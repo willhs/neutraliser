@@ -1,0 +1,9 @@
+/.bundle/
+/vendor/
+/pkg/
+/.yardoc
+/.rspec_status
+/.ruby-version
+/.ruby-gemset
+/tmp/
+/coverage/

@@ -1,0 +1,31 @@
+{
+  "version": 1,
+  "generated_at": "2025-09-24T11:05:26Z",
+  "entries": [
+    {
+      "path": "philosophy/goals.md",
+      "type": "goals",
+      "priority": "must_read"
+    },
+    {
+      "path": "philosophy/principles.md",
+      "type": "principles",
+      "priority": "must_read"
+    },
+    {
+      "path": "design/architecture.md",
+      "type": "architecture",
+      "priority": "must_read"
+    },
+    {
+      "path": "work/roadmap.md",
+      "type": "roadmap",
+      "priority": "must_read"
+    },
+    {
+      "path": "ops/runbook.md",
+      "type": "runbook",
+      "priority": "must_read"
+    }
+  ]
+}
