@@ -16,31 +16,105 @@ Never adjust your volume between videos again. Neutraliser analyses and adjusts 
 
 ## Installation
 
+Install FFmpeg (see `Requirements`), then run the CLI straight from source:
+
 ```bash
-gem install neutraliser
+git clone https://github.com/your-username/neutraliser.git
+cd neutraliser
+bundle install
+bundle exec neutraliser --help
 ```
 
-## Usage
+For optional gem builds or development workflow details, see the sections below.
 
-Process a single video:
-```bash
-neutraliser movie.mp4
-```
+## Quick start
 
-Process a directory:
-```bash
-neutraliser /path/to/video/library
-```
+- **Process a single video**
 
-Replace original files instead of creating copies:
-```bash
-neutraliser --replace movie.mp4
-```
+  ```bash
+  bundle exec neutraliser movie.mp4
+  ```
+
+- **Process an entire directory**
+
+  ```bash
+  bundle exec neutraliser process /path/to/video/library
+  ```
+
+- **Replace the original file instead of saving a copy**
+
+  ```bash
+  bundle exec neutraliser process --replace movie.mp4
+  ```
+
+- **Dry-run to inspect loudness only**
+
+  ```bash
+  bundle exec neutraliser process --dry-run movie.mp4
+  ```
+
+## CLI commands
+
+### `process`
+
+`neutraliser process PATH`
+
+- Run the full normalisation pipeline on the file or directory located at `PATH`.
+
+- **`--profile`**: Normalisation profile (`reference`, `livingroom` *(default)*, `night`).
+- **`--target-level`**: Override LUFS target explicitly.
+- **`--tolerance`**: Skip files within this LU range *(default: 1.0)*.
+- **`--replace`**: Replace originals rather than writing `*_normalized` copies.
+- **`--cache/--no-cache`**: Toggle loudness analysis caching.
+- **`--cache-only`**: Generate cache sidecars without processing.
+- **`--dry-run`**: Analyse only; no output files.
+- **`--report`**: Emit `summary`, `detailed`, or `csv` reports after processing.
+
+### `profiles`
+
+`neutraliser profiles [--verbose|-v]`
+
+- Display the built-in loudness profiles and their associated targets.
+
+- Lists available normalisation profiles and their LUFS / true-peak targets.
+- Add `--verbose` for descriptions of each profile.
+
+### `cache`
+
+`neutraliser cache SUBCOMMAND`
+
+- Inspect or maintain stored loudness analysis caches.
+
+- **`stats PATH`**: Show cache counts and storage for analysed files in `PATH`.
+- **`clean PATH`**: Remove cache data older than the configured `--max-age` (days).
+
+### `analyze-plex`
+
+`neutraliser analyze-plex [options]`
+
+- Audit audio loudness levels across your Plex media libraries.
+
+- **`--server-url`**: Plex host (`http://localhost:32400` by default).
+- **`--token`**: Plex auth token (falls back to `PLEX_TOKEN` in `.env`).
+- **`--library`**: Restrict analysis to a single Plex library.
+- **`--output-format`**: `table`, `csv`, or `json` reporting.
+- **`--sample-percent`**: Sample percentage for large libraries *(default: 100)*.
+- **`--concurrent-jobs`**: Control worker concurrency *(default: 4)*.
+- **`--cache-results`**: Cache Plex analysis responses locally.
+
+### `version`
+
+`neutraliser version`
+
+- Print the currently installed Neutraliser CLI version number.
+
+- Prints the currently installed version of the CLI.
 
 ## Requirements
 
-- Ruby 2.7+
-- FFmpeg (for video/audio processing)
+- **Ruby** 2.7+
+- **FFmpeg** 4.2+ available on the command line
+- *(Optional)* **Plex token** in `.env` when using `analyze-plex`
 
 ## Development
 

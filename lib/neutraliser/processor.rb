@@ -2,9 +2,11 @@ module Neutraliser
   class Processor
     SUPPORTED_FORMATS = %w[.mp4 .mkv .avi .mov .wmv .flv .webm .m4v].freeze
 
-    def initialize(replace: false, target_level: -16.0)
+    def initialize(replace: false, target_level: nil, profile: 'livingroom', tolerance: 1.0, cache: true)
       @replace = replace
-      @target_level = target_level
+      @profile = target_level ? Profiles.get_profile(target_level) : Profiles.get_profile(profile)
+      @tolerance = tolerance
+      @cache_enabled = cache
     end
 
     def process(path)
@@ -48,10 +50,10 @@ module Neutraliser
           return
         end
 
-        current_level = analyze_loudness(movie)
+        measured_data = analyze_loudness(movie)
 
-        if needs_processing?(current_level)
-          normalize_file(file_path, current_level)
+        if needs_processing?(measured_data)
+          normalize_file(file_path, measured_data)
         else
           puts "  Already at target level, skipping"
         end
@@ -69,101 +71,69 @@ module Neutraliser
     end
 
     def analyze_loudness(movie)
-      # Use ffmpeg to measure integrated loudness (LUFS)
-      temp_analysis_file = "/tmp/loudness_analysis_#{Time.now.to_i}.txt"
-
-      begin
-        # Run ffmpeg loudnorm filter in dual-pass mode to get current loudness
-        cmd = [
-          'ffmpeg', '-hide_banner', '-nostats',
-          '-i', movie.path,
-          '-af', 'loudnorm=I=-16:dual_mono=true:TP=-1.5:LRA=11:print_format=summary',
-          '-f', 'null', '-',
-          '2>', temp_analysis_file
-        ].join(' ')
-
-        system(cmd)
-
-        if File.exist?(temp_analysis_file)
-          analysis_output = File.read(temp_analysis_file)
-
-          # Parse the integrated loudness from ffmpeg output
-          if match = analysis_output.match(/Input Integrated:\s*([-\d.]+)\s*LUFS/)
-            integrated_loudness = match[1].to_f
-            return integrated_loudness
-          end
-        end
-
-        # Fallback: use ffprobe for basic volume analysis if loudnorm fails
-        fallback_analysis(movie)
-      rescue => e
-        puts "  Warning: Could not analyze loudness (#{e.message}), using fallback"
-        fallback_analysis(movie)
-      ensure
-        File.delete(temp_analysis_file) if File.exist?(temp_analysis_file)
-      end
+      analyzer = AudioAnalyser.new(
+        cache_enabled: @cache_enabled,
+        use_sidecar: @cache_enabled  # Use sidecar caching when cache is enabled
+      )
+      analyzer.analyze_file(movie.path, @profile)
+    rescue FFmpegError => e
+      puts "  Warning: Could not analyze loudness (#{e.message}), using fallback"
+      fallback_analysis(movie)
     end
 
     def fallback_analysis(movie)
-      # Fallback method using ffprobe to get mean volume
-      begin
-        cmd = [
-          'ffprobe', '-hide_banner', '-nostats',
-          '-f', 'lavfi',
-          '-i', "amovie=#{movie.path},astats=metadata=1:reset=1",
-          '-show_entries', 'frame=pkt_pts_time:frame_tags=lavfi.astats.Overall.RMS_level',
-          '-of', 'csv=p=0'
-        ].join(' ')
-
-        result = `#{cmd} 2>/dev/null`.strip
-
-        if result && !result.empty?
-          # Parse RMS levels and calculate approximate LUFS
-          rms_values = result.split("\n").map { |line| line.split(',')[1] }.compact.map(&:to_f)
-          if rms_values.any?
-            avg_rms = rms_values.sum / rms_values.size
-            # Convert RMS to approximate LUFS (very rough approximation)
-            approximate_lufs = avg_rms - 3.0  # Rough conversion
-            return approximate_lufs
-          end
-        end
-
-        # Final fallback
-        -18.0
-      rescue
-        -18.0
-      end
-    end
-
-    def needs_processing?(current_level)
-      (current_level - @target_level).abs > 0.5
-    end
-
-    def normalize_file(file_path, current_level)
-      gain_adjustment = @target_level - current_level
-      output_path = @replace ? generate_temp_path(file_path) : generate_output_path(file_path)
-
-      puts "  Adjusting by #{gain_adjustment.round(1)}dB"
-
-      movie = FFMPEG::Movie.new(file_path)
-
-      # Copy video stream, reencode audio with volume adjustment
-      options = {
-        video_codec: 'copy',
-        audio_codec: 'aac',
-        custom: ['-filter:a', "volume=#{gain_adjustment}dB"]
+      # Fallback: return dummy loudnorm data structure for compatibility
+      puts "  Using fallback analysis - results may not be optimal"
+      {
+        'input_i' => -18.0,
+        'input_tp' => -1.0,
+        'input_lra' => 10.0,
+        'input_thresh' => -28.0,
+        'target_offset' => 2.0,
+        'fallback' => true
       }
+    end
 
-      movie.transcode(output_path, options) do |progress|
-        # Progress callback if needed
+    def needs_processing?(measured_data)
+      analyzer = AudioAnalyser.new
+      analyzer.needs_normalization?(measured_data, @profile, tolerance: @tolerance)
+    end
+
+    def normalize_file(file_path, measured_data)
+      output_path = @replace ? FileManager.safe_temp_path(file_path) : generate_output_path(file_path)
+
+      current_lufs = measured_data['input_i'].to_f
+      target_lufs = @profile[:lufs]
+      adjustment = target_lufs - current_lufs
+
+      # Check for multiple audio tracks
+      audio_tracks = detect_audio_tracks(file_path)
+      if audio_tracks.length > 1
+        puts "  Found #{audio_tracks.length} audio tracks, normalizing primary track only"
+      end
+
+      puts "  Current: #{current_lufs.round(1)} LUFS, Target: #{target_lufs} LUFS (#{adjustment.round(1)} LU adjustment)"
+
+      FFmpegWrapper.apply_normalization_with_multiple_tracks(
+        file_path, output_path, measured_data, audio_tracks, @profile
+      )
+
+      # Verify output file integrity before committing changes
+      unless FileManager.verify_file_integrity(output_path)
+        FileUtils.rm(output_path) if File.exist?(output_path)
+        raise "Output file verification failed - processing aborted"
       end
 
       if @replace
-        File.rename(output_path, file_path)
+        FileManager.atomic_replace(output_path, file_path)
         puts "  Replaced: #{file_path}"
       else
         puts "  Saved: #{output_path}"
       end
+    rescue => e
+      # Clean up temp file on error
+      FileUtils.rm(output_path) if File.exist?(output_path)
+      raise e
     end
 
     def generate_temp_path(file_path)
@@ -180,6 +150,26 @@ module Neutraliser
       ext = File.extname(file_path)
 
       File.join(dir, "#{basename}_normalized#{ext}")
+    end
+
+    def cache_directory
+      # For Phase 1, use a simple cache directory in tmp
+      # This will be enhanced in Phase 3 with sidecar caching
+      tmp_dir = ENV['TMPDIR'] || '/tmp'
+      cache_dir = File.join(tmp_dir, 'neutraliser_cache')
+      FileUtils.mkdir_p(cache_dir) unless File.exist?(cache_dir)
+      cache_dir
+    end
+
+    def detect_audio_tracks(file_path)
+      FFmpegWrapper.detect_audio_tracks(file_path)
+    end
+
+    def cleanup_temp_files
+      # Clean up any leftover temp files in the current directory
+      Dir.glob("*_neutraliser_*").each do |pattern|
+        FileManager.cleanup_temp_files(pattern)
+      end
     end
   end
 end
