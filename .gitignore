@@ -7,3 +7,4 @@
 /.ruby-gemset
 /tmp/
 /coverage/
+*.gem

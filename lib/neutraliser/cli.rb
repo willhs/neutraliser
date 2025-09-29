@@ -66,7 +66,8 @@ module Neutraliser
         target_level: options[:target_level],
         profile: options[:profile],
         tolerance: options[:tolerance],
-        cache: options[:cache]
+        cache: options[:cache],
+        dry_run: options[:dry_run]
       )
 
       processor.process(path)

@@ -22,12 +22,14 @@ RSpec.describe Neutraliser::Processor do
         replace: true,
         target_level: -18.0,
         tolerance: 0.5,
-        cache: false
+        cache: false,
+        dry_run: true
       )
 
       expect(processor.instance_variable_get(:@replace)).to be true
       expect(processor.instance_variable_get(:@tolerance)).to eq(0.5)
       expect(processor.instance_variable_get(:@cache_enabled)).to be false
+      expect(processor.instance_variable_get(:@dry_run)).to be true
     end
 
     it 'uses profile when no target_level specified' do
@@ -173,6 +175,22 @@ RSpec.describe Neutraliser::Processor do
         }.to output(/Already at target level, skipping/).to_stdout
 
         expect(processor).not_to have_received(:normalize_file)
+      end
+
+      it 'skips normalization in dry-run mode' do
+        processor_dry_run = described_class.new(dry_run: true)
+        allow(FFMPEG::Movie).to receive(:new).and_return(movie_mock)
+        allow(processor_dry_run).to receive(:analyze_loudness).and_return(measured_data)
+        allow(processor_dry_run).to receive(:needs_processing?).and_return(true)
+        allow(processor_dry_run).to receive(:normalize_file)
+
+        expect {
+          processor_dry_run.send(:process_file, video_file)
+        }.to output(/\[DRY RUN\] Would normalize: -25\.0 LUFS → -20\.0 LUFS/).to_stdout
+
+        expect(processor_dry_run).to have_received(:analyze_loudness).with(movie_mock)
+        expect(processor_dry_run).to have_received(:needs_processing?).with(measured_data)
+        expect(processor_dry_run).not_to have_received(:normalize_file)
       end
 
       it 'handles processing errors gracefully' do

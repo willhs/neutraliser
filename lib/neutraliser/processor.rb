@@ -2,11 +2,12 @@ module Neutraliser
   class Processor
     SUPPORTED_FORMATS = %w[.mp4 .mkv .avi .mov .wmv .flv .webm .m4v].freeze
 
-    def initialize(replace: false, target_level: nil, profile: 'livingroom', tolerance: 1.0, cache: true)
+    def initialize(replace: false, target_level: nil, profile: 'livingroom', tolerance: 1.0, cache: true, dry_run: false)
       @replace = replace
       @profile = target_level ? Profiles.get_profile(target_level) : Profiles.get_profile(profile)
       @tolerance = tolerance
       @cache_enabled = cache
+      @dry_run = dry_run
     end
 
     def process(path)
@@ -53,7 +54,11 @@ module Neutraliser
         measured_data = analyze_loudness(movie)
 
         if needs_processing?(measured_data)
-          normalize_file(file_path, measured_data)
+          if @dry_run
+            puts "  [DRY RUN] Would normalize: #{measured_data['input_i'].round(1)} LUFS → #{@profile[:lufs]} LUFS"
+          else
+            normalize_file(file_path, measured_data)
+          end
         else
           puts "  Already at target level, skipping"
         end
