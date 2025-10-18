@@ -22,31 +22,39 @@ module Neutraliser
 
     private
 
+    def timestamp
+      Time.now.strftime('[%Y-%m-%d %H:%M:%S]')
+    end
+
+    def log(message)
+      puts "#{timestamp} #{message}"
+    end
+
     def process_directory(dir_path)
       video_files = find_video_files(dir_path)
 
       if video_files.empty?
-        puts "No video files found in '#{dir_path}'"
+        log "No video files found in '#{dir_path}'"
         return
       end
 
-      puts "Found #{video_files.length} video file(s)"
+      log "Found #{video_files.length} video file(s)"
       video_files.each { |file| process_file(file) }
     end
 
     def process_file(file_path)
       unless video_file?(file_path)
-        puts "Skipping '#{file_path}' - not a supported video format"
+        log "Skipping '#{file_path}' - not a supported video format"
         return
       end
 
-      puts "Processing: #{file_path}"
+      log "Processing: #{file_path}"
 
       begin
         movie = FFMPEG::Movie.new(file_path)
 
         unless movie.audio_stream
-          puts "  No audio track found, skipping"
+          log "  No audio track found, skipping"
           return
         end
 
@@ -55,10 +63,10 @@ module Neutraliser
         if needs_processing?(measured_data)
           normalize_file(file_path, measured_data)
         else
-          puts "  Already at target level, skipping"
+          log "  Already at target level, skipping"
         end
       rescue => e
-        puts "  Error processing file: #{e.message}"
+        log "  Error processing file: #{e.message}"
       end
     end
 
@@ -77,13 +85,13 @@ module Neutraliser
       )
       analyzer.analyze_file(movie.path, @profile)
     rescue FFmpegError => e
-      puts "  Warning: Could not analyze loudness (#{e.message}), using fallback"
+      log "  Warning: Could not analyze loudness (#{e.message}), using fallback"
       fallback_analysis(movie)
     end
 
     def fallback_analysis(movie)
       # Fallback: return dummy loudnorm data structure for compatibility
-      puts "  Using fallback analysis - results may not be optimal"
+      log "  Using fallback analysis - results may not be optimal"
       {
         'input_i' => -18.0,
         'input_tp' => -1.0,
@@ -109,10 +117,10 @@ module Neutraliser
       # Check for multiple audio tracks
       audio_tracks = detect_audio_tracks(file_path)
       if audio_tracks.length > 1
-        puts "  Found #{audio_tracks.length} audio tracks, normalizing primary track only"
+        log "  Found #{audio_tracks.length} audio tracks, normalizing primary track only"
       end
 
-      puts "  Current: #{current_lufs.round(1)} LUFS, Target: #{target_lufs} LUFS (#{adjustment.round(1)} LU adjustment)"
+      log "  Current: #{current_lufs.round(1)} LUFS, Target: #{target_lufs} LUFS (#{adjustment.round(1)} LU adjustment)"
 
       FFmpegWrapper.apply_normalization_with_multiple_tracks(
         file_path, output_path, measured_data, audio_tracks, @profile
@@ -126,9 +134,9 @@ module Neutraliser
 
       if @replace
         FileManager.atomic_replace(output_path, file_path)
-        puts "  Replaced: #{file_path}"
+        log "  Replaced: #{file_path}"
       else
-        puts "  Saved: #{output_path}"
+        log "  Saved: #{output_path}"
       end
     rescue => e
       # Clean up temp file on error
