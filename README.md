@@ -66,9 +66,10 @@ For optional gem builds or development workflow details, see the sections below.
 - **`--tolerance`**: Skip files within this LU range *(default: 1.0)*.
 - **`--replace`**: Replace originals rather than writing `*_normalized` copies.
 - **`--cache/--no-cache`**: Toggle loudness analysis caching.
-- **`--cache-only`**: Generate cache sidecars without processing.
 - **`--dry-run`**: Analyse only; no output files.
-- **`--report`**: Emit `summary`, `detailed`, or `csv` reports after processing.
+- **`--parallel/--no-parallel`**: Enable or disable multi-file parallel processing.
+- **`--max-threads`**: Set worker thread count for parallel processing.
+- **`--fast-verify/--no-fast-verify`**: Enable or disable quick pre-verification before full analysis.
 
 ### `profiles`
 
@@ -99,8 +100,6 @@ For optional gem builds or development workflow details, see the sections below.
 - **`--library`**: Restrict analysis to a single Plex library.
 - **`--output-format`**: `table`, `csv`, or `json` reporting.
 - **`--sample-percent`**: Sample percentage for large libraries *(default: 100)*.
-- **`--concurrent-jobs`**: Control worker concurrency *(default: 4)*.
-- **`--cache-results`**: Cache Plex analysis responses locally.
 
 ### `version`
 

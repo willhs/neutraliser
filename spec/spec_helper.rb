@@ -1,4 +1,5 @@
 require 'rspec'
+require 'tmpdir'
 require_relative '../lib/neutraliser'
 
 RSpec.configure do |config|

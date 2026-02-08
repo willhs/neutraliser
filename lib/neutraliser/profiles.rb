@@ -18,17 +18,14 @@ module Neutraliser
         raise ArgumentError, "Unknown profile: #{name_or_lufs}. Available: #{PROFILES.keys.join(', ')}" unless profile
         profile
       when Numeric
-        # Try to find closest standard profile first
-        closest = find_closest_profile(name_or_lufs.to_f)
-        if closest
-          closest.merge(name: "#{closest[:name]}_closest")
-        else
-          # Create custom profile for non-standard LUFS values
-          { name: 'custom', lufs: name_or_lufs.to_f, tp: -1.5, lra: 12.0 }
-        end
+        custom_profile(name_or_lufs.to_f)
       else
         raise ArgumentError, "Profile must be a string name or numeric LUFS value"
       end
+    end
+
+    def self.custom_profile(target_lufs, name: 'custom', tp: -1.5, lra: 12.0)
+      { name: name, lufs: target_lufs.to_f, tp: tp, lra: lra }
     end
 
     def self.list_profiles
@@ -62,22 +59,6 @@ module Neutraliser
         NIGHT_MODE  # Music often benefits from reduced dynamic range
       else
         LIVING_ROOM  # Safe default
-      end
-    end
-
-    private
-
-    def self.find_closest_profile(target_lufs)
-      # Find the profile with LUFS closest to the target
-      closest_profile = PROFILES.values.min_by do |profile|
-        (profile[:lufs] - target_lufs).abs
-      end
-
-      # Only use closest if it's within 2 LU
-      if (closest_profile[:lufs] - target_lufs).abs <= 2.0
-        closest_profile
-      else
-        nil
       end
     end
   end

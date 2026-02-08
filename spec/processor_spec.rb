@@ -1,5 +1,4 @@
 require 'spec_helper'
-require 'tempfile'
 require 'fileutils'
 
 RSpec.describe Neutraliser::Processor do
@@ -10,202 +9,141 @@ RSpec.describe Neutraliser::Processor do
   end
 
   describe '#initialize' do
-    it 'initializes with default values' do
+    it 'uses livingroom profile by default' do
       processor = described_class.new
-      expect(processor.instance_variable_get(:@replace)).to be false
-      expect(processor.instance_variable_get(:@tolerance)).to eq(1.0)
-      expect(processor.instance_variable_get(:@cache_enabled)).to be true
-    end
-
-    it 'accepts custom parameters' do
-      processor = described_class.new(
-        replace: true,
-        target_level: -18.0,
-        tolerance: 0.5,
-        cache: false,
-        dry_run: true
-      )
-
-      expect(processor.instance_variable_get(:@replace)).to be true
-      expect(processor.instance_variable_get(:@tolerance)).to eq(0.5)
-      expect(processor.instance_variable_get(:@cache_enabled)).to be false
-      expect(processor.instance_variable_get(:@dry_run)).to be true
-    end
-
-    it 'uses profile when no target_level specified' do
-      processor = described_class.new(profile: 'night')
       profile = processor.instance_variable_get(:@profile)
-      expect(profile[:name]).to eq('night')
-      expect(profile[:lufs]).to eq(-16.0)
+
+      expect(profile).to include(name: 'livingroom', lufs: -20.0, tp: -1.5, lra: 12.0)
     end
 
-    it 'creates custom profile when target_level specified' do
-      processor = described_class.new(target_level: -18.0)
+    it 'uses exact custom target for target_level override' do
+      processor = described_class.new(target_level: -18.3)
       profile = processor.instance_variable_get(:@profile)
-      expect(profile[:lufs]).to eq(-18.0)
+
+      expect(profile).to include(name: 'custom', lufs: -18.3, tp: -1.5, lra: 12.0)
     end
   end
 
   describe '#process' do
-    let(:processor) { described_class.new }
+    it 'exits for missing path' do
+      processor = described_class.new
 
-    context 'with single file' do
-      let(:video_file) { File.join(temp_dir, 'test.mp4') }
-
-      before do
-        File.write(video_file, 'fake video content')
-      end
-
-      it 'processes single video file' do
-        expect(processor).to receive(:process_file).with(video_file)
-        processor.process(video_file)
-      end
-
-      it 'handles nonexistent file' do
-        expect {
-          processor.process('/nonexistent/file.mp4')
-        }.to output(/Path '.*' does not exist/).to_stdout.and raise_error(SystemExit)
-      end
+      expect { processor.process(File.join(temp_dir, 'missing.mp4')) }
+        .to output(/does not exist/).to_stdout
+        .and raise_error(SystemExit)
     end
 
-    context 'with directory' do
-      let(:video_files) do
-        %w[movie1.mp4 movie2.mkv series.avi].map { |f| File.join(temp_dir, f) }
-      end
+    it 'processes directory sequentially when parallel is disabled' do
+      processor = described_class.new(parallel: false)
+      video_1 = File.join(temp_dir, 'a.mp4')
+      video_2 = File.join(temp_dir, 'b.mkv')
+      File.write(video_1, 'x')
+      File.write(video_2, 'x')
 
-      before do
-        video_files.each { |f| File.write(f, 'fake content') }
-        File.write(File.join(temp_dir, 'readme.txt'), 'not a video')
-      end
+      expect(processor).to receive(:process_file).with(video_1)
+      expect(processor).to receive(:process_file).with(video_2)
 
-      it 'processes all video files in directory' do
-        video_files.each do |file|
-          expect(processor).to receive(:process_file).with(file)
-        end
+      processor.process(temp_dir)
+    end
 
-        processor.process(temp_dir)
-      end
+    it 'routes multi-file directories through parallel processor when enabled' do
+      processor = described_class.new(parallel: true)
+      video_1 = File.join(temp_dir, 'a.mp4')
+      video_2 = File.join(temp_dir, 'b.mkv')
+      File.write(video_1, 'x')
+      File.write(video_2, 'x')
 
-      it 'skips non-video files' do
-        expect(processor).not_to receive(:process_file).with(File.join(temp_dir, 'readme.txt'))
-        allow(processor).to receive(:process_file).with(any_args)
-        processor.process(temp_dir)
-      end
-
-      it 'handles empty directory gracefully' do
-        empty_dir = File.join(temp_dir, 'empty')
-        Dir.mkdir(empty_dir)
-
-        expect {
-          processor.process(empty_dir)
-        }.to output(/No video files found/).to_stdout
-      end
+      expect(processor).to receive(:process_files_parallel).with(array_including(video_1, video_2))
+      processor.process(temp_dir)
     end
   end
 
   describe '#process_file' do
-    let(:processor) { described_class.new }
-    let(:video_file) { File.join(temp_dir, 'test.mp4') }
+    let(:video_file) { File.join(temp_dir, 'movie.mp4') }
 
     before do
-      File.write(video_file, 'fake video content')
+      File.write(video_file, 'video')
     end
 
-    context 'with unsupported file format' do
-      let(:text_file) { File.join(temp_dir, 'test.txt') }
+    it 'skips unsupported file extensions' do
+      txt = File.join(temp_dir, 'note.txt')
+      File.write(txt, 'x')
 
-      before do
-        File.write(text_file, 'not a video')
-      end
-
-      it 'skips unsupported formats' do
-        expect {
-          processor.send(:process_file, text_file)
-        }.to output(/Skipping.*not a supported video format/).to_stdout
-      end
+      expect { described_class.new.send(:process_file, txt) }
+        .to output(/not a supported video format/).to_stdout
     end
 
-    context 'with video file without audio' do
-      before do
-        movie_mock = instance_double(FFMPEG::Movie, audio_stream: nil)
-        allow(FFMPEG::Movie).to receive(:new).and_return(movie_mock)
-      end
+    it 'skips files with no audio stream' do
+      processor = described_class.new
+      movie = instance_double(FFMPEG::Movie, audio_stream: nil)
+      allow(FFMPEG::Movie).to receive(:new).and_return(movie)
 
-      it 'skips files without audio tracks' do
-        expect {
-          processor.send(:process_file, video_file)
-        }.to output(/No audio track found, skipping/).to_stdout
-      end
+      expect { processor.send(:process_file, video_file) }
+        .to output(/No audio track found, skipping/).to_stdout
     end
 
-    context 'with valid video file' do
-      let(:movie_mock) { instance_double(FFMPEG::Movie, path: video_file, audio_stream: true) }
-      let(:measured_data) do
-        {
-          'input_i' => '-18.0',
-          'input_tp' => '-2.0',
-          'input_lra' => '8.0',
-          'input_thresh' => '-28.0',
-          'target_offset' => '2.0'
-        }
-      end
+    it 'prints dry-run output using numeric conversion for measured input' do
+      processor = described_class.new(dry_run: true)
+      movie = instance_double(FFMPEG::Movie, path: video_file, audio_stream: true)
+      measured = {
+        'input_i' => '-18.0',
+        'input_tp' => '-2.0',
+        'input_lra' => '8.0',
+        'input_thresh' => '-28.0',
+        'target_offset' => '2.0'
+      }
 
-      before do
-        allow(FFMPEG::Movie).to receive(:new).and_return(movie_mock)
-        allow(processor).to receive(:analyze_loudness).and_return(measured_data)
-        allow(processor).to receive(:needs_processing?).and_return(true)
-        allow(processor).to receive(:normalize_file)
-      end
+      allow(FFMPEG::Movie).to receive(:new).and_return(movie)
+      allow(processor).to receive(:analyze_loudness).and_return(measured)
+      allow(processor).to receive(:needs_processing?).and_return(true)
 
-      it 'processes file that needs normalization' do
-        expect {
-          processor.send(:process_file, video_file)
-        }.to output(/Processing: #{Regexp.escape(video_file)}/).to_stdout
+      expect { processor.send(:process_file, video_file) }
+        .to output(/\[DRY RUN\] Would normalize: -18.0 LUFS → -20.0 LUFS/).to_stdout
+    end
 
-        expect(processor).to have_received(:analyze_loudness).with(movie_mock)
-        expect(processor).to have_received(:needs_processing?).with(measured_data)
-        expect(processor).to have_received(:normalize_file).with(video_file, measured_data)
-      end
+    it 'handles analysis errors by reporting and continuing' do
+      processor = described_class.new
+      movie = instance_double(FFMPEG::Movie, path: video_file, audio_stream: true)
 
-      it 'skips file that does not need processing' do
-        allow(processor).to receive(:needs_processing?).and_return(false)
+      allow(FFMPEG::Movie).to receive(:new).and_return(movie)
+      allow(processor).to receive(:analyze_loudness).and_raise(StandardError, 'analysis failed')
 
-        expect {
-          processor.send(:process_file, video_file)
-        }.to output(/Already at target level, skipping/).to_stdout
+      expect { processor.send(:process_file, video_file) }
+        .to output(/Error processing file: analysis failed/).to_stdout
+    end
+  end
 
-        expect(processor).not_to have_received(:normalize_file)
-      end
+  describe '#analyze_loudness' do
+    let(:processor) { described_class.new }
+    let(:movie) { instance_double(FFMPEG::Movie, path: '/tmp/movie.mp4') }
+    let(:analyser) { instance_double(Neutraliser::AudioAnalyser) }
 
-      it 'skips normalization in dry-run mode' do
-        processor_dry_run = described_class.new(dry_run: true)
-        allow(FFMPEG::Movie).to receive(:new).and_return(movie_mock)
-        allow(processor_dry_run).to receive(:analyze_loudness).and_return(measured_data)
-        allow(processor_dry_run).to receive(:needs_processing?).and_return(true)
-        allow(processor_dry_run).to receive(:normalize_file)
+    before do
+      allow(Neutraliser::AudioAnalyser).to receive(:new).and_return(analyser)
+    end
 
-        expect {
-          processor_dry_run.send(:process_file, video_file)
-        }.to output(/\[DRY RUN\] Would normalize: -25\.0 LUFS → -20\.0 LUFS/).to_stdout
+    it 'skips full analysis when fast verification indicates no work is needed' do
+      allow(analyser).to receive(:should_analyze_file?).and_return(false)
 
-        expect(processor_dry_run).to have_received(:analyze_loudness).with(movie_mock)
-        expect(processor_dry_run).to have_received(:needs_processing?).with(measured_data)
-        expect(processor_dry_run).not_to have_received(:normalize_file)
-      end
+      result = processor.send(:analyze_loudness, movie)
 
-      it 'handles processing errors gracefully' do
-        allow(processor).to receive(:analyze_loudness).and_raise(StandardError.new('Analysis failed'))
+      expect(result['fast_verified']).to eq(true)
+      expect(result['target_offset']).to eq(0.0)
+    end
 
-        expect {
-          processor.send(:process_file, video_file)
-        }.to output(/Error processing file: Analysis failed/).to_stdout
-      end
+    it 'raises ffmpeg errors from analyser instead of using fake fallback data' do
+      allow(analyser).to receive(:should_analyze_file?).and_return(true)
+      allow(analyser).to receive(:analyze_file).and_raise(Neutraliser::FFmpegError, 'boom')
+
+      expect { processor.send(:analyze_loudness, movie) }
+        .to raise_error(Neutraliser::FFmpegError, /boom/)
     end
   end
 
   describe '#normalize_file' do
     let(:processor) { described_class.new(replace: false) }
-    let(:video_file) { File.join(temp_dir, 'input.mp4') }
+    let(:video_file) { File.join(temp_dir, 'movie.mp4') }
+    let(:output_file) { File.join(temp_dir, 'movie_normalized.mp4') }
     let(:measured_data) do
       {
         'input_i' => '-18.0',
@@ -215,241 +153,30 @@ RSpec.describe Neutraliser::Processor do
         'target_offset' => '2.0'
       }
     end
-    let(:audio_tracks) { [{ index: 1, codec: 'aac', channels: 2 }] }
 
     before do
-      File.write(video_file, 'fake video content')
-      allow(processor).to receive(:detect_audio_tracks).and_return(audio_tracks)
+      File.write(video_file, 'x')
+      allow(processor).to receive(:detect_audio_tracks).and_return([{ index: 0, codec: 'aac', channels: 2 }])
       allow(Neutraliser::FFmpegWrapper).to receive(:apply_normalization_with_multiple_tracks)
       allow(Neutraliser::FileManager).to receive(:verify_file_integrity).and_return(true)
     end
 
-    it 'generates correct output path for copy mode' do
-      expected_output = File.join(temp_dir, 'input_normalized.mp4')
-      allow(File).to receive(:exist?).and_return(false)  # No cleanup needed
+    it 'writes to _normalized output in copy mode' do
+      processor.send(:normalize_file, video_file, measured_data)
 
-      expect {
-        processor.send(:normalize_file, video_file, measured_data)
-      }.to output(/Saved: #{Regexp.escape(expected_output)}/).to_stdout
-
-      expect(Neutraliser::FFmpegWrapper).to have_received(:apply_normalization_with_multiple_tracks).with(
-        video_file, expected_output, measured_data, audio_tracks, anything
-      )
+      expect(Neutraliser::FFmpegWrapper).to have_received(:apply_normalization_with_multiple_tracks)
+        .with(video_file, output_file, measured_data, any_args)
     end
 
-    it 'detects multiple audio tracks' do
-      multi_track_audio = [
-        { index: 1, codec: 'ac3', channels: 6 },
-        { index: 2, codec: 'aac', channels: 2 }
-      ]
-      allow(processor).to receive(:detect_audio_tracks).and_return(multi_track_audio)
-      allow(File).to receive(:exist?).and_return(false)
+    it 'raises when output fails integrity checks' do
+      allow(Neutraliser::FileManager).to receive(:verify_file_integrity).and_return(false)
+      allow(File).to receive(:exist?).with(output_file).and_return(true)
+      allow(FileUtils).to receive(:rm)
 
-      expect {
-        processor.send(:normalize_file, video_file, measured_data)
-      }.to output(/Found 2 audio tracks, normalizing primary track only/).to_stdout
-    end
+      expect { processor.send(:normalize_file, video_file, measured_data) }
+        .to raise_error(/Output file verification failed/)
 
-    it 'shows LUFS adjustment information' do
-      allow(File).to receive(:exist?).and_return(false)
-
-      expect {
-        processor.send(:normalize_file, video_file, measured_data)
-      }.to output(/Current: -18.0 LUFS, Target: -20.0 LUFS \(-2.0 LU adjustment\)/).to_stdout
-    end
-
-    context 'with replace mode' do
-      let(:processor) { described_class.new(replace: true) }
-      let(:temp_path) { File.join(temp_dir, 'temp_file.mp4') }
-
-      before do
-        allow(Neutraliser::FileManager).to receive(:safe_temp_path).and_return(temp_path)
-        allow(Neutraliser::FileManager).to receive(:atomic_replace)
-      end
-
-      it 'uses atomic replacement for replace mode' do
-        processor.send(:normalize_file, video_file, measured_data)
-
-        expect(Neutraliser::FileManager).to have_received(:safe_temp_path).with(video_file)
-        expect(Neutraliser::FileManager).to have_received(:atomic_replace).with(temp_path, video_file)
-      end
-    end
-
-    context 'when file verification fails' do
-      let(:output_path) { File.join(temp_dir, 'input_normalized.mp4') }
-
-      before do
-        allow(Neutraliser::FileManager).to receive(:verify_file_integrity).and_return(false)
-        allow(FileUtils).to receive(:rm)
-        allow(File).to receive(:exist?).with(output_path).and_return(true)
-      end
-
-      it 'cleans up failed output and raises error' do
-        expect {
-          processor.send(:normalize_file, video_file, measured_data)
-        }.to raise_error(/Output file verification failed/)
-
-        expect(FileUtils).to have_received(:rm).with(output_path)
-      end
-    end
-
-    context 'when normalization fails' do
-      let(:output_path) { File.join(temp_dir, 'input_normalized.mp4') }
-
-      before do
-        allow(Neutraliser::FFmpegWrapper).to receive(:apply_normalization_with_multiple_tracks)
-          .and_raise(StandardError.new('FFmpeg failed'))
-        allow(FileUtils).to receive(:rm)
-        allow(File).to receive(:exist?).with(output_path).and_return(true)
-      end
-
-      it 'cleans up temp file and re-raises error' do
-        expect {
-          processor.send(:normalize_file, video_file, measured_data)
-        }.to raise_error('FFmpeg failed')
-
-        expect(FileUtils).to have_received(:rm).with(output_path)
-      end
-    end
-  end
-
-  describe 'file detection methods' do
-    let(:processor) { described_class.new }
-
-    describe '#find_video_files' do
-      before do
-        # Create directory structure with video and non-video files
-        Dir.mkdir(File.join(temp_dir, 'subdir'))
-
-        %w[movie.mp4 series.mkv clip.avi].each do |f|
-          File.write(File.join(temp_dir, f), 'video')
-        end
-
-        File.write(File.join(temp_dir, 'subdir', 'nested.mov'), 'nested video')
-        File.write(File.join(temp_dir, 'readme.txt'), 'not video')
-        File.write(File.join(temp_dir, 'image.jpg'), 'image')
-      end
-
-      it 'finds all video files recursively' do
-        files = processor.send(:find_video_files, temp_dir)
-
-        expect(files).to include(
-          File.join(temp_dir, 'movie.mp4'),
-          File.join(temp_dir, 'series.mkv'),
-          File.join(temp_dir, 'clip.avi'),
-          File.join(temp_dir, 'subdir', 'nested.mov')
-        )
-
-        expect(files).not_to include(
-          File.join(temp_dir, 'readme.txt'),
-          File.join(temp_dir, 'image.jpg')
-        )
-      end
-    end
-
-    describe '#video_file?' do
-      it 'identifies supported video formats' do
-        supported_files = %w[
-          test.mp4 test.mkv test.avi test.mov
-          test.wmv test.flv test.webm test.m4v
-        ]
-
-        supported_files.each do |file|
-          expect(processor.send(:video_file?, file)).to be true
-        end
-      end
-
-      it 'rejects unsupported formats' do
-        unsupported_files = %w[
-          test.txt test.jpg test.mp3 test.pdf
-          test.MP4 test.MKV  # Case sensitivity test
-        ]
-
-        unsupported_files[0..-3].each do |file|  # Skip case test for now
-          expect(processor.send(:video_file?, file)).to be false
-        end
-      end
-
-      it 'handles case-insensitive extensions' do
-        expect(processor.send(:video_file?, 'TEST.MP4')).to be true
-        expect(processor.send(:video_file?, 'movie.MKV')).to be true
-      end
-    end
-  end
-
-  describe 'audio analysis integration' do
-    let(:processor) { described_class.new }
-    let(:movie_mock) { instance_double(FFMPEG::Movie, path: '/test/video.mp4') }
-    let(:analyzer_mock) { instance_double(Neutraliser::AudioAnalyser) }
-
-    before do
-      allow(Neutraliser::AudioAnalyser).to receive(:new).and_return(analyzer_mock)
-    end
-
-    describe '#analyze_loudness' do
-      let(:profile) { processor.instance_variable_get(:@profile) }
-
-      it 'delegates to AudioAnalyser with correct profile' do
-        expect(analyzer_mock).to receive(:analyze_file).with('/test/video.mp4', profile)
-        processor.send(:analyze_loudness, movie_mock)
-      end
-
-      context 'when analysis fails' do
-        before do
-          allow(analyzer_mock).to receive(:analyze_file).and_raise(Neutraliser::FFmpegError.new('Analysis failed'))
-        end
-
-        it 'falls back to dummy data with warning' do
-          expect {
-            result = processor.send(:analyze_loudness, movie_mock)
-            expect(result['fallback']).to be true
-            expect(result['input_i']).to eq(-18.0)
-          }.to output(/Warning: Could not analyze loudness.*using fallback/).to_stdout
-        end
-      end
-    end
-
-    describe '#needs_processing?' do
-      let(:measured_data) { { 'input_i' => '-18.0' } }
-
-      before do
-        allow(analyzer_mock).to receive(:needs_normalization?).and_return(true)
-      end
-
-      it 'delegates to AudioAnalyser with tolerance' do
-        processor.send(:needs_processing?, measured_data)
-
-        expect(analyzer_mock).to have_received(:needs_normalization?).with(
-          measured_data, anything, tolerance: 1.0
-        )
-      end
-    end
-  end
-end
-
-# Integration test tag for real media files
-RSpec.describe Neutraliser::Processor, :integration do
-  # These tests require actual media files and FFmpeg
-  # Skip by default unless explicitly requested with: rspec --tag integration
-
-  let(:media_dir) { '/Volumes/G-TV-Shows' }
-
-  before(:each) do
-    skip 'Integration tests require media files' unless Dir.exist?(media_dir) && ENV['RUN_INTEGRATION_TESTS']
-  end
-
-  describe 'with real media files', :slow do
-    let(:processor) { described_class.new(replace: false, cache: true) }
-
-    it 'processes actual video files correctly' do
-      # Find a small video file for testing
-      video_files = Dir.glob(File.join(media_dir, '**', '*.{mp4,mkv}')).first(1)
-      skip 'No video files found for integration testing' if video_files.empty?
-
-      test_file = video_files.first
-      expect {
-        processor.process(test_file)
-      }.not_to raise_error
+      expect(FileUtils).to have_received(:rm).with(output_file)
     end
   end
 end

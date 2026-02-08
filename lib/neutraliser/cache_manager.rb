@@ -1,5 +1,6 @@
 require 'json'
 require 'digest'
+require 'time'
 
 module Neutraliser
   class CacheManager

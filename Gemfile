@@ -8,6 +8,7 @@ gem 'plex-ruby', '~> 1.5'
 gem 'sqlite3', '~> 1.6'
 gem 'terminal-table', '~> 3.0'
 gem 'dotenv', '~> 2.8'
+gem 'concurrent-ruby', '~> 1.3'
 
 group :development, :test do
   gem 'rspec', '~> 3.12'

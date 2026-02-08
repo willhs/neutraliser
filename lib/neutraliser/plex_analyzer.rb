@@ -9,18 +9,15 @@ module Neutraliser
 
     ACCEPTABLE_VARIANCE = 3.0 # LUFS variance considered acceptable
 
-    attr_reader :server_url, :token, :library_name, :output_format,
-                :sample_percent, :concurrent_jobs, :cache_results
+    attr_reader :server_url, :token, :library_name, :output_format, :sample_percent
 
     def initialize(server_url:, token: nil, library_name: nil, output_format: 'table',
-                   sample_percent: 100, concurrent_jobs: 4, cache_results: false)
+                   sample_percent: 100)
       @server_url = server_url
       @token = token
       @library_name = library_name
       @output_format = output_format
       @sample_percent = sample_percent
-      @concurrent_jobs = concurrent_jobs
-      @cache_results = cache_results
       @plex_server = nil
     end
 

@@ -14,14 +14,54 @@ module Neutraliser
       ]
 
       stdout, stderr, status = Open3.capture3(*cmd)
-      raise FFmpegError, "Measurement failed: #{status.exitstatus}" unless status.success?
+      unless status.success?
+        exit_status = status.respond_to?(:exitstatus) ? status.exitstatus : "unknown"
+        raise FFmpegError, "Measurement failed (exit #{exit_status}): #{stderr}"
+      end
 
       parse_loudnorm_json(stderr)
     end
 
-    def self.apply_normalization(input_path, output_path, measured_data, target_i: -20.0, target_tp: -1.5, target_lra: 12.0)
-      audio_tracks = detect_audio_tracks(input_path)
-      primary_channels = detect_audio_channels(input_path)
+    def self.quick_loudness_sample(input_path, duration: 30, target_i: -20.0)
+      # Quick LUFS estimation using a sample from the middle of the file
+      # Much faster than analyzing the entire file
+
+      # First get the total duration
+      duration_cmd = [
+        "ffprobe", "-v", "error", "-show_entries", "format=duration",
+        "-of", "default=nw=1:nk=1", input_path
+      ]
+
+      stdout, stderr, status = Open3.capture3(*duration_cmd)
+      return nil unless status.success?
+
+      total_duration = stdout.to_f
+      return nil if total_duration < duration * 2 # File too short for meaningful sample
+
+      # Start sampling from middle of file
+      start_time = (total_duration - duration) / 2
+
+      cmd = [
+        "ffmpeg", "-hide_banner", "-nostats",
+        "-ss", start_time.to_s, "-i", input_path,
+        "-t", duration.to_s,
+        "-map", "a:0",
+        "-af", "loudnorm=I=#{target_i}:print_format=json",
+        "-f", "null", "-"
+      ]
+
+      stdout, stderr, status = Open3.capture3(*cmd)
+      return nil unless status.success?
+
+      parse_loudnorm_json(stderr)
+    rescue => e
+      # Return nil on any error to fall back to full analysis
+      nil
+    end
+
+    def self.apply_normalization(input_path, output_path, measured_data, target_i: -20.0, target_tp: -1.5, target_lra: 12.0, audio_tracks: nil)
+      audio_tracks ||= detect_audio_tracks(input_path)
+      primary_channels = audio_tracks.first&.dig(:channels) || detect_audio_channels(input_path)
       primary_codec = select_audio_codec(primary_channels)
 
       loudnorm_filter = build_loudnorm_filter(measured_data, target_i, target_tp, target_lra)
@@ -38,7 +78,8 @@ module Neutraliser
       apply_normalization(input_path, output_path, measured_data,
                          target_i: profile[:lufs],
                          target_tp: profile[:tp],
-                         target_lra: profile[:lra])
+                         target_lra: profile[:lra],
+                         audio_tracks: audio_tracks)
     end
 
     def self.detect_audio_channels(input_path)
@@ -93,7 +134,7 @@ module Neutraliser
     end
 
     def self.select_audio_codec(channel_count)
-      channel_count >= 6 ? ["-c:a", "ac3", "-b:a", "640k"] : ["-c:a", "aac", "-b:a", "256k"]
+      channel_count.to_i >= 6 ? ["-c:a:0", "ac3", "-b:a:0", "640k"] : ["-c:a:0", "aac", "-b:a:0", "256k"]
     end
 
     def self.build_loudnorm_filter(measured, target_i, target_tp, target_lra)
@@ -118,7 +159,7 @@ module Neutraliser
       # Additional audio streams - copy as-is
       if audio_tracks.length > 1
         audio_tracks[1..-1].each do |track|
-          cmd += ["-map", "0:a:#{track[:index]}", "-c:a:#{track[:index] + 1}", "copy"]
+          cmd += ["-map", "0:a:#{track[:index]}", "-c:a:#{track[:index]}", "copy"]
         end
       end
 

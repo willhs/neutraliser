@@ -58,8 +58,9 @@ module Neutraliser
     option :tolerance, type: :numeric, default: 1.0, desc: 'Skip files within this many LU of target'
     option :cache, type: :boolean, default: true, desc: 'Cache analysis results'
     option :dry_run, type: :boolean, default: false, desc: 'Analyze only, do not process files'
-    option :cache_only, type: :boolean, default: false, desc: 'Only create cache files, do not process'
-    option :report, type: :string, desc: 'Generate analysis report: summary, detailed, csv'
+    option :parallel, type: :boolean, default: true, desc: 'Enable parallel processing for multiple files'
+    option :max_threads, type: :numeric, desc: 'Maximum number of concurrent threads (default: auto)'
+    option :fast_verify, type: :boolean, default: true, desc: 'Enable fast verification to reduce analysis time'
     def process(path)
       processor = Processor.new(
         replace: options[:replace],
@@ -67,7 +68,10 @@ module Neutraliser
         profile: options[:profile],
         tolerance: options[:tolerance],
         cache: options[:cache],
-        dry_run: options[:dry_run]
+        dry_run: options[:dry_run],
+        parallel: options[:parallel],
+        max_threads: options[:max_threads],
+        fast_verify: options[:fast_verify]
       )
 
       processor.process(path)
@@ -79,17 +83,13 @@ module Neutraliser
     option :library, type: :string, desc: 'Specific library to analyze (default: all video libraries)'
     option :output_format, type: :string, default: 'table', desc: 'Report format: table, csv, json'
     option :sample_percent, type: :numeric, default: 100, desc: 'Analyze only N% of files for large libraries'
-    option :concurrent_jobs, type: :numeric, default: 4, desc: 'Number of concurrent analysis jobs'
-    option :cache_results, type: :boolean, default: false, desc: 'Cache analysis results to avoid re-analyzing'
     def analyze_plex
       analyzer = PlexAnalyzer.new(
         server_url: options[:server_url],
         token: options[:token],
         library_name: options[:library],
         output_format: options[:output_format],
-        sample_percent: options[:sample_percent],
-        concurrent_jobs: options[:concurrent_jobs],
-        cache_results: options[:cache_results]
+        sample_percent: options[:sample_percent]
       )
 
       analyzer.analyze

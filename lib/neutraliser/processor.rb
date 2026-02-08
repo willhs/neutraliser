@@ -1,13 +1,24 @@
+require_relative 'parallel_processor'
+
 module Neutraliser
   class Processor
     SUPPORTED_FORMATS = %w[.mp4 .mkv .avi .mov .wmv .flv .webm .m4v].freeze
 
-    def initialize(replace: false, target_level: nil, profile: 'livingroom', tolerance: 1.0, cache: true, dry_run: false)
+    def initialize(replace: false, target_level: nil, profile: 'livingroom', tolerance: 1.0, cache: true, dry_run: false, parallel: true, max_threads: nil, fast_verify: true)
       @replace = replace
-      @profile = target_level ? Profiles.get_profile(target_level) : Profiles.get_profile(profile)
+      @profile = if target_level
+                   Profiles.custom_profile(target_level.to_f)
+                 elsif profile.is_a?(Hash)
+                   profile
+                 else
+                   Profiles.get_profile(profile)
+                 end
       @tolerance = tolerance
       @cache_enabled = cache
       @dry_run = dry_run
+      @parallel_enabled = parallel
+      @max_threads = max_threads
+      @fast_verify = fast_verify
     end
 
     def process(path)
@@ -32,7 +43,39 @@ module Neutraliser
       end
 
       puts "Found #{video_files.length} video file(s)"
-      video_files.each { |file| process_file(file) }
+
+      if @parallel_enabled && video_files.length > 1
+        process_files_parallel(video_files)
+      else
+        video_files.each { |file| process_file(file) }
+      end
+    end
+
+    def process_files_parallel(video_files)
+      puts "Processing #{video_files.length} files with #{@max_threads || 'auto'} threads"
+
+      parallel_processor = ParallelProcessor.new(max_threads: @max_threads)
+
+      config = {
+        replace: @replace,
+        profile: @profile,
+        tolerance: @tolerance,
+        cache: @cache_enabled,
+        dry_run: @dry_run,
+        fast_verify: @fast_verify
+      }
+
+      start_time = Time.now
+      begin
+        result = parallel_processor.process_files_parallel(video_files, config)
+        elapsed_time = Time.now - start_time
+
+        puts "Completed #{result[:completed]} files in #{elapsed_time.round(1)}s"
+        puts "Errors: #{result[:errors]}" if result[:errors] > 0
+      ensure
+        # Clean up thread pool
+        parallel_processor.shutdown
+      end
     end
 
     def process_file(file_path)
@@ -55,7 +98,7 @@ module Neutraliser
 
         if needs_processing?(measured_data)
           if @dry_run
-            puts "  [DRY RUN] Would normalize: #{measured_data['input_i'].round(1)} LUFS → #{@profile[:lufs]} LUFS"
+            puts "  [DRY RUN] Would normalize: #{measured_data['input_i'].to_f.round(1)} LUFS → #{@profile[:lufs]} LUFS"
           else
             normalize_file(file_path, measured_data)
           end
@@ -78,24 +121,29 @@ module Neutraliser
     def analyze_loudness(movie)
       analyzer = AudioAnalyser.new(
         cache_enabled: @cache_enabled,
-        use_sidecar: @cache_enabled  # Use sidecar caching when cache is enabled
+        use_sidecar: @cache_enabled,       # Use sidecar caching when cache is enabled
+        fast_verification: @fast_verify    # Use fast verification setting
       )
+
+      # Quick check if analysis is needed (when fast verification is enabled)
+      if @fast_verify && !analyzer.should_analyze_file?(movie.path, @profile, tolerance: @tolerance)
+        puts "  Fast verification: file already at target level"
+        # Return dummy data that indicates no processing needed
+        return create_target_level_data(@profile)
+      end
+
       analyzer.analyze_file(movie.path, @profile)
-    rescue FFmpegError => e
-      puts "  Warning: Could not analyze loudness (#{e.message}), using fallback"
-      fallback_analysis(movie)
     end
 
-    def fallback_analysis(movie)
-      # Fallback: return dummy loudnorm data structure for compatibility
-      puts "  Using fallback analysis - results may not be optimal"
+    def create_target_level_data(profile)
+      # Return analysis data that indicates file is already at target level
       {
-        'input_i' => -18.0,
-        'input_tp' => -1.0,
-        'input_lra' => 10.0,
-        'input_thresh' => -28.0,
-        'target_offset' => 2.0,
-        'fallback' => true
+        'input_i' => profile[:lufs],  # Already at target LUFS
+        'input_tp' => profile[:tp],
+        'input_lra' => profile[:lra],
+        'input_thresh' => profile[:lufs] - 10.0,
+        'target_offset' => 0.0,       # No offset needed
+        'fast_verified' => true
       }
     end
 
@@ -125,7 +173,6 @@ module Neutraliser
 
       # Verify output file integrity before committing changes
       unless FileManager.verify_file_integrity(output_path)
-        FileUtils.rm(output_path) if File.exist?(output_path)
         raise "Output file verification failed - processing aborted"
       end
 
