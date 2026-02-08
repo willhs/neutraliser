@@ -5,8 +5,6 @@ module Neutraliser
     def initialize(max_threads: nil)
       @max_threads = max_threads || calculate_optimal_threads
       @thread_pool = Concurrent::FixedThreadPool.new(@max_threads)
-      @results = Concurrent::Array.new
-      @errors = Concurrent::Array.new
     end
 
     def process_files_parallel(files, processor_config)
@@ -16,19 +14,38 @@ module Neutraliser
         end
       end
 
-      # Wait for all files to complete
-      futures.each(&:wait)
-
-      # Collect results and errors
+      results = []
       futures.each_with_index do |future, index|
+        future.wait
+        file_path = files[index]
         if future.fulfilled?
-          @results << { file: files[index], result: future.value }
+          result = future.value
+          unless result.is_a?(Hash) && result[:status]
+            result = {
+              file: File.expand_path(file_path),
+              status: :failed,
+              reason: :invalid_worker_result,
+              message: 'Worker did not return a valid file result'
+            }
+          end
+          results << result
         else
-          @errors << { file: files[index], error: future.reason }
+          message = future.reason&.message || 'Unknown parallel worker failure'
+          results << {
+            file: File.expand_path(file_path),
+            status: :failed,
+            reason: :parallel_worker_error,
+            message: message
+          }
         end
       end
 
-      { completed: @results.size, errors: @errors.size }
+      {
+        results: results,
+        done: results.count { |result| result[:status] == :done },
+        skipped: results.count { |result| result[:status] == :skipped },
+        failed: results.count { |result| result[:status] == :failed }
+      }
     end
 
     def shutdown
@@ -50,9 +67,10 @@ module Neutraliser
         tolerance: config[:tolerance],
         cache: config[:cache],
         dry_run: config[:dry_run],
-        fast_verify: config[:fast_verify]
+        fast_verify: config[:fast_verify],
+        resume: config[:resume]
       )
-      processor.process(file)
+      processor.process_one(file)
     end
   end
 end

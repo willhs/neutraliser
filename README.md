@@ -70,6 +70,8 @@ For optional gem builds or development workflow details, see the sections below.
 - **`--parallel/--no-parallel`**: Enable or disable multi-file parallel processing.
 - **`--max-threads`**: Set worker thread count for parallel processing.
 - **`--fast-verify/--no-fast-verify`**: Enable or disable quick pre-verification before full analysis.
+- **`--resume`**: Resume a prior directory run using `.neutraliser-run-manifest.jsonl` and skip completed files.
+- `process` exits with status `1` when any file fails, so batch runners can detect partial failure.
 
 ### `profiles`
 

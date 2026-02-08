@@ -40,10 +40,16 @@ RSpec.describe Neutraliser::Processor do
       File.write(video_1, 'x')
       File.write(video_2, 'x')
 
-      expect(processor).to receive(:process_file).with(video_1)
-      expect(processor).to receive(:process_file).with(video_2)
+      expect(processor).to receive(:process_one).with(video_1).and_return(
+        { file: video_1, status: :done, reason: :normalized, message: nil }
+      )
+      expect(processor).to receive(:process_one).with(video_2).and_return(
+        { file: video_2, status: :skipped, reason: :within_tolerance, message: nil }
+      )
 
-      processor.process(temp_dir)
+      summary = processor.process(temp_dir)
+      expect(summary[:done]).to eq(1)
+      expect(summary[:skipped]).to eq(1)
     end
 
     it 'routes multi-file directories through parallel processor when enabled' do
@@ -53,8 +59,37 @@ RSpec.describe Neutraliser::Processor do
       File.write(video_1, 'x')
       File.write(video_2, 'x')
 
-      expect(processor).to receive(:process_files_parallel).with(array_including(video_1, video_2))
-      processor.process(temp_dir)
+      expect(processor).to receive(:process_files_parallel).with(array_including(video_1, video_2)).and_return([])
+      summary = processor.process(temp_dir)
+      expect(summary[:queued]).to eq(2)
+    end
+
+    it 'supports resuming from manifest and skips completed files' do
+      processor = described_class.new(parallel: false, resume: true)
+      completed = File.join(temp_dir, 'done.mp4')
+      pending = File.join(temp_dir, 'todo.mkv')
+      File.write(completed, 'x')
+      File.write(pending, 'x')
+
+      manifest_path = File.join(temp_dir, '.neutraliser-run-manifest.jsonl')
+      File.open(manifest_path, 'w') do |manifest|
+        manifest.puts(JSON.generate({
+          timestamp: Time.now.utc.iso8601,
+          file: File.expand_path(completed),
+          status: 'done'
+        }))
+      end
+
+      expect(processor).to receive(:process_one).with(pending).and_return(
+        { file: pending, status: :done, reason: :normalized, message: nil }
+      )
+      expect(processor).not_to receive(:process_one).with(completed)
+
+      summary = processor.process(temp_dir)
+      expect(summary[:resumed]).to eq(1)
+      expect(summary[:queued]).to eq(1)
+      expect(summary[:done]).to eq(1)
+      expect(summary[:failed]).to eq(0)
     end
   end
 

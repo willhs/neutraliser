@@ -61,6 +61,7 @@ module Neutraliser
     option :parallel, type: :boolean, default: true, desc: 'Enable parallel processing for multiple files'
     option :max_threads, type: :numeric, desc: 'Maximum number of concurrent threads (default: auto)'
     option :fast_verify, type: :boolean, default: true, desc: 'Enable fast verification to reduce analysis time'
+    option :resume, type: :boolean, default: false, desc: 'Resume from previous run manifest and skip completed files'
     def process(path)
       processor = Processor.new(
         replace: options[:replace],
@@ -71,10 +72,18 @@ module Neutraliser
         dry_run: options[:dry_run],
         parallel: options[:parallel],
         max_threads: options[:max_threads],
-        fast_verify: options[:fast_verify]
+        fast_verify: options[:fast_verify],
+        resume: options[:resume]
       )
 
-      processor.process(path)
+      summary = processor.process(path)
+
+      if summary.is_a?(Hash)
+        puts "Summary: found=#{summary[:found]}, queued=#{summary[:queued]}, resumed=#{summary[:resumed]}, " \
+             "done=#{summary[:done]}, skipped=#{summary[:skipped]}, failed=#{summary[:failed]}"
+        puts "Manifest: #{summary[:manifest_path]}" if summary[:manifest_path]
+        exit 1 if summary[:failed].to_i.positive?
+      end
     end
 
     desc 'analyze-plex', 'Analyze Plex library audio levels'
