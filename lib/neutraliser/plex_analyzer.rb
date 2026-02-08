@@ -181,7 +181,7 @@ module Neutraliser
         puts "📊 Sampling #{sample_size} items (#{sample_percent}% of #{all_items.size} total)"
       end
 
-      puts "🎬 Found #{all_items.size} items to analyze"
+      # Found items to analyze (reduced logging)
 
       results = []
       processed = 0
@@ -192,8 +192,8 @@ module Neutraliser
           results << result if result
           processed += 1
 
-          # Progress indicator
-          if processed % 10 == 0
+          # Progress indicator (reduced logging)
+          if processed % 25 == 0
             puts "   ⏳ Processed #{processed}/#{all_items.size} items..."
           end
         rescue => e
@@ -211,11 +211,11 @@ module Neutraliser
       # Get Plex streaming URL
       streaming_url = get_plex_streaming_url(item)
       unless streaming_url
-        puts "   🚫 #{title}: No streaming URL available"
+        # No streaming URL available (reduced logging)
         return nil
       end
 
-      puts "   📡 #{title}: Analyzing via Plex stream..."
+      # Analyzing via Plex stream (reduced logging)
 
       # Determine content type for target level selection
       content_type = determine_content_type(item, library_type)
@@ -227,11 +227,11 @@ module Neutraliser
 
         # Skip if we can't get a valid measurement
         if current_level == -20.0 || current_level == -18.0  # Skip placeholder/fallback values
-          puts "   ⚠️  #{title}: Got placeholder audio level (#{current_level}), skipping"
+          # Skipping placeholder audio level (reduced logging)
           return nil
         end
 
-        puts "   ✅ #{title}: Audio level #{current_level} LUFS"
+        # Audio level analyzed (reduced logging)
 
         {
           title: title,
@@ -245,7 +245,7 @@ module Neutraliser
           adjustment_type: get_adjustment_type(current_level, target_level)
         }
       rescue => e
-        puts "   ❌ #{title}: Error analyzing audio - #{e.message}"
+        # Error analyzing audio (reduced logging)
         return nil
       end
     end
@@ -295,7 +295,7 @@ module Neutraliser
         # Fallback
         -18.0
       rescue => e
-        puts "    Warning: Stream analysis failed (#{e.message}), using fallback"
+        # Stream analysis failed, using fallback (reduced logging)
         -18.0
       ensure
         File.delete(temp_analysis_file) if File.exist?(temp_analysis_file)

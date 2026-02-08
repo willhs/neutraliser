@@ -151,15 +151,20 @@ module Neutraliser
       cmd = [
         "ffmpeg", "-hide_banner", "-y", "-i", input_path,
         # Video stream - always copy
-        "-map", "0:v", "-c:v", "copy",
-        # Primary audio stream - normalize
-        "-map", "0:a:0", "-af", loudnorm_filter
+        "-map", "0:v", "-c:v", "copy"
+      ]
+
+      # Primary audio stream - normalize using filter_complex
+      cmd += [
+        "-filter_complex", "[0:a:0]#{loudnorm_filter}[norm]",
+        "-map", "[norm]"
       ] + primary_codec
 
-      # Additional audio streams - copy as-is
+      # Additional audio streams - copy as-is with explicit indexing
       if audio_tracks.length > 1
-        audio_tracks[1..-1].each do |track|
-          cmd += ["-map", "0:a:#{track[:index]}", "-c:a:#{track[:index]}", "copy"]
+        audio_tracks[1..-1].each_with_index do |track, idx|
+          output_index = idx + 1
+          cmd += ["-map", "0:a:#{track[:index]}", "-c:a:#{output_index}", "copy"]
         end
       end
 

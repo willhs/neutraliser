@@ -34,15 +34,23 @@ module Neutraliser
 
     private
 
+    def timestamp
+      Time.now.strftime('[%Y-%m-%d %H:%M:%S]')
+    end
+
+    def log(message)
+      puts "#{timestamp} #{message}"
+    end
+
     def process_directory(dir_path)
       video_files = find_video_files(dir_path)
 
       if video_files.empty?
-        puts "No video files found in '#{dir_path}'"
+        log "No video files found in '#{dir_path}'"
         return
       end
 
-      puts "Found #{video_files.length} video file(s)"
+      log "Found #{video_files.length} video file(s)"
 
       if @parallel_enabled && video_files.length > 1
         process_files_parallel(video_files)
@@ -52,7 +60,7 @@ module Neutraliser
     end
 
     def process_files_parallel(video_files)
-      puts "Processing #{video_files.length} files with #{@max_threads || 'auto'} threads"
+      log "Processing #{video_files.length} files with #{@max_threads || 'auto'} threads"
 
       parallel_processor = ParallelProcessor.new(max_threads: @max_threads)
 
@@ -70,27 +78,26 @@ module Neutraliser
         result = parallel_processor.process_files_parallel(video_files, config)
         elapsed_time = Time.now - start_time
 
-        puts "Completed #{result[:completed]} files in #{elapsed_time.round(1)}s"
-        puts "Errors: #{result[:errors]}" if result[:errors] > 0
+        log "Completed #{result[:completed]} files in #{elapsed_time.round(1)}s"
+        log "Errors: #{result[:errors]}" if result[:errors] > 0
       ensure
-        # Clean up thread pool
         parallel_processor.shutdown
       end
     end
 
     def process_file(file_path)
       unless video_file?(file_path)
-        puts "Skipping '#{file_path}' - not a supported video format"
+        log "Skipping '#{file_path}' - not a supported video format"
         return
       end
 
-      puts "Processing: #{file_path}"
+      log "Processing: #{file_path}"
 
       begin
         movie = FFMPEG::Movie.new(file_path)
 
         unless movie.audio_stream
-          puts "  No audio track found, skipping"
+          log "  No audio track found, skipping"
           return
         end
 
@@ -103,10 +110,10 @@ module Neutraliser
             normalize_file(file_path, measured_data)
           end
         else
-          puts "  Already at target level, skipping"
+          log "  Already at target level, skipping"
         end
       rescue => e
-        puts "  Error processing file: #{e.message}"
+        log "  Error processing file: #{e.message}"
       end
     end
 
@@ -162,10 +169,10 @@ module Neutraliser
       # Check for multiple audio tracks
       audio_tracks = detect_audio_tracks(file_path)
       if audio_tracks.length > 1
-        puts "  Found #{audio_tracks.length} audio tracks, normalizing primary track only"
+        log "  Found #{audio_tracks.length} audio tracks, normalizing primary track only"
       end
 
-      puts "  Current: #{current_lufs.round(1)} LUFS, Target: #{target_lufs} LUFS (#{adjustment.round(1)} LU adjustment)"
+      log "  Current: #{current_lufs.round(1)} LUFS, Target: #{target_lufs} LUFS (#{adjustment.round(1)} LU adjustment)"
 
       FFmpegWrapper.apply_normalization_with_multiple_tracks(
         file_path, output_path, measured_data, audio_tracks, @profile
@@ -178,9 +185,9 @@ module Neutraliser
 
       if @replace
         FileManager.atomic_replace(output_path, file_path)
-        puts "  Replaced: #{file_path}"
+        log "  Replaced: #{file_path}"
       else
-        puts "  Saved: #{output_path}"
+        log "  Saved: #{output_path}"
       end
     rescue => e
       # Clean up temp file on error
