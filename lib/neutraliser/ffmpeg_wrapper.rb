@@ -7,7 +7,7 @@ module Neutraliser
 
   class FFmpegWrapper
     # Timeout constants (in seconds)
-    ANALYSIS_TIMEOUT = 600    # 10 minutes for full analysis
+    ANALYSIS_TIMEOUT = 300    # 5 minutes for full analysis
     QUICK_TIMEOUT = 120       # 2 minutes for quick operations
     NORMALIZATION_TIMEOUT = 1800  # 30 minutes for normalization
     PROBE_TIMEOUT = 30        # 30 seconds for ffprobe
