@@ -3,8 +3,14 @@ require 'json'
 
 module Neutraliser
   class FFmpegError < StandardError; end
+  class FFmpegTimeoutError < FFmpegError; end
 
   class FFmpegWrapper
+    # Timeout constants (in seconds)
+    ANALYSIS_TIMEOUT = 600    # 10 minutes for full analysis
+    QUICK_TIMEOUT = 120       # 2 minutes for quick operations
+    NORMALIZATION_TIMEOUT = 1800  # 30 minutes for normalization
+    PROBE_TIMEOUT = 30        # 30 seconds for ffprobe
     def self.measure_loudness(input_path, target_i: -20.0, target_tp: -1.5, target_lra: 12.0)
       cmd = [
         "ffmpeg", "-hide_banner", "-nostats", "-i", input_path,
@@ -13,7 +19,7 @@ module Neutraliser
         "-f", "null", "-"
       ]
 
-      stdout, stderr, status = Open3.capture3(*cmd)
+      stdout, stderr, status = execute_with_timeout(cmd, ANALYSIS_TIMEOUT, "Loudness measurement")
       unless status.success?
         exit_status = status.respond_to?(:exitstatus) ? status.exitstatus : "unknown"
         raise FFmpegError, "Measurement failed (exit #{exit_status}): #{stderr}"
@@ -32,7 +38,7 @@ module Neutraliser
         "-of", "default=nw=1:nk=1", input_path
       ]
 
-      stdout, stderr, status = Open3.capture3(*duration_cmd)
+      stdout, stderr, status = execute_with_timeout(duration_cmd, PROBE_TIMEOUT, "Duration probe")
       return nil unless status.success?
 
       total_duration = stdout.to_f
@@ -50,7 +56,7 @@ module Neutraliser
         "-f", "null", "-"
       ]
 
-      stdout, stderr, status = Open3.capture3(*cmd)
+      stdout, stderr, status = execute_with_timeout(cmd, QUICK_TIMEOUT, "Quick loudness sample")
       return nil unless status.success?
 
       parse_loudnorm_json(stderr)
@@ -89,7 +95,7 @@ module Neutraliser
         input_path
       ]
 
-      stdout, stderr, status = Open3.capture3(*cmd)
+      stdout, stderr, status = execute_with_timeout(cmd, PROBE_TIMEOUT, "Audio channel detection")
       unless status.success?
         raise FFmpegError, "Failed to detect audio channels: #{stderr}"
       end
@@ -104,7 +110,7 @@ module Neutraliser
         "-of", "csv=p=0", input_path
       ]
 
-      stdout, stderr, status = Open3.capture3(*cmd)
+      stdout, stderr, status = execute_with_timeout(cmd, PROBE_TIMEOUT, "Audio track detection")
       unless status.success?
         return [{ index: 0, channels: 2, codec: 'unknown' }]
       end
@@ -123,6 +129,58 @@ module Neutraliser
     end
 
     private
+
+    def self.execute_with_timeout(cmd, timeout_seconds, operation_name)
+      # Use Open3.popen3 with manual timeout to avoid thread corruption from Timeout.timeout
+      stdout_str = ""
+      stderr_str = ""
+      status = nil
+
+      Open3.popen3(*cmd) do |stdin, stdout, stderr, wait_thr|
+        stdin.close
+
+        # Use IO.select with timeout to safely handle slow operations
+        start_time = Time.now
+        stdout_eof = false
+        stderr_eof = false
+
+        until stdout_eof && stderr_eof
+          elapsed = Time.now - start_time
+          if elapsed > timeout_seconds
+            # Timeout - kill the process
+            Process.kill('TERM', wait_thr.pid) rescue nil
+            sleep(1)
+            Process.kill('KILL', wait_thr.pid) rescue nil
+            raise FFmpegTimeoutError, "#{operation_name} timed out after #{timeout_seconds}s - file may be corrupted or have unsupported codec"
+          end
+
+          # Check which streams have data available (with 1 second timeout per iteration)
+          ready = IO.select([stdout, stderr].compact, nil, nil, 1)
+          next unless ready
+
+          ready[0].each do |io|
+            begin
+              if io == stdout
+                data = io.read_nonblock(4096)
+                stdout_str << data
+              elsif io == stderr
+                data = io.read_nonblock(4096)
+                stderr_str << data
+              end
+            rescue IO::WaitReadable
+              # Nothing to read right now
+            rescue EOFError
+              stdout_eof = true if io == stdout
+              stderr_eof = true if io == stderr
+            end
+          end
+        end
+
+        status = wait_thr.value
+      end
+
+      [stdout_str, stderr_str, status]
+    end
 
     def self.parse_loudnorm_json(stderr_output)
       json_text = stderr_output[/\{\s*"input_i".*?\}/m]
@@ -179,7 +237,7 @@ module Neutraliser
     end
 
     def self.execute_with_progress(cmd)
-      stdout, stderr, status = Open3.capture3(*cmd)
+      stdout, stderr, status = execute_with_timeout(cmd, NORMALIZATION_TIMEOUT, "Normalization")
       unless status.success?
         raise FFmpegError, "FFmpeg normalization failed: #{stderr}"
       end
