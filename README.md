@@ -12,6 +12,7 @@ Never adjust your volume between videos again. Neutraliser analyses and adjusts 
 - **Safe by Default**: Creates copies of your files, leaving originals untouched
 - **Flexible**: Option to replace original files with `--replace` flag
 - **Batch Processing**: Process entire directories or individual files
+- **Quality Preservation**: Matches source audio codec and bitrate — no unnecessary quality loss during normalization
 - **Video Preservation**: Maintains video quality while only adjusting audio levels
 
 ## Installation
