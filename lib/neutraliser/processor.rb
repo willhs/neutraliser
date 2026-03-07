@@ -39,7 +39,7 @@ module Neutraliser
           results: [process_one(path)]
         )
       else
-        puts "Error: Path '#{path}' does not exist"
+        log "Error: Path '#{path}' does not exist"
         exit 1
       end
     end
@@ -50,12 +50,8 @@ module Neutraliser
 
     private
 
-    def timestamp
-      Time.now.strftime('[%Y-%m-%d %H:%M:%S]')
-    end
-
     def log(message)
-      puts "#{timestamp} #{message}"
+      Neutraliser.logger.log(message)
     end
 
     def process_directory(dir_path)
@@ -302,7 +298,7 @@ module Neutraliser
 
       # Quick check if analysis is needed (when fast verification is enabled)
       if @fast_verify && !analyzer.should_analyze_file?(movie.path, @profile, tolerance: @tolerance)
-        puts "  Fast verification: file already at target level"
+        log "  Fast verification: file already at target level"
         # Return dummy data that indicates no processing needed
         return create_target_level_data(@profile)
       end
@@ -342,9 +338,11 @@ module Neutraliser
 
       log "  Current: #{current_lufs.round(1)} LUFS, Target: #{target_lufs} LUFS (#{adjustment.round(1)} LU adjustment)"
 
-      FFmpegWrapper.apply_normalization_with_multiple_tracks(
+      codec_decision = FFmpegWrapper.apply_normalization_with_multiple_tracks(
         file_path, output_path, measured_data, audio_tracks, @profile
       )
+
+      log_codec_decision(codec_decision)
 
       # Verify output file integrity before committing changes
       unless FileManager.verify_file_integrity(output_path)
@@ -361,6 +359,21 @@ module Neutraliser
       # Clean up temp file on error
       FileUtils.rm(output_path) if File.exist?(output_path)
       raise e
+    end
+
+    def log_codec_decision(decision)
+      return unless decision.is_a?(Hash) && decision[:encoder]
+
+      source = decision[:source_codec].to_s
+      source += " #{decision[:source_bitrate] / 1000}k" if decision[:source_bitrate].to_i > 0
+
+      target = if decision[:lossless_output]
+                 "#{decision[:encoder]} (lossless)"
+               else
+                 "#{decision[:encoder]} #{decision[:bitrate].to_i / 1000}k"
+               end
+
+      log "  Audio: #{source} -> #{target}"
     end
 
     def generate_temp_path(file_path)

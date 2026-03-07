@@ -191,8 +191,10 @@ RSpec.describe Neutraliser::Processor do
 
     before do
       File.write(video_file, 'x')
-      allow(processor).to receive(:detect_audio_tracks).and_return([{ index: 0, codec: 'aac', channels: 2 }])
-      allow(Neutraliser::FFmpegWrapper).to receive(:apply_normalization_with_multiple_tracks)
+      allow(processor).to receive(:detect_audio_tracks).and_return([{ index: 0, codec: 'aac', channels: 2, bit_rate: 256000, sample_rate: 48000 }])
+      allow(Neutraliser::FFmpegWrapper).to receive(:apply_normalization_with_multiple_tracks).and_return(
+        { encoder: 'aac', bitrate: 256_000, source_codec: 'aac', source_bitrate: 256_000, lossless_output: false }
+      )
       allow(Neutraliser::FileManager).to receive(:verify_file_integrity).and_return(true)
     end
 
