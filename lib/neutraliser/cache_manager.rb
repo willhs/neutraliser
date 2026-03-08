@@ -93,7 +93,7 @@ module Neutraliser
         File.write(cache_file, JSON.pretty_generate(cache_data))
       rescue StandardError => e
         # Don't fail processing if caching fails, just warn
-        puts "  Warning: Could not save analysis cache: #{e.message}"
+        Neutraliser.logger.log "  Warning: Could not save analysis cache: #{e.message}"
       end
     end
 
@@ -113,11 +113,11 @@ module Neutraliser
 
             if age_days > max_age_days
               File.delete(cache_file)
-              puts "  Cleaned up stale cache: #{File.basename(cache_file)}"
+              Neutraliser.logger.log "  Cleaned up stale cache: #{File.basename(cache_file)}"
             end
           end
         rescue StandardError => e
-          puts "  Warning: Could not clean up cache file #{cache_file}: #{e.message}"
+          Neutraliser.logger.log "  Warning: Could not clean up cache file #{cache_file}: #{e.message}"
         end
       end
     end

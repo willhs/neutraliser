@@ -58,6 +58,15 @@ When re-encoding normalised audio, the codec and bitrate are selected to match t
 
 See [ADR-0001](adr/0001-smart-codec-selection.md) for the full rationale.
 
+### Performance Flags
+
+Two optional flags reduce per-file processing time. See [ADR-0002](adr/0002-performance-flags.md) for rationale and benchmark data.
+
+- **`--fast`** — uses FFmpeg's single-pass loudnorm (dynamic mode) instead of the default two-pass (linear mode). Skips the measurement pass entirely. Benchmarked at **30-37% faster** in both single-file and parallel scenarios. Slightly less accurate — uses dynamic gain adjustment rather than a constant linear offset.
+- **`--local-stage`** — copies each file to a local temp directory (`/tmp/neutraliser_staging/`) before processing, then copies the result back. Designed to avoid slow random I/O over SMB/NFS. Benchmarks showed **no improvement on fast LAN** (~110 MB/s SMB) where CPU is the bottleneck, but may help on slower network mounts. Cache sidecar files are still read/written next to the original video, not the staged copy.
+
+Both flags are independent and can be combined.
+
 ### Key Components
 
 | Component | File | Responsibility |
@@ -70,6 +79,7 @@ See [ADR-0001](adr/0001-smart-codec-selection.md) for the full rationale.
 | FastVerifier | `lib/neutraliser/fast_verifier.rb` | Quick LUFS sampling to skip already-normalised files |
 | FileManager | `lib/neutraliser/file_manager.rb` | Atomic file replacement, integrity verification |
 | ParallelProcessor | `lib/neutraliser/parallel_processor.rb` | Thread-pool dispatch for multi-file runs |
+| LocalStager | `lib/neutraliser/local_stager.rb` | Stage files to local NVMe for fast processing, copy result back |
 
 ## Decisions / Rationale
 
@@ -91,3 +101,4 @@ See [ADR-0001](adr/0001-smart-codec-selection.md) for the full rationale.
 ### Change Log
 - 2025-09-24 (agent:create-project): Created architecture placeholder
 - 2026-03-07 (agent:implement-plan): Added pipeline diagram, codec selection, component table
+- 2026-03-08 (agent:implement-plan): Added performance flags section, LocalStager component

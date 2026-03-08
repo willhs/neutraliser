@@ -56,7 +56,7 @@ module Neutraliser
           end
         rescue => e
           # Don't fail cleanup if we can't delete a file
-          puts "  Warning: Could not clean up temp file #{file}: #{e.message}"
+          Neutraliser.logger.log "  Warning: Could not clean up temp file #{file}: #{e.message}"
         end
       end
     end

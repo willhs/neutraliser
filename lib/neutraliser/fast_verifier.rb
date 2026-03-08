@@ -16,13 +16,13 @@ module Neutraliser
 
       # Strategy 2: Check for recent processing markers
       if recently_processed?(file_path, profile)
-        puts "  File recently processed for this profile, skipping"
+        Neutraliser.logger.log "  File recently processed for this profile, skipping"
         return false
       end
 
       # Strategy 3: Fast audio sampling for rough LUFS estimate
       if quick_lufs_check(file_path, profile, tolerance)
-        puts "  Quick check shows file likely within tolerance"
+        Neutraliser.logger.log "  Quick check shows file likely within tolerance"
         return false
       end
 
@@ -77,7 +77,7 @@ module Neutraliser
         end
       rescue => e
         # If quick check fails, fall back to full analysis
-        puts "  Quick check failed (#{e.message}), using full analysis"
+        Neutraliser.logger.log "  Quick check failed (#{e.message}), using full analysis"
       end
 
       false
@@ -104,7 +104,7 @@ module Neutraliser
       File.write(marker_file, JSON.pretty_generate(marker_data))
     rescue => e
       # Don't fail if marker creation fails
-      puts "  Warning: Could not create processing marker: #{e.message}"
+      Neutraliser.logger.log "  Warning: Could not create processing marker: #{e.message}"
     end
   end
 end

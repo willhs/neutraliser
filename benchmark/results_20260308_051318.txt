@@ -1,0 +1,210 @@
+=== Neutraliser Performance Benchmark ===
+Date: Sun  8 Mar 05:13:18 UTC 2026
+Host: budgie
+
+
+--- SINGLE FILE TESTS ---
+[2026-03-08 05:16:08] Processing: /mnt/nas/media/movies/_benchmark_test/test_1.mp4
+[2026-03-08 05:16:25]   Current: -51.8 LUFS, Target: -20.0 LUFS (31.8 LU adjustment)
+[2026-03-08 05:16:56]   Audio: 44100 0k -> aac 128k
+[2026-03-08 05:17:03]   Replaced: /mnt/nas/media/movies/_benchmark_test/test_1.mp4
+Summary: found=1, queued=1, resumed=0, done=1, skipped=0, failed=0
+
+real	0m55.339s
+user	0m34.612s
+sys	0m3.365s
+[2026-03-08 05:18:03] Processing: /mnt/nas/media/movies/_benchmark_test/test_1.mp4
+[2026-03-08 05:18:03]   Fast mode: single-pass normalization to -20.0 LUFS
+[2026-03-08 05:18:35]   Audio: 44100 0k -> aac 128k
+[2026-03-08 05:18:41]   Replaced: /mnt/nas/media/movies/_benchmark_test/test_1.mp4
+Summary: found=1, queued=1, resumed=0, done=1, skipped=0, failed=0
+
+real	0m38.483s
+user	0m22.392s
+sys	0m3.019s
+[2026-03-08 05:19:40] Processing: /mnt/nas/media/movies/_benchmark_test/test_1.mp4
+[2026-03-08 05:19:40]   Staging in: /mnt/nas/media/movies/_benchmark_test/test_1.mp4 -> /tmp/neutraliser_staging/test_1_d15152dce611.mp4
+[2026-03-08 05:20:01]   Current: -51.8 LUFS, Target: -20.0 LUFS (31.8 LU adjustment)
+[2026-03-08 05:20:24]   Audio: 44100 0k -> aac 128k
+[2026-03-08 05:20:24]   Staging out: /tmp/neutraliser_staging/test_1_d15152dce611_neutraliser_3b4613d6a15f8e01.mp4 -> /mnt/nas/media/movies/_benchmark_test/test_1.mp4
+[2026-03-08 05:20:33]   Replaced: /mnt/nas/media/movies/_benchmark_test/test_1.mp4
+Summary: found=1, queued=1, resumed=0, done=1, skipped=0, failed=0
+
+real	0m53.793s
+user	0m34.208s
+sys	0m4.313s
+[2026-03-08 05:21:34] Processing: /mnt/nas/media/movies/_benchmark_test/test_1.mp4
+[2026-03-08 05:21:34]   Staging in: /mnt/nas/media/movies/_benchmark_test/test_1.mp4 -> /tmp/neutraliser_staging/test_1_62eab251fee7.mp4
+[2026-03-08 05:21:44]   Fast mode: single-pass normalization to -20.0 LUFS
+[2026-03-08 05:22:05]   Audio: 44100 0k -> aac 128k
+[2026-03-08 05:22:05]   Staging out: /tmp/neutraliser_staging/test_1_62eab251fee7_neutraliser_f50d01528ea58153.mp4 -> /mnt/nas/media/movies/_benchmark_test/test_1.mp4
+[2026-03-08 05:22:15]   Replaced: /mnt/nas/media/movies/_benchmark_test/test_1.mp4
+Summary: found=1, queued=1, resumed=0, done=1, skipped=0, failed=0
+
+real	0m41.092s
+user	0m21.456s
+sys	0m4.291s
+
+--- PARALLEL (6 FILE) TESTS ---
+[2026-03-08 05:23:14] Found 6 video file(s)
+[2026-03-08 05:23:15] Processing 6 files with auto threads
+[2026-03-08 05:23:15] Processing: /mnt/nas/media/movies/_benchmark_test/test_1.mp4
+[2026-03-08 05:23:15] Processing: /mnt/nas/media/movies/_benchmark_test/test_2.mp4
+[2026-03-08 05:23:15] Processing: /mnt/nas/media/movies/_benchmark_test/test_3.mp4
+[2026-03-08 05:23:15] Processing: /mnt/nas/media/movies/_benchmark_test/test_4.mp4
+[2026-03-08 05:23:15] Processing: /mnt/nas/media/movies/_benchmark_test/test_5.mp4
+[2026-03-08 05:23:56]   Current: -51.8 LUFS, Target: -20.0 LUFS (31.8 LU adjustment)
+[2026-03-08 05:23:56]   Current: -51.8 LUFS, Target: -20.0 LUFS (31.8 LU adjustment)
+[2026-03-08 05:23:57]   Current: -51.8 LUFS, Target: -20.0 LUFS (31.8 LU adjustment)
+[2026-03-08 05:23:57]   Current: -51.8 LUFS, Target: -20.0 LUFS (31.8 LU adjustment)
+[2026-03-08 05:23:58]   Current: -51.8 LUFS, Target: -20.0 LUFS (31.8 LU adjustment)
+[2026-03-08 05:24:45]   Audio: 44100 0k -> aac 128k
+[2026-03-08 05:24:45]   Audio: 44100 0k -> aac 128k
+[2026-03-08 05:24:47]   Audio: 44100 0k -> aac 128k
+[2026-03-08 05:24:47]   Audio: 44100 0k -> aac 128k
+[2026-03-08 05:24:48]   Audio: 44100 0k -> aac 128k
+[2026-03-08 05:24:56]   Replaced: /mnt/nas/media/movies/_benchmark_test/test_3.mp4
+[2026-03-08 05:24:56] Processing: /mnt/nas/media/movies/_benchmark_test/test_6.mp4
+[2026-03-08 05:25:06]   Replaced: /mnt/nas/media/movies/_benchmark_test/test_2.mp4
+[2026-03-08 05:25:06]   Replaced: /mnt/nas/media/movies/_benchmark_test/test_5.mp4
+[2026-03-08 05:25:06]   Replaced: /mnt/nas/media/movies/_benchmark_test/test_4.mp4
+[2026-03-08 05:25:06]   Replaced: /mnt/nas/media/movies/_benchmark_test/test_1.mp4
+[2026-03-08 05:25:25]   Current: -51.8 LUFS, Target: -20.0 LUFS (31.8 LU adjustment)
+[2026-03-08 05:25:55]   Audio: 44100 0k -> aac 128k
+[2026-03-08 05:26:02]   Replaced: /mnt/nas/media/movies/_benchmark_test/test_6.mp4
+[2026-03-08 05:26:02] Parallel worker summary: done=6, skipped=0, failed=0 (167.3s)
+[2026-03-08 05:26:02] Run summary: queued=6, done=6, skipped=0, failed=0, resumed=0
+Summary: found=6, queued=6, resumed=0, done=6, skipped=0, failed=0
+Manifest: /mnt/nas/media/movies/_benchmark_test/.neutraliser-run-manifest.jsonl
+
+real	2m47.898s
+user	3m51.287s
+sys	0m23.219s
+[2026-03-08 05:27:01] Found 6 video file(s)
+[2026-03-08 05:27:01] Processing 6 files with auto threads
+[2026-03-08 05:27:01] Processing: /mnt/nas/media/movies/_benchmark_test/test_1.mp4
+[2026-03-08 05:27:01] Processing: /mnt/nas/media/movies/_benchmark_test/test_2.mp4
+[2026-03-08 05:27:01] Processing: /mnt/nas/media/movies/_benchmark_test/test_3.mp4
+[2026-03-08 05:27:01] Processing: /mnt/nas/media/movies/_benchmark_test/test_4.mp4
+[2026-03-08 05:27:01] Processing: /mnt/nas/media/movies/_benchmark_test/test_5.mp4
+[2026-03-08 05:27:01]   Fast mode: single-pass normalization to -20.0 LUFS
+[2026-03-08 05:27:01]   Fast mode: single-pass normalization to -20.0 LUFS
+[2026-03-08 05:27:01]   Fast mode: single-pass normalization to -20.0 LUFS
+[2026-03-08 05:27:01]   Fast mode: single-pass normalization to -20.0 LUFS
+[2026-03-08 05:27:01]   Fast mode: single-pass normalization to -20.0 LUFS
+[2026-03-08 05:27:55]   Audio: 44100 0k -> aac 128k
+[2026-03-08 05:27:55]   Audio: 44100 0k -> aac 128k
+[2026-03-08 05:27:56]   Audio: 44100 0k -> aac 128k
+[2026-03-08 05:27:56]   Audio: 44100 0k -> aac 128k
+[2026-03-08 05:27:57]   Audio: 44100 0k -> aac 128k
+[2026-03-08 05:28:02]   Replaced: /mnt/nas/media/movies/_benchmark_test/test_5.mp4
+[2026-03-08 05:28:02] Processing: /mnt/nas/media/movies/_benchmark_test/test_6.mp4
+[2026-03-08 05:28:08]   Fast mode: single-pass normalization to -20.0 LUFS
+[2026-03-08 05:28:09]   Replaced: /mnt/nas/media/movies/_benchmark_test/test_4.mp4
+[2026-03-08 05:28:09]   Replaced: /mnt/nas/media/movies/_benchmark_test/test_2.mp4
+[2026-03-08 05:28:10]   Replaced: /mnt/nas/media/movies/_benchmark_test/test_3.mp4
+[2026-03-08 05:28:10]   Replaced: /mnt/nas/media/movies/_benchmark_test/test_1.mp4
+[2026-03-08 05:28:40]   Audio: 44100 0k -> aac 128k
+[2026-03-08 05:28:47]   Replaced: /mnt/nas/media/movies/_benchmark_test/test_6.mp4
+[2026-03-08 05:28:47] Parallel worker summary: done=6, skipped=0, failed=0 (105.7s)
+[2026-03-08 05:28:47] Run summary: queued=6, done=6, skipped=0, failed=0, resumed=0
+Summary: found=6, queued=6, resumed=0, done=6, skipped=0, failed=0
+Manifest: /mnt/nas/media/movies/_benchmark_test/.neutraliser-run-manifest.jsonl
+
+real	1m46.142s
+user	2m35.429s
+sys	0m20.711s
+[2026-03-08 05:29:46] Found 6 video file(s)
+[2026-03-08 05:29:46] Processing 6 files with auto threads
+[2026-03-08 05:29:46] Processing: /mnt/nas/media/movies/_benchmark_test/test_1.mp4
+[2026-03-08 05:29:46]   Staging in: /mnt/nas/media/movies/_benchmark_test/test_1.mp4 -> /tmp/neutraliser_staging/test_1_9e37743a76b5.mp4
+[2026-03-08 05:29:46] Processing: /mnt/nas/media/movies/_benchmark_test/test_2.mp4
+[2026-03-08 05:29:46]   Staging in: /mnt/nas/media/movies/_benchmark_test/test_2.mp4 -> /tmp/neutraliser_staging/test_2_a31c4e09961d.mp4
+[2026-03-08 05:29:46] Processing: /mnt/nas/media/movies/_benchmark_test/test_4.mp4
+[2026-03-08 05:29:46]   Staging in: /mnt/nas/media/movies/_benchmark_test/test_4.mp4 -> /tmp/neutraliser_staging/test_4_b847ec28e986.mp4
+[2026-03-08 05:29:46] Processing: /mnt/nas/media/movies/_benchmark_test/test_5.mp4
+[2026-03-08 05:29:46]   Staging in: /mnt/nas/media/movies/_benchmark_test/test_5.mp4 -> /tmp/neutraliser_staging/test_5_daea8ed89b6c.mp4
+[2026-03-08 05:29:46] Processing: /mnt/nas/media/movies/_benchmark_test/test_3.mp4
+[2026-03-08 05:29:46]   Staging in: /mnt/nas/media/movies/_benchmark_test/test_3.mp4 -> /tmp/neutraliser_staging/test_3_49dbf5584e9c.mp4
+[2026-03-08 05:30:47]   Current: -51.8 LUFS, Target: -20.0 LUFS (31.8 LU adjustment)
+[2026-03-08 05:30:47]   Current: -51.8 LUFS, Target: -20.0 LUFS (31.8 LU adjustment)
+[2026-03-08 05:30:47]   Current: -51.8 LUFS, Target: -20.0 LUFS (31.8 LU adjustment)
+[2026-03-08 05:30:47]   Current: -51.8 LUFS, Target: -20.0 LUFS (31.8 LU adjustment)
+[2026-03-08 05:30:47]   Current: -51.8 LUFS, Target: -20.0 LUFS (31.8 LU adjustment)
+[2026-03-08 05:31:18]   Audio: 44100 0k -> aac 128k
+[2026-03-08 05:31:18]   Staging out: /tmp/neutraliser_staging/test_5_daea8ed89b6c_neutraliser_c39517be1c324ffb.mp4 -> /mnt/nas/media/movies/_benchmark_test/test_5.mp4
+[2026-03-08 05:31:18]   Audio: 44100 0k -> aac 128k
+[2026-03-08 05:31:18]   Staging out: /tmp/neutraliser_staging/test_2_a31c4e09961d_neutraliser_615ca9529b07bec3.mp4 -> /mnt/nas/media/movies/_benchmark_test/test_2.mp4
+[2026-03-08 05:31:18]   Audio: 44100 0k -> aac 128k
+[2026-03-08 05:31:19]   Staging out: /tmp/neutraliser_staging/test_1_9e37743a76b5_neutraliser_e67bce82d7291b33.mp4 -> /mnt/nas/media/movies/_benchmark_test/test_1.mp4
+[2026-03-08 05:31:19]   Audio: 44100 0k -> aac 128k
+[2026-03-08 05:31:19]   Staging out: /tmp/neutraliser_staging/test_4_b847ec28e986_neutraliser_c121cd605a447e43.mp4 -> /mnt/nas/media/movies/_benchmark_test/test_4.mp4
+[2026-03-08 05:31:19]   Audio: 44100 0k -> aac 128k
+[2026-03-08 05:31:19]   Staging out: /tmp/neutraliser_staging/test_3_49dbf5584e9c_neutraliser_16a00d62debe96a2.mp4 -> /mnt/nas/media/movies/_benchmark_test/test_3.mp4
+[2026-03-08 05:31:35]   Replaced: /mnt/nas/media/movies/_benchmark_test/test_5.mp4
+[2026-03-08 05:31:35] Processing: /mnt/nas/media/movies/_benchmark_test/test_6.mp4
+[2026-03-08 05:31:35]   Staging in: /mnt/nas/media/movies/_benchmark_test/test_6.mp4 -> /tmp/neutraliser_staging/test_6_b9f974d92a97.mp4
+[2026-03-08 05:32:03]   Replaced: /mnt/nas/media/movies/_benchmark_test/test_1.mp4
+[2026-03-08 05:32:03]   Replaced: /mnt/nas/media/movies/_benchmark_test/test_2.mp4
+[2026-03-08 05:32:03]   Replaced: /mnt/nas/media/movies/_benchmark_test/test_4.mp4
+[2026-03-08 05:32:03]   Replaced: /mnt/nas/media/movies/_benchmark_test/test_3.mp4
+[2026-03-08 05:32:15]   Current: -51.8 LUFS, Target: -20.0 LUFS (31.8 LU adjustment)
+[2026-03-08 05:32:36]   Audio: 44100 0k -> aac 128k
+[2026-03-08 05:32:36]   Staging out: /tmp/neutraliser_staging/test_6_b9f974d92a97_neutraliser_da3adeff3ef0de81.mp4 -> /mnt/nas/media/movies/_benchmark_test/test_6.mp4
+[2026-03-08 05:32:46]   Replaced: /mnt/nas/media/movies/_benchmark_test/test_6.mp4
+[2026-03-08 05:32:46] Parallel worker summary: done=6, skipped=0, failed=0 (179.5s)
+[2026-03-08 05:32:46] Run summary: queued=6, done=6, skipped=0, failed=0, resumed=0
+Summary: found=6, queued=6, resumed=0, done=6, skipped=0, failed=0
+Manifest: /mnt/nas/media/movies/_benchmark_test/.neutraliser-run-manifest.jsonl
+
+real	2m59.941s
+user	3m55.632s
+sys	0m33.123s
+[2026-03-08 05:33:45] Found 6 video file(s)
+[2026-03-08 05:33:45] Processing 6 files with auto threads
+[2026-03-08 05:33:45] Processing: /mnt/nas/media/movies/_benchmark_test/test_1.mp4
+[2026-03-08 05:33:45]   Staging in: /mnt/nas/media/movies/_benchmark_test/test_1.mp4 -> /tmp/neutraliser_staging/test_1_29780dab1e5f.mp4
+[2026-03-08 05:33:45] Processing: /mnt/nas/media/movies/_benchmark_test/test_2.mp4
+[2026-03-08 05:33:45]   Staging in: /mnt/nas/media/movies/_benchmark_test/test_2.mp4 -> /tmp/neutraliser_staging/test_2_3ce01570dd50.mp4
+[2026-03-08 05:33:45] Processing: /mnt/nas/media/movies/_benchmark_test/test_3.mp4
+[2026-03-08 05:33:45]   Staging in: /mnt/nas/media/movies/_benchmark_test/test_3.mp4 -> /tmp/neutraliser_staging/test_3_be818bd79abb.mp4
+[2026-03-08 05:33:45] Processing: /mnt/nas/media/movies/_benchmark_test/test_5.mp4
+[2026-03-08 05:33:45]   Staging in: /mnt/nas/media/movies/_benchmark_test/test_5.mp4 -> /tmp/neutraliser_staging/test_5_554a6487d39a.mp4
+[2026-03-08 05:33:45] Processing: /mnt/nas/media/movies/_benchmark_test/test_4.mp4
+[2026-03-08 05:33:45]   Staging in: /mnt/nas/media/movies/_benchmark_test/test_4.mp4 -> /tmp/neutraliser_staging/test_4_866aa6973198.mp4
+[2026-03-08 05:34:26]   Fast mode: single-pass normalization to -20.0 LUFS
+[2026-03-08 05:34:26]   Fast mode: single-pass normalization to -20.0 LUFS
+[2026-03-08 05:34:26]   Fast mode: single-pass normalization to -20.0 LUFS
+[2026-03-08 05:34:26]   Fast mode: single-pass normalization to -20.0 LUFS
+[2026-03-08 05:34:26]   Fast mode: single-pass normalization to -20.0 LUFS
+[2026-03-08 05:34:58]   Audio: 44100 0k -> aac 128k
+[2026-03-08 05:34:58]   Staging out: /tmp/neutraliser_staging/test_2_3ce01570dd50_neutraliser_61ca57158a5f2b35.mp4 -> /mnt/nas/media/movies/_benchmark_test/test_2.mp4
+[2026-03-08 05:34:58]   Audio: 44100 0k -> aac 128k
+[2026-03-08 05:34:58]   Audio: 44100 0k -> aac 128k
+[2026-03-08 05:34:58]   Staging out: /tmp/neutraliser_staging/test_5_554a6487d39a_neutraliser_85b7e38e6aabff7f.mp4 -> /mnt/nas/media/movies/_benchmark_test/test_5.mp4
+[2026-03-08 05:34:58]   Staging out: /tmp/neutraliser_staging/test_3_be818bd79abb_neutraliser_d3c3634d36ce9312.mp4 -> /mnt/nas/media/movies/_benchmark_test/test_3.mp4
+[2026-03-08 05:34:58]   Audio: 44100 0k -> aac 128k
+[2026-03-08 05:34:58]   Staging out: /tmp/neutraliser_staging/test_1_29780dab1e5f_neutraliser_6ca2698a166a0018.mp4 -> /mnt/nas/media/movies/_benchmark_test/test_1.mp4
+[2026-03-08 05:34:58]   Audio: 44100 0k -> aac 128k
+[2026-03-08 05:34:58]   Staging out: /tmp/neutraliser_staging/test_4_866aa6973198_neutraliser_d57e545b6b4d62fb.mp4 -> /mnt/nas/media/movies/_benchmark_test/test_4.mp4
+[2026-03-08 05:35:21]   Replaced: /mnt/nas/media/movies/_benchmark_test/test_2.mp4
+[2026-03-08 05:35:21] Processing: /mnt/nas/media/movies/_benchmark_test/test_6.mp4
+[2026-03-08 05:35:21]   Staging in: /mnt/nas/media/movies/_benchmark_test/test_6.mp4 -> /tmp/neutraliser_staging/test_6_338f9517a899.mp4
+[2026-03-08 05:35:21]   Replaced: /mnt/nas/media/movies/_benchmark_test/test_5.mp4
+[2026-03-08 05:35:41]   Replaced: /mnt/nas/media/movies/_benchmark_test/test_3.mp4
+[2026-03-08 05:35:42]   Replaced: /mnt/nas/media/movies/_benchmark_test/test_1.mp4
+[2026-03-08 05:35:42]   Replaced: /mnt/nas/media/movies/_benchmark_test/test_4.mp4
+[2026-03-08 05:35:42]   Fast mode: single-pass normalization to -20.0 LUFS
+[2026-03-08 05:36:04]   Audio: 44100 0k -> aac 128k
+[2026-03-08 05:36:04]   Staging out: /tmp/neutraliser_staging/test_6_338f9517a899_neutraliser_a57c35248ccc1498.mp4 -> /mnt/nas/media/movies/_benchmark_test/test_6.mp4
+[2026-03-08 05:36:13]   Replaced: /mnt/nas/media/movies/_benchmark_test/test_6.mp4
+[2026-03-08 05:36:13] Parallel worker summary: done=6, skipped=0, failed=0 (148.7s)
+[2026-03-08 05:36:13] Run summary: queued=6, done=6, skipped=0, failed=0, resumed=0
+Summary: found=6, queued=6, resumed=0, done=6, skipped=0, failed=0
+Manifest: /mnt/nas/media/movies/_benchmark_test/.neutraliser-run-manifest.jsonl
+
+real	2m29.131s
+user	2m34.681s
+sys	0m30.969s
+
+=== Benchmark Complete ===

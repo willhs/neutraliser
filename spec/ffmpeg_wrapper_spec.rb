@@ -77,6 +77,37 @@ RSpec.describe Neutraliser::FFmpegWrapper do
     end
   end
 
+  describe '.apply_normalization_single_pass' do
+    let(:profile) { { lufs: -20.0, tp: -1.5, lra: 12.0, name: 'livingroom' } }
+
+    it 'builds a loudnorm filter without measured values' do
+      allow(described_class).to receive(:detect_audio_tracks).and_return(
+        [{ index: 0, channels: 2, codec: 'aac', bit_rate: 256_000, sample_rate: 48_000 }]
+      )
+      allow(described_class).to receive(:execute_with_progress)
+
+      described_class.apply_normalization_single_pass('/in.mp4', '/out.mp4', nil, profile)
+
+      expect(described_class).to have_received(:execute_with_progress) do |cmd|
+        filter_arg = cmd[cmd.index('-filter_complex') + 1]
+        expect(filter_arg).to include('loudnorm=I=-20.0:TP=-1.5:LRA=12.0')
+        expect(filter_arg).not_to include('measured_I')
+        expect(filter_arg).not_to include('linear=true')
+      end
+    end
+
+    it 'returns a codec decision hash' do
+      allow(described_class).to receive(:detect_audio_tracks).and_return(
+        [{ index: 0, channels: 2, codec: 'aac', bit_rate: 256_000, sample_rate: 48_000 }]
+      )
+      allow(described_class).to receive(:execute_with_progress)
+
+      result = described_class.apply_normalization_single_pass('/in.mp4', '/out.mp4', nil, profile)
+
+      expect(result).to include(encoder: 'aac', source_codec: 'aac')
+    end
+  end
+
   describe '.detect_audio_tracks' do
     it 'parses ffprobe csv output including bitrate and sample rate' do
       ffprobe_csv = "1,6,ac3,640000,48000\n2,2,aac,256000,44100\n"

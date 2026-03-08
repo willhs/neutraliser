@@ -24,7 +24,7 @@ RSpec.describe 'Error Handling and Edge Cases' do
       movie = instance_double(FFMPEG::Movie, path: video, audio_stream: true)
 
       allow(FFMPEG::Movie).to receive(:new).and_return(movie)
-      allow(processor).to receive(:analyze_loudness).and_raise(StandardError, 'boom')
+      allow(processor).to receive(:analyze_loudness_for_path).and_raise(StandardError, 'boom')
 
       expect { processor.send(:process_file, video) }
         .to output(/Error processing file: boom/).to_stdout

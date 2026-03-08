@@ -152,6 +152,25 @@ module Neutraliser
                          audio_tracks: audio_tracks)
     end
 
+    def self.apply_normalization_single_pass(input_path, output_path, audio_tracks, profile)
+      audio_tracks ||= detect_audio_tracks(input_path)
+      primary_track = audio_tracks.first || { index: 0, channels: 2, codec: 'unknown', bit_rate: nil, sample_rate: nil }
+
+      codec_decision = select_output_codec(primary_track, output_path)
+      codec_args = build_codec_args(codec_decision)
+
+      loudnorm_filter = "loudnorm=I=#{profile[:lufs]}:TP=#{profile[:tp]}:LRA=#{profile[:lra]}:print_format=summary"
+
+      cmd = build_complete_ffmpeg_command(
+        input_path, output_path, loudnorm_filter,
+        codec_args, audio_tracks
+      )
+
+      execute_with_progress(cmd)
+
+      codec_decision
+    end
+
     def self.detect_audio_tracks(input_path)
       cmd = [
         "ffprobe", "-v", "error", "-select_streams", "a",

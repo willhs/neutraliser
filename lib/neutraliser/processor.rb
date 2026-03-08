@@ -8,7 +8,7 @@ module Neutraliser
     MANIFEST_FILENAME = '.neutraliser-run-manifest.jsonl'.freeze
     TERMINAL_RESUME_STATES = %w[done skipped].freeze
 
-    def initialize(replace: false, target_level: nil, profile: 'livingroom', tolerance: 1.0, cache: true, dry_run: false, parallel: true, max_threads: nil, fast_verify: true, resume: false)
+    def initialize(replace: false, target_level: nil, profile: 'livingroom', tolerance: 1.0, cache: true, dry_run: false, parallel: true, max_threads: nil, fast_verify: true, resume: false, fast: false, local_stage: false)
       @replace = replace
       @profile = if target_level
                    Profiles.custom_profile(target_level.to_f)
@@ -25,6 +25,9 @@ module Neutraliser
       @fast_verify = fast_verify
       @resume = resume
       @manifest_mutex = Mutex.new
+      @fast = fast
+      @local_stage = local_stage
+      @stager = LocalStager.new if local_stage
     end
 
     def process(path)
@@ -206,7 +209,9 @@ module Neutraliser
         cache: @cache_enabled,
         dry_run: @dry_run,
         fast_verify: @fast_verify,
-        resume: false
+        resume: false,
+        fast: @fast,
+        local_stage: @local_stage
       }
 
       start_time = Time.now
@@ -234,30 +239,173 @@ module Neutraliser
       log "Processing: #{file_path}"
 
       begin
-        movie = FFMPEG::Movie.new(file_path)
+        working_path = file_path
+        if @local_stage
+          working_path = @stager.stage_in(file_path)
+        end
+
+        movie = FFMPEG::Movie.new(working_path)
 
         unless movie.audio_stream
           log "  No audio track found, skipping"
+          @stager&.cleanup(working_path) if @local_stage
           return file_result(file_path, status: :skipped, reason: :no_audio_track)
         end
 
-        measured_data = analyze_loudness(movie)
-
-        if needs_processing?(measured_data)
-          if @dry_run
-            log "  [DRY RUN] Would normalize: #{measured_data['input_i'].to_f.round(1)} LUFS → #{@profile[:lufs]} LUFS"
-            file_result(file_path, status: :done, reason: :dry_run)
-          else
-            normalize_file(file_path, measured_data)
-            file_result(file_path, status: :done, reason: :normalized)
-          end
+        if @fast
+          result = process_file_fast(file_path, working_path)
         else
-          log "  Already at target level, skipping"
-          file_result(file_path, status: :skipped, reason: :within_tolerance)
+          result = process_file_two_pass(file_path, working_path, movie)
         end
+
+        @stager&.cleanup(working_path) if @local_stage
+        result
       rescue => e
+        @stager&.cleanup(working_path) if @local_stage && working_path != file_path
         log "  Error processing file: #{e.message}"
         file_result(file_path, status: :failed, reason: :processing_error, message: e.message)
+      end
+    end
+
+    def process_file_two_pass(original_path, working_path, movie)
+      measured_data = analyze_loudness_for_path(working_path, original_path)
+
+      if needs_processing?(measured_data)
+        if @dry_run
+          log "  [DRY RUN] Would normalize: #{measured_data['input_i'].to_f.round(1)} LUFS → #{@profile[:lufs]} LUFS"
+          file_result(original_path, status: :done, reason: :dry_run)
+        else
+          normalize_file_with_paths(original_path, working_path, measured_data)
+          file_result(original_path, status: :done, reason: :normalized)
+        end
+      else
+        log "  Already at target level, skipping"
+        file_result(original_path, status: :skipped, reason: :within_tolerance)
+      end
+    end
+
+    def process_file_fast(original_path, working_path)
+      if @dry_run
+        log "  [DRY RUN] Would normalize (fast single-pass) to #{@profile[:lufs]} LUFS"
+        return file_result(original_path, status: :done, reason: :dry_run)
+      end
+
+      output_path = if @replace
+                      FileManager.safe_temp_path(working_path)
+                    else
+                      generate_output_path(working_path)
+                    end
+
+      audio_tracks = detect_audio_tracks(working_path)
+      if audio_tracks.length > 1
+        log "  Found #{audio_tracks.length} audio tracks, normalizing primary track only"
+      end
+
+      log "  Fast mode: single-pass normalization to #{@profile[:lufs]} LUFS"
+
+      codec_decision = FFmpegWrapper.apply_normalization_single_pass(
+        working_path, output_path, audio_tracks, @profile
+      )
+
+      log_codec_decision(codec_decision)
+
+      unless FileManager.verify_file_integrity(output_path)
+        raise "Output file verification failed - processing aborted"
+      end
+
+      commit_output(original_path, working_path, output_path)
+      file_result(original_path, status: :done, reason: :normalized)
+    rescue => e
+      FileUtils.rm_f(output_path) if output_path && File.exist?(output_path)
+      raise e
+    end
+
+    def analyze_loudness_for_path(working_path, original_path)
+      analyzer = AudioAnalyser.new(
+        cache_enabled: @cache_enabled,
+        use_sidecar: @cache_enabled,
+        fast_verification: @fast_verify
+      )
+
+      if @fast_verify && !analyzer.should_analyze_file?(original_path, @profile, tolerance: @tolerance)
+        log "  Fast verification: file already at target level"
+        return create_target_level_data(@profile)
+      end
+
+      if @cache_enabled
+        cache_manager = CacheManager.new(enabled: true)
+        cached = cache_manager.load_cached_analysis(original_path, @profile)
+        if cached
+          log "  Using cached analysis data"
+          return cached
+        end
+      end
+
+      measured_data = FFmpegWrapper.measure_loudness(
+        working_path,
+        target_i: @profile[:lufs],
+        target_tp: @profile[:tp],
+        target_lra: @profile[:lra]
+      )
+
+      if @cache_enabled
+        cache_manager = CacheManager.new(enabled: true)
+        cache_manager.save_analysis(original_path, @profile, measured_data)
+      end
+
+      measured_data
+    end
+
+    def normalize_file_with_paths(original_path, working_path, measured_data)
+      output_path = if @replace
+                      FileManager.safe_temp_path(working_path)
+                    else
+                      generate_output_path(working_path)
+                    end
+
+      current_lufs = measured_data['input_i'].to_f
+      target_lufs = @profile[:lufs]
+      adjustment = target_lufs - current_lufs
+
+      audio_tracks = detect_audio_tracks(working_path)
+      if audio_tracks.length > 1
+        log "  Found #{audio_tracks.length} audio tracks, normalizing primary track only"
+      end
+
+      log "  Current: #{current_lufs.round(1)} LUFS, Target: #{target_lufs} LUFS (#{adjustment.round(1)} LU adjustment)"
+
+      codec_decision = FFmpegWrapper.apply_normalization_with_multiple_tracks(
+        working_path, output_path, measured_data, audio_tracks, @profile
+      )
+
+      log_codec_decision(codec_decision)
+
+      unless FileManager.verify_file_integrity(output_path)
+        raise "Output file verification failed - processing aborted"
+      end
+
+      commit_output(original_path, working_path, output_path)
+    rescue => e
+      FileUtils.rm_f(output_path) if output_path && File.exist?(output_path)
+      raise e
+    end
+
+    def commit_output(original_path, working_path, output_path)
+      if @replace
+        if @local_stage
+          @stager.stage_out(output_path, original_path)
+          @stager.cleanup(output_path)
+        else
+          FileManager.atomic_replace(output_path, original_path)
+        end
+        log "  Replaced: #{original_path}"
+      else
+        dest = generate_output_path(original_path)
+        if @local_stage
+          @stager.stage_out(output_path, dest)
+          @stager.cleanup(output_path)
+        end
+        log "  Saved: #{dest}"
       end
     end
 
@@ -289,23 +437,6 @@ module Neutraliser
       SUPPORTED_FORMATS.include?(File.extname(file_path).downcase)
     end
 
-    def analyze_loudness(movie)
-      analyzer = AudioAnalyser.new(
-        cache_enabled: @cache_enabled,
-        use_sidecar: @cache_enabled,       # Use sidecar caching when cache is enabled
-        fast_verification: @fast_verify    # Use fast verification setting
-      )
-
-      # Quick check if analysis is needed (when fast verification is enabled)
-      if @fast_verify && !analyzer.should_analyze_file?(movie.path, @profile, tolerance: @tolerance)
-        log "  Fast verification: file already at target level"
-        # Return dummy data that indicates no processing needed
-        return create_target_level_data(@profile)
-      end
-
-      analyzer.analyze_file(movie.path, @profile)
-    end
-
     def create_target_level_data(profile)
       # Return analysis data that indicates file is already at target level
       {
@@ -321,44 +452,6 @@ module Neutraliser
     def needs_processing?(measured_data)
       analyzer = AudioAnalyser.new
       analyzer.needs_normalization?(measured_data, @profile, tolerance: @tolerance)
-    end
-
-    def normalize_file(file_path, measured_data)
-      output_path = @replace ? FileManager.safe_temp_path(file_path) : generate_output_path(file_path)
-
-      current_lufs = measured_data['input_i'].to_f
-      target_lufs = @profile[:lufs]
-      adjustment = target_lufs - current_lufs
-
-      # Check for multiple audio tracks
-      audio_tracks = detect_audio_tracks(file_path)
-      if audio_tracks.length > 1
-        log "  Found #{audio_tracks.length} audio tracks, normalizing primary track only"
-      end
-
-      log "  Current: #{current_lufs.round(1)} LUFS, Target: #{target_lufs} LUFS (#{adjustment.round(1)} LU adjustment)"
-
-      codec_decision = FFmpegWrapper.apply_normalization_with_multiple_tracks(
-        file_path, output_path, measured_data, audio_tracks, @profile
-      )
-
-      log_codec_decision(codec_decision)
-
-      # Verify output file integrity before committing changes
-      unless FileManager.verify_file_integrity(output_path)
-        raise "Output file verification failed - processing aborted"
-      end
-
-      if @replace
-        FileManager.atomic_replace(output_path, file_path)
-        log "  Replaced: #{file_path}"
-      else
-        log "  Saved: #{output_path}"
-      end
-    rescue => e
-      # Clean up temp file on error
-      FileUtils.rm(output_path) if File.exist?(output_path)
-      raise e
     end
 
     def log_codec_decision(decision)
