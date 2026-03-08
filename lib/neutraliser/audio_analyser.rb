@@ -16,7 +16,7 @@ module Neutraliser
       # Try sidecar cache first (Phase 3 enhancement)
       if @use_sidecar && @cache_manager
         if cached_result = @cache_manager.load_cached_analysis(file_path, target_profile)
-          puts "  Using cached analysis data"
+          Neutraliser.logger.log "  Using cached analysis data"
           return cached_result
         end
       end
@@ -50,10 +50,6 @@ module Neutraliser
 
       # No optimization available
       true
-    end
-
-    def audio_channels(file_path)
-      FFmpegWrapper.detect_audio_channels(file_path)
     end
 
     def needs_normalization?(measured_data, target_profile, tolerance: 1.0)

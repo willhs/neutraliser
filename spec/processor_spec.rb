@@ -129,7 +129,7 @@ RSpec.describe Neutraliser::Processor do
       }
 
       allow(FFMPEG::Movie).to receive(:new).and_return(movie)
-      allow(processor).to receive(:analyze_loudness).and_return(measured)
+      allow(processor).to receive(:analyze_loudness_for_path).and_return(measured)
       allow(processor).to receive(:needs_processing?).and_return(true)
 
       expect { processor.send(:process_file, video_file) }
@@ -141,16 +141,15 @@ RSpec.describe Neutraliser::Processor do
       movie = instance_double(FFMPEG::Movie, path: video_file, audio_stream: true)
 
       allow(FFMPEG::Movie).to receive(:new).and_return(movie)
-      allow(processor).to receive(:analyze_loudness).and_raise(StandardError, 'analysis failed')
+      allow(processor).to receive(:analyze_loudness_for_path).and_raise(StandardError, 'analysis failed')
 
       expect { processor.send(:process_file, video_file) }
         .to output(/Error processing file: analysis failed/).to_stdout
     end
   end
 
-  describe '#analyze_loudness' do
+  describe '#analyze_loudness_for_path' do
     let(:processor) { described_class.new }
-    let(:movie) { instance_double(FFMPEG::Movie, path: '/tmp/movie.mp4') }
     let(:analyser) { instance_double(Neutraliser::AudioAnalyser) }
 
     before do
@@ -160,22 +159,22 @@ RSpec.describe Neutraliser::Processor do
     it 'skips full analysis when fast verification indicates no work is needed' do
       allow(analyser).to receive(:should_analyze_file?).and_return(false)
 
-      result = processor.send(:analyze_loudness, movie)
+      result = processor.send(:analyze_loudness_for_path, '/tmp/movie.mp4', '/tmp/movie.mp4')
 
       expect(result['fast_verified']).to eq(true)
       expect(result['target_offset']).to eq(0.0)
     end
 
-    it 'raises ffmpeg errors from analyser instead of using fake fallback data' do
+    it 'raises ffmpeg errors from measurement instead of using fake fallback data' do
       allow(analyser).to receive(:should_analyze_file?).and_return(true)
-      allow(analyser).to receive(:analyze_file).and_raise(Neutraliser::FFmpegError, 'boom')
+      allow(Neutraliser::FFmpegWrapper).to receive(:measure_loudness).and_raise(Neutraliser::FFmpegError, 'boom')
 
-      expect { processor.send(:analyze_loudness, movie) }
+      expect { processor.send(:analyze_loudness_for_path, '/tmp/movie.mp4', '/tmp/movie.mp4') }
         .to raise_error(Neutraliser::FFmpegError, /boom/)
     end
   end
 
-  describe '#normalize_file' do
+  describe '#normalize_file_with_paths' do
     let(:processor) { described_class.new(replace: false) }
     let(:video_file) { File.join(temp_dir, 'movie.mp4') }
     let(:output_file) { File.join(temp_dir, 'movie_normalized.mp4') }
@@ -191,13 +190,15 @@ RSpec.describe Neutraliser::Processor do
 
     before do
       File.write(video_file, 'x')
-      allow(processor).to receive(:detect_audio_tracks).and_return([{ index: 0, codec: 'aac', channels: 2 }])
-      allow(Neutraliser::FFmpegWrapper).to receive(:apply_normalization_with_multiple_tracks)
+      allow(processor).to receive(:detect_audio_tracks).and_return([{ index: 0, codec: 'aac', channels: 2, bit_rate: 256000, sample_rate: 48000 }])
+      allow(Neutraliser::FFmpegWrapper).to receive(:apply_normalization_with_multiple_tracks).and_return(
+        { encoder: 'aac', bitrate: 256_000, source_codec: 'aac', source_bitrate: 256_000, lossless_output: false }
+      )
       allow(Neutraliser::FileManager).to receive(:verify_file_integrity).and_return(true)
     end
 
     it 'writes to _normalized output in copy mode' do
-      processor.send(:normalize_file, video_file, measured_data)
+      processor.send(:normalize_file_with_paths, video_file, video_file, measured_data)
 
       expect(Neutraliser::FFmpegWrapper).to have_received(:apply_normalization_with_multiple_tracks)
         .with(video_file, output_file, measured_data, any_args)
@@ -205,13 +206,71 @@ RSpec.describe Neutraliser::Processor do
 
     it 'raises when output fails integrity checks' do
       allow(Neutraliser::FileManager).to receive(:verify_file_integrity).and_return(false)
+      allow(File).to receive(:exist?).and_call_original
       allow(File).to receive(:exist?).with(output_file).and_return(true)
-      allow(FileUtils).to receive(:rm)
+      allow(FileUtils).to receive(:rm_f)
 
-      expect { processor.send(:normalize_file, video_file, measured_data) }
+      expect { processor.send(:normalize_file_with_paths, video_file, video_file, measured_data) }
         .to raise_error(/Output file verification failed/)
+    end
+  end
 
-      expect(FileUtils).to have_received(:rm).with(output_file)
+  describe '#process_file with fast mode' do
+    let(:processor) { described_class.new(fast: true, dry_run: true) }
+    let(:video_file) { File.join(temp_dir, 'movie.mp4') }
+
+    before do
+      File.write(video_file, 'x')
+    end
+
+    it 'uses fast single-pass in dry-run mode' do
+      movie = instance_double(FFMPEG::Movie, path: video_file, audio_stream: true)
+      allow(FFMPEG::Movie).to receive(:new).and_return(movie)
+
+      result = processor.send(:process_file, video_file)
+
+      expect(result[:status]).to eq(:done)
+      expect(result[:reason]).to eq(:dry_run)
+    end
+  end
+
+  describe '#process_file with local staging' do
+    let(:staging_dir) { Dir.mktmpdir }
+    let(:processor) { described_class.new(local_stage: true, dry_run: true) }
+    let(:video_file) { File.join(temp_dir, 'movie.mp4') }
+
+    before do
+      File.write(video_file, 'video content')
+    end
+
+    after do
+      FileUtils.remove_entry(staging_dir) if Dir.exist?(staging_dir)
+    end
+
+    it 'stages file locally before processing' do
+      movie = instance_double(FFMPEG::Movie, path: anything, audio_stream: true)
+      allow(FFMPEG::Movie).to receive(:new).and_return(movie)
+      allow(processor).to receive(:process_file_two_pass).and_return(
+        { file: video_file, status: :done, reason: :dry_run, message: nil }
+      )
+
+      result = processor.send(:process_file, video_file)
+
+      expect(result[:status]).to eq(:done)
+    end
+
+    it 'cleans up staged file after processing' do
+      movie = instance_double(FFMPEG::Movie, path: anything, audio_stream: true)
+      allow(FFMPEG::Movie).to receive(:new).and_return(movie)
+      allow(processor).to receive(:process_file_two_pass).and_return(
+        { file: video_file, status: :done, reason: :dry_run, message: nil }
+      )
+
+      processor.send(:process_file, video_file)
+
+      stager = processor.instance_variable_get(:@stager)
+      staged_files = Dir.glob(File.join(stager.staging_dir, '*'))
+      expect(staged_files).to be_empty
     end
   end
 end

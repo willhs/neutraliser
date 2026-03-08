@@ -8,3 +8,4 @@
 /tmp/
 /coverage/
 *.gem
+benchmark/test_source.mp4

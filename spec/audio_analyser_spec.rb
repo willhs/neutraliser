@@ -52,7 +52,7 @@ RSpec.describe Neutraliser::AudioAnalyser do
       end
 
       it 'returns cached data and skips FFmpeg analysis' do
-        expect(analyser).to receive(:puts).with("  Using cached analysis data")
+        expect(Neutraliser.logger).to receive(:log).with("  Using cached analysis data")
         result = analyser.analyze_file('test.mp4', target_profile)
 
         expect(result).to eq(measured_data)
@@ -102,16 +102,6 @@ RSpec.describe Neutraliser::AudioAnalyser do
           analyser.analyze_file('test.mp4', target_profile)
         }.to raise_error(Neutraliser::FFmpegError, "FFmpeg failed")
       end
-    end
-  end
-
-  describe '#audio_channels' do
-    let(:analyser) { described_class.new }
-
-    it 'delegates to FFmpegWrapper' do
-      expect(Neutraliser::FFmpegWrapper).to receive(:detect_audio_channels).with('test.mp4').and_return(6)
-      result = analyser.audio_channels('test.mp4')
-      expect(result).to eq(6)
     end
   end
 

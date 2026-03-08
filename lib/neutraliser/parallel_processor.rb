@@ -68,7 +68,9 @@ module Neutraliser
         cache: config[:cache],
         dry_run: config[:dry_run],
         fast_verify: config[:fast_verify],
-        resume: config[:resume]
+        resume: config[:resume],
+        fast: config[:fast],
+        local_stage: config[:local_stage]
       )
       processor.process_one(file)
     end

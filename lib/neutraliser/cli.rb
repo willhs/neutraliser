@@ -62,6 +62,8 @@ module Neutraliser
     option :max_threads, type: :numeric, desc: 'Maximum number of concurrent threads (default: auto)'
     option :fast_verify, type: :boolean, default: true, desc: 'Enable fast verification to reduce analysis time'
     option :resume, type: :boolean, default: false, desc: 'Resume from previous run manifest and skip completed files'
+    option :fast, type: :boolean, default: false, desc: 'Single-pass normalization (faster, slightly less accurate)'
+    option :local_stage, type: :boolean, default: false, desc: 'Copy files to local disk before processing'
     def process(path)
       processor = Processor.new(
         replace: options[:replace],
@@ -73,7 +75,9 @@ module Neutraliser
         parallel: options[:parallel],
         max_threads: options[:max_threads],
         fast_verify: options[:fast_verify],
-        resume: options[:resume]
+        resume: options[:resume],
+        fast: options[:fast],
+        local_stage: options[:local_stage]
       )
 
       summary = processor.process(path)
