@@ -33,8 +33,8 @@ RSpec.describe Neutraliser::Processor do
         .and raise_error(SystemExit)
     end
 
-    it 'processes directory sequentially when parallel is disabled' do
-      processor = described_class.new(parallel: false)
+    it 'processes directory sequentially' do
+      processor = described_class.new
       video_1 = File.join(temp_dir, 'a.mp4')
       video_2 = File.join(temp_dir, 'b.mkv')
       File.write(video_1, 'x')
@@ -52,20 +52,8 @@ RSpec.describe Neutraliser::Processor do
       expect(summary[:skipped]).to eq(1)
     end
 
-    it 'routes multi-file directories through parallel processor when enabled' do
-      processor = described_class.new(parallel: true)
-      video_1 = File.join(temp_dir, 'a.mp4')
-      video_2 = File.join(temp_dir, 'b.mkv')
-      File.write(video_1, 'x')
-      File.write(video_2, 'x')
-
-      expect(processor).to receive(:process_files_parallel).with(array_including(video_1, video_2)).and_return([])
-      summary = processor.process(temp_dir)
-      expect(summary[:queued]).to eq(2)
-    end
-
     it 'supports resuming from manifest and skips completed files' do
-      processor = described_class.new(parallel: false, resume: true)
+      processor = described_class.new(resume: true)
       completed = File.join(temp_dir, 'done.mp4')
       pending = File.join(temp_dir, 'todo.mkv')
       File.write(completed, 'x')

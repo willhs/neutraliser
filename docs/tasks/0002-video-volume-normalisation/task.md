@@ -133,7 +133,7 @@ ffmpeg -hide_banner -i "INPUT" \
 
 #### **Phase 2: Enhanced Audio Processing** ✅
 - ✅ `FileManager` with atomic file operations and rollback capability
-- ✅ Intelligent codec selection: AC-3 640k for 5.1+, AAC 256k for stereo
+- ✅ Initial codec selection: AC-3 640k for 5.1+, AAC 256k for stereo _(superseded by ADR-0001 — see `design/adr/0001-smart-codec-selection.md` for the source-matching approach that replaced this hardcoded behavior)_
 - ✅ Multiple audio track handling (normalize primary, copy others)
 - ✅ Complete metadata and subtitle preservation (26 subtitle tracks tested)
 - ✅ **Test Results**: Successfully processed 5.1 surround → AC-3, stereo → AAC

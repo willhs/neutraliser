@@ -96,7 +96,18 @@ A Ruby CLI tool that normalises audio volume in video files using industry-stand
 - **Quality**: Industry-standard EBU R128 compliance
 
 ## Future Enhancements
-- Parallel processing for large libraries
 - Additional normalization profiles
 - Advanced Plex integration features
 - GUI interface consideration
+
+## docs/ Knowledge Base
+
+Before starting significant work, read `docs/index.md` — it maps the full knowledge base.
+
+All docs use YAML front matter (`id`, `type`, `purpose`). Validate against `docs/front-matter-schema.json`.
+
+When you create or significantly update a doc:
+1. Update `docs/index.md` if a doc was added, removed, or renamed.
+2. Append to `docs/log.md`: `## [YYYY-MM-DD] <verb> | <title>` (verbs: create, update, delete, lint, synthesise, ingest).
+
+When answering a question that synthesised **3+ docs/**, offer to save it as a research note in `docs/research/`.

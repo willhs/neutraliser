@@ -1,6 +1,5 @@
 require 'json'
 require 'time'
-require_relative 'parallel_processor'
 
 module Neutraliser
   class Processor
@@ -20,8 +19,6 @@ module Neutraliser
       @tolerance = tolerance
       @cache_enabled = cache
       @dry_run = dry_run
-      @parallel_enabled = parallel
-      @max_threads = max_threads
       @fast_verify = fast_verify
       @resume = resume
       @manifest_mutex = Mutex.new
@@ -90,11 +87,7 @@ module Neutraliser
         append_manifest_entry(manifest_path, file: file_path, status: 'queued')
       end
 
-      raw_results = if @parallel_enabled && files_to_process.length > 1
-                      process_files_parallel(files_to_process)
-                    else
-                      files_to_process.map { |file| process_one(file) }
-                    end
+      raw_results = files_to_process.map { |file| process_one(file) }
 
       results = Array(raw_results).each_with_index.map do |result, index|
         normalize_file_result(result, files_to_process[index])
@@ -173,9 +166,7 @@ module Neutraliser
       }
       entry[:message] = message if message && !message.empty?
 
-      @manifest_mutex.synchronize do
-        File.open(manifest_path, 'a') { |manifest| manifest.puts(JSON.generate(entry)) }
-      end
+      File.open(manifest_path, 'a') { |manifest| manifest.puts(JSON.generate(entry)) }
     rescue StandardError => e
       log "Warning: Could not write run manifest entry: #{e.message}"
     end
@@ -195,39 +186,6 @@ module Neutraliser
         manifest_path: manifest_path,
         results: results
       }
-    end
-
-    def process_files_parallel(video_files)
-      log "Processing #{video_files.length} files with #{@max_threads || 'auto'} threads"
-
-      parallel_processor = ParallelProcessor.new(max_threads: @max_threads)
-
-      config = {
-        replace: @replace,
-        profile: @profile,
-        tolerance: @tolerance,
-        cache: @cache_enabled,
-        dry_run: @dry_run,
-        fast_verify: @fast_verify,
-        resume: false,
-        fast: @fast,
-        local_stage: @local_stage
-      }
-
-      start_time = Time.now
-      begin
-        parallel_result = parallel_processor.process_files_parallel(video_files, config)
-        elapsed_time = Time.now - start_time
-
-        log(
-          "Parallel worker summary: done=#{parallel_result[:done]}, " \
-          "skipped=#{parallel_result[:skipped]}, failed=#{parallel_result[:failed]} (#{elapsed_time.round(1)}s)"
-        )
-
-        parallel_result[:results]
-      ensure
-        parallel_processor.shutdown
-      end
     end
 
     def process_file(file_path)

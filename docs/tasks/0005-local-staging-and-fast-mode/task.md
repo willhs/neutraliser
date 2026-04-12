@@ -11,9 +11,9 @@ Reduce per-file processing time for large batches on NAS by (1) staging files to
 
 ## Context
 
-Neutraliser runs on a NAS (Intel i5-8600T, 16GB RAM, 238GB NVMe) processing video files from a 7.3TB SMB share (`//<nas>/media` mounted at `/mnt/nas/media`). The SMB link (~110 MB/s) is the dominant bottleneck — each file requires two full reads over the network (measurement + normalization) plus one full write back.
+Neutraliser runs on a NAS (Intel i5-8600T, 16GB RAM, 238GB NVMe) processing video files from a 7.3TB SMB share (`//<nas>/media` mounted at `/mnt/nas/media`). The SMB link (~110 MB/s) was hypothesised as the dominant bottleneck — each file requires two full reads over the network (measurement + normalization) plus one full write back.
 
-Local NVMe reads at ~3 GB/s, so copying a 5GB file locally (~50s), processing it on fast storage, and copying the result back (~50s) is far faster than FFmpeg reading/writing over SMB for 20-30 minutes.
+Two approaches were prototyped. Benchmarks showed `--fast` (single-pass loudnorm) is the clear winner at 30–37% faster. `--local-stage` showed no benefit on this setup — at ~110 MB/s SMB the CPU is the bottleneck, not I/O, and the staging copy overhead eats any savings. Full benchmark results are in ADR-0002. `--local-stage` is kept as it may help on slower network mounts.
 
 Single-pass loudnorm halves the work by skipping the measurement pass entirely, at the cost of using dynamic gain adjustment instead of linear gain.
 
