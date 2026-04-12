@@ -16,7 +16,7 @@ When rewriting video files with normalized audio, preserve the original audio qu
 
 ## Context
 
-The current `FFmpegWrapper.select_audio_codec` method hardcodes the output codec and bitrate:
+The current `FFmpegWrapper.select_audio_codec` method hardcodes the output codec and bitrate (see [task-0002 implementation plan](../0002-video-volume-normalisation/plan.md) for the original two-pass design):
 - Stereo/mono: AAC at 256 kbps
 - 5.1+ surround: AC3 at 640 kbps
 

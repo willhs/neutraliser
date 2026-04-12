@@ -731,7 +731,7 @@ Both flags are independent and can be combined for maximum speed.
 
 ## References
 
-- Task: `docs/tasks/0005-local-staging-and-fast-mode/task.md`
-- Performance task: `docs/tasks/0003-performance-optimization/task.md`
+- Task: [docs/tasks/0005-local-staging-and-fast-mode/task.md](./task.md)
+- Performance task: [docs/tasks/0003-performance-optimization/task.md](../0003-performance-optimization/task.md)
 - FFmpeg loudnorm docs: http://k.ylo.ph/2016/04/04/loudnorm.html
 - Architecture: `docs/design/architecture.md`

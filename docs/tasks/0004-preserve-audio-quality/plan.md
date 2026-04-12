@@ -564,6 +564,6 @@ end
 
 ## References
 
-- Task: `docs/tasks/0004-preserve-audio-quality/task.md`
+- Task: [docs/tasks/0004-preserve-audio-quality/task.md](./task.md)
 - FFmpeg encoder availability: `ffmpeg -encoders | grep audio`
 - Container codec compatibility research in plan research notes
