@@ -34,7 +34,7 @@ RSpec.describe 'Error Handling and Edge Cases' do
   describe Neutraliser::FFmpegWrapper do
     it 'raises parse error when loudnorm json is missing' do
       status = instance_double(Process::Status, success?: true)
-      allow(Open3).to receive(:capture3).and_return(['', 'missing', status])
+      allow(described_class).to receive(:execute_with_timeout).and_return(['', 'missing', status])
 
       expect { described_class.measure_loudness('test.mp4') }
         .to raise_error(Neutraliser::FFmpegError, /loudnorm JSON not found/)

@@ -132,31 +132,35 @@ module Neutraliser
       nil
     end
 
-    def self.apply_normalization(input_path, output_path, measured_data, target_i: -20.0, target_tp: -1.5, target_lra: 12.0, audio_tracks: nil)
+    def self.apply_normalization(input_path, output_path, measured_data, target_i: -20.0, target_tp: -1.5, target_lra: 12.0, audio_tracks: nil, linear_only: false)
       audio_tracks ||= detect_audio_tracks(input_path)
       primary_track = audio_tracks.first || { index: 0, channels: 2, codec: 'unknown', bit_rate: nil, sample_rate: nil }
 
       codec_decision = select_output_codec(primary_track, output_path)
       codec_args = build_codec_args(codec_decision)
 
-      loudnorm_filter = build_loudnorm_filter(measured_data, target_i, target_tp, target_lra)
+      audio_filter, forced_normalization_type = build_audio_filter(
+        measured_data, target_i, target_tp, target_lra, primary_track[:sample_rate], linear_only: linear_only
+      )
 
       cmd = build_complete_ffmpeg_command(
-        input_path, output_path, loudnorm_filter,
+        input_path, output_path, audio_filter,
         codec_args, audio_tracks
       )
 
-      execute_with_progress(cmd)
+      ffmpeg_output = execute_with_progress(cmd)
+      normalization_type = forced_normalization_type || parse_normalization_type(ffmpeg_output) || 'Unknown'
 
-      codec_decision
+      codec_decision.merge(normalization_type: normalization_type)
     end
 
-    def self.apply_normalization_with_multiple_tracks(input_path, output_path, measured_data, audio_tracks, profile)
+    def self.apply_normalization_with_multiple_tracks(input_path, output_path, measured_data, audio_tracks, profile, linear_only: false)
       apply_normalization(input_path, output_path, measured_data,
                          target_i: profile[:lufs],
                          target_tp: profile[:tp],
                          target_lra: profile[:lra],
-                         audio_tracks: audio_tracks)
+                         audio_tracks: audio_tracks,
+                         linear_only: linear_only)
     end
 
     def self.apply_normalization_single_pass(input_path, output_path, audio_tracks, profile)
@@ -167,22 +171,27 @@ module Neutraliser
       codec_args = build_codec_args(codec_decision)
 
       loudnorm_filter = "loudnorm=I=#{profile[:lufs]}:TP=#{profile[:tp]}:LRA=#{profile[:lra]}:print_format=summary"
+      loudnorm_filter += ",aresample=#{primary_track[:sample_rate]}" if primary_track[:sample_rate]
 
       cmd = build_complete_ffmpeg_command(
         input_path, output_path, loudnorm_filter,
         codec_args, audio_tracks
       )
 
-      execute_with_progress(cmd)
+      ffmpeg_output = execute_with_progress(cmd)
+      # Single-pass loudnorm has no prior measurement pass, so it always
+      # behaves as dynamic (per-frame) normalization regardless of the
+      # filter's default linear setting.
+      normalization_type = parse_normalization_type(ffmpeg_output) || 'Dynamic'
 
-      codec_decision
+      codec_decision.merge(normalization_type: normalization_type)
     end
 
     def self.detect_audio_tracks(input_path)
       cmd = [
         "ffprobe", "-v", "error", "-select_streams", "a",
-        "-show_entries", "stream=index,channels,codec_name,bit_rate,sample_rate",
-        "-of", "csv=p=0", input_path
+        "-show_entries", "stream=index,codec_name,sample_rate,channels,bit_rate",
+        "-of", "json", input_path
       ]
 
       stdout, stderr, status = execute_with_timeout(cmd, PROBE_TIMEOUT, "Audio track detection")
@@ -190,19 +199,33 @@ module Neutraliser
         return [{ index: 0, channels: 2, codec: 'unknown', bit_rate: nil, sample_rate: nil }]
       end
 
-      tracks = stdout.strip.split("\n").map.with_index do |line, idx|
-        parts = line.split(',')
-        {
-          index: idx,
-          stream_index: parts[0].to_i,
-          channels: parts[1].to_i,
-          codec: parts[2] || 'unknown',
-          bit_rate: parts[3]&.to_i,
-          sample_rate: parts[4]&.to_i
-        }
-      end
+      tracks = parse_audio_tracks_json(stdout)
 
       tracks.empty? ? [{ index: 0, channels: 2, codec: 'unknown', bit_rate: nil, sample_rate: nil }] : tracks
+    end
+
+    def self.parse_audio_tracks_json(json_text)
+      data = JSON.parse(json_text)
+      streams = data['streams'] || []
+
+      streams.each_with_index.map do |stream, idx|
+        {
+          index: idx,
+          stream_index: stream['index'].to_i,
+          channels: stream['channels'].to_i,
+          codec: stream['codec_name'] || 'unknown',
+          bit_rate: parse_bit_rate(stream['bit_rate']),
+          sample_rate: stream['sample_rate']&.to_i
+        }
+      end
+    rescue JSON::ParserError
+      []
+    end
+
+    def self.parse_bit_rate(value)
+      return nil if value.nil? || value == 'N/A'
+
+      value.to_i
     end
 
     private
@@ -352,6 +375,50 @@ module Neutraliser
       ":linear=true:print_format=summary"
     end
 
+    # Builds the audio filter chain to apply during the normalization pass.
+    #
+    # Returns [filter_string, forced_normalization_type]. forced_normalization_type
+    # is nil when the filter is loudnorm (its actual Linear/Dynamic behavior can
+    # only be known after ffmpeg runs, by parsing its summary output) and 'Linear'
+    # when linear_only mode is used (a plain gain filter that can never engage
+    # dynamic compression).
+    def self.build_audio_filter(measured, target_i, target_tp, target_lra, source_sample_rate, linear_only:)
+      if linear_only
+        filter = build_volume_gain_filter(measured, target_i, target_tp)
+        forced_normalization_type = 'Linear'
+      else
+        filter = build_loudnorm_filter(measured, target_i, target_tp, target_lra)
+        forced_normalization_type = nil
+      end
+
+      filter += ",aresample=#{source_sample_rate}" if source_sample_rate
+
+      [filter, forced_normalization_type]
+    end
+
+    # A constant-gain volume adjustment, capped so the output true peak never
+    # exceeds target_tp. This guarantees zero dynamic-range change — unlike
+    # loudnorm's linear mode, it cannot silently fall back to dynamic
+    # (per-frame) compression. Quiet-but-peaky sources land shy of target_i
+    # rather than being squashed.
+    def self.build_volume_gain_filter(measured, target_i, target_tp)
+      gain = capped_linear_gain(measured, target_i, target_tp)
+      "volume=#{format('%.2f', gain)}dB"
+    end
+
+    def self.capped_linear_gain(measured, target_i, target_tp)
+      desired_gain = target_i - measured['input_i'].to_f
+      max_safe_gain = target_tp - measured['input_tp'].to_f
+      [desired_gain, max_safe_gain].min
+    end
+
+    def self.parse_normalization_type(ffmpeg_output)
+      return nil if ffmpeg_output.nil?
+
+      match = ffmpeg_output.match(/Normalization Type:\s*(Linear|Dynamic)/i)
+      match && match[1].capitalize
+    end
+
     def self.build_complete_ffmpeg_command(input_path, output_path, loudnorm_filter, primary_codec, audio_tracks)
       cmd = [
         "ffmpeg", "-hide_banner", "-y", "-i", input_path,
@@ -389,7 +456,8 @@ module Neutraliser
         raise FFmpegError, "FFmpeg normalization failed: #{stderr}"
       end
 
-      stdout
+      # ffmpeg writes the loudnorm summary (including "Normalization Type") to stderr
+      stderr
     end
   end
 end

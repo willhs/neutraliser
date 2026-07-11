@@ -16,21 +16,25 @@ RSpec.describe Neutraliser::FFmpegWrapper do
           "target_offset" : "1.5"
         }
       OUT
-      allow(Open3).to receive(:capture3).and_return(['', stderr, ok_status])
+      allow(described_class).to receive(:execute_with_timeout).and_return(['', stderr, ok_status])
 
       result = described_class.measure_loudness('test.mp4', target_i: -20.0, target_tp: -1.5, target_lra: 12.0)
 
-      expect(Open3).to have_received(:capture3).with(
-        'ffmpeg', '-hide_banner', '-nostats', '-i', 'test.mp4',
-        '-map', 'a:0',
-        '-af', 'loudnorm=I=-20.0:TP=-1.5:LRA=12.0:print_format=json',
-        '-f', 'null', '-'
+      expect(described_class).to have_received(:execute_with_timeout).with(
+        [
+          'ffmpeg', '-hide_banner', '-nostats', '-i', 'test.mp4',
+          '-map', 'a:0',
+          '-af', 'loudnorm=I=-20.0:TP=-1.5:LRA=12.0:print_format=json',
+          '-f', 'null', '-'
+        ],
+        described_class::ANALYSIS_TIMEOUT,
+        'Loudness measurement'
       )
       expect(result['input_i']).to eq('-18.5')
     end
 
     it 'raises FFmpegError including stderr when command fails' do
-      allow(Open3).to receive(:capture3).and_return(['', 'boom', fail_status])
+      allow(described_class).to receive(:execute_with_timeout).and_return(['', 'boom', fail_status])
 
       expect { described_class.measure_loudness('missing.mp4') }
         .to raise_error(Neutraliser::FFmpegError, /boom/)
@@ -39,7 +43,7 @@ RSpec.describe Neutraliser::FFmpegWrapper do
 
   describe '.quick_loudness_sample' do
     it 'returns nil when file is too short for meaningful sample' do
-      allow(Open3).to receive(:capture3).and_return(['40', '', ok_status])
+      allow(described_class).to receive(:execute_with_timeout).and_return(['40', '', ok_status])
 
       result = described_class.quick_loudness_sample('short.mp4', duration: 30)
       expect(result).to be_nil
@@ -64,16 +68,42 @@ RSpec.describe Neutraliser::FFmpegWrapper do
         { index: 0, channels: 6, codec: 'ac3', bit_rate: 448_000, sample_rate: 48_000 },
         { index: 1, channels: 2, codec: 'aac', bit_rate: 256_000, sample_rate: 44_100 }
       ]
-      allow(Open3).to receive(:capture3).and_return(['', '', ok_status])
+      allow(described_class).to receive(:execute_with_timeout).and_return(['', 'Normalization Type:   Linear', ok_status])
 
       result = described_class.apply_normalization_with_multiple_tracks('in.mkv', 'out.mkv', measured_data, tracks, profile)
 
-      expect(Open3).to have_received(:capture3) do |*args|
-        expect(args).to include('-c:a:0', 'ac3', '-b:a:0', '448k')
-        expect(args).to include('-map', '0:a:1', '-c:a:1', 'copy')
+      expect(described_class).to have_received(:execute_with_timeout) do |cmd, *_rest|
+        expect(cmd).to include('-c:a:0', 'ac3', '-b:a:0', '448k')
+        expect(cmd).to include('-map', '0:a:1', '-c:a:1', 'copy')
+        filter_arg = cmd[cmd.index('-filter_complex') + 1]
+        expect(filter_arg).to include('aresample=48000')
       end
       expect(result[:encoder]).to eq('ac3')
       expect(result[:bitrate]).to eq(448_000)
+      expect(result[:normalization_type]).to eq('Linear')
+    end
+
+    it 'records Dynamic normalization type when loudnorm falls back silently' do
+      tracks = [{ index: 0, channels: 2, codec: 'aac', bit_rate: 128_000, sample_rate: 48_000 }]
+      allow(described_class).to receive(:execute_with_timeout).and_return(['', 'Normalization Type:   Dynamic', ok_status])
+
+      result = described_class.apply_normalization_with_multiple_tracks('in.mp4', 'out.mp4', measured_data, tracks, profile)
+
+      expect(result[:normalization_type]).to eq('Dynamic')
+    end
+
+    it 'never engages dynamic compression in linear_only mode, regardless of ffmpeg output' do
+      tracks = [{ index: 0, channels: 2, codec: 'aac', bit_rate: 128_000, sample_rate: 48_000 }]
+      allow(described_class).to receive(:execute_with_timeout).and_return(['', 'Normalization Type:   Dynamic', ok_status])
+
+      result = described_class.apply_normalization_with_multiple_tracks('in.mp4', 'out.mp4', measured_data, tracks, profile, linear_only: true)
+
+      expect(result[:normalization_type]).to eq('Linear')
+      expect(described_class).to have_received(:execute_with_timeout) do |cmd, *_rest|
+        filter_arg = cmd[cmd.index('-filter_complex') + 1]
+        expect(filter_arg).to include('volume=')
+        expect(filter_arg).not_to include('loudnorm')
+      end
     end
   end
 
@@ -109,12 +139,22 @@ RSpec.describe Neutraliser::FFmpegWrapper do
   end
 
   describe '.detect_audio_tracks' do
-    it 'parses ffprobe csv output including bitrate and sample rate' do
-      ffprobe_csv = "1,6,ac3,640000,48000\n2,2,aac,256000,44100\n"
-      allow(Open3).to receive(:capture3).and_return([ffprobe_csv, '', ok_status])
+    it 'parses ffprobe json output by field name, not positional order' do
+      # ffprobe emits fields in canonical order (index,codec_name,sample_rate,channels,bit_rate)
+      # regardless of the order requested in -show_entries — parsing must be name-based.
+      ffprobe_json = {
+        streams: [
+          { index: 1, codec_name: 'ac3', sample_rate: '48000', channels: 6, bit_rate: '640000' },
+          { index: 2, codec_name: 'aac', sample_rate: '44100', channels: 2, bit_rate: '256000' }
+        ]
+      }.to_json
+      allow(described_class).to receive(:execute_with_timeout).and_return([ffprobe_json, '', ok_status])
 
-      result = described_class.detect_audio_tracks('test.mp4')
+      result = described_class.detect_audio_tracks('test.mkv')
 
+      expect(described_class).to have_received(:execute_with_timeout).with(
+        array_including('-of', 'json'), described_class::PROBE_TIMEOUT, 'Audio track detection'
+      )
       expect(result).to eq([
         { index: 0, stream_index: 1, channels: 6, codec: 'ac3', bit_rate: 640000, sample_rate: 48000 },
         { index: 1, stream_index: 2, channels: 2, codec: 'aac', bit_rate: 256000, sample_rate: 44100 }
@@ -122,20 +162,34 @@ RSpec.describe Neutraliser::FFmpegWrapper do
     end
 
     it 'returns a default track when ffprobe fails' do
-      allow(Open3).to receive(:capture3).and_return(['', 'err', fail_status])
+      allow(described_class).to receive(:execute_with_timeout).and_return(['', 'err', fail_status])
 
       result = described_class.detect_audio_tracks('bad.mp4')
       expect(result).to eq([{ index: 0, channels: 2, codec: 'unknown', bit_rate: nil, sample_rate: nil }])
     end
 
-    it 'handles missing bitrate fields gracefully' do
-      ffprobe_csv = "1,6,flac,N/A,48000\n"
-      allow(Open3).to receive(:capture3).and_return([ffprobe_csv, '', ok_status])
+    it 'treats an absent bit_rate field as nil rather than defaulting to stereo/FLAC' do
+      # MKV streams commonly omit bit_rate entirely (not "N/A") when unknown.
+      ffprobe_json = {
+        streams: [
+          { index: 1, codec_name: 'flac', sample_rate: '48000', channels: 6 }
+        ]
+      }.to_json
+      allow(described_class).to receive(:execute_with_timeout).and_return([ffprobe_json, '', ok_status])
 
       result = described_class.detect_audio_tracks('test.mkv')
 
-      expect(result.first[:bit_rate]).to eq(0)
+      expect(result.first[:codec]).to eq('flac')
+      expect(result.first[:channels]).to eq(6)
+      expect(result.first[:bit_rate]).to be_nil
       expect(result.first[:sample_rate]).to eq(48000)
+    end
+
+    it 'returns a default track when ffprobe emits unparseable json' do
+      allow(described_class).to receive(:execute_with_timeout).and_return(['not json', '', ok_status])
+
+      result = described_class.detect_audio_tracks('bad.mkv')
+      expect(result).to eq([{ index: 0, channels: 2, codec: 'unknown', bit_rate: nil, sample_rate: nil }])
     end
   end
 
@@ -148,6 +202,15 @@ RSpec.describe Neutraliser::FFmpegWrapper do
       result = described_class.send(:select_output_codec, make_track(codec: 'aac', bit_rate: 512_000), 'out.mp4')
       expect(result[:encoder]).to eq('aac')
       expect(result[:bitrate]).to eq(320_000) # capped at AAC stereo max
+    end
+
+    it 'round-trips AAC-in-MKV as AAC instead of falling back to FLAC' do
+      # Regression: with correct field-name parsing, an AAC source in an MKV
+      # container must map to the AAC encoder per ADR-0001 priority — not the
+      # MKV lossless-fallback (FLAC) that a broken codec parse would trigger.
+      result = described_class.send(:select_output_codec, make_track(codec: 'aac', bit_rate: 128_000), 'out.mkv')
+      expect(result[:encoder]).to eq('aac')
+      expect(result[:lossless_output]).to eq(false)
     end
 
     it 'matches source AC3 for MKV' do
@@ -224,6 +287,76 @@ RSpec.describe Neutraliser::FFmpegWrapper do
     it 'raises a clear error when no loudnorm json is present' do
       expect { described_class.send(:parse_loudnorm_json, 'no json here') }
         .to raise_error(Neutraliser::FFmpegError, /loudnorm JSON not found/)
+    end
+  end
+
+  describe '.parse_normalization_type' do
+    it 'extracts Linear from the loudnorm summary output' do
+      output = "Input Integrated:    -18.5 LUFS\nNormalization Type:   Linear\n"
+      expect(described_class.send(:parse_normalization_type, output)).to eq('Linear')
+    end
+
+    it 'extracts Dynamic from the loudnorm summary output' do
+      output = "Input Integrated:    -18.5 LUFS\nNormalization Type:   Dynamic\n"
+      expect(described_class.send(:parse_normalization_type, output)).to eq('Dynamic')
+    end
+
+    it 'returns nil when no normalization type line is present' do
+      expect(described_class.send(:parse_normalization_type, 'no summary here')).to be_nil
+    end
+
+    it 'returns nil for nil output' do
+      expect(described_class.send(:parse_normalization_type, nil)).to be_nil
+    end
+  end
+
+  describe '.capped_linear_gain' do
+    let(:measured) { { 'input_i' => '-25.0', 'input_tp' => '-20.0' } }
+
+    it 'uses the full gain needed to reach target loudness when peak headroom allows it' do
+      gain = described_class.send(:capped_linear_gain, measured, -20.0, -1.5)
+      expect(gain).to eq(5.0) # -20.0 - (-25.0)
+    end
+
+    it 'caps gain so the resulting true peak never exceeds target_tp' do
+      # Desired gain (13.0) would push -3.0 dBTP up to +10.0 dBTP — way past -1.5.
+      # Gain must be capped to the max safe headroom (-1.5 - (-3.0) = 1.5 dB),
+      # landing the file shy of target_i instead of engaging dynamic compression.
+      peaky_measured = { 'input_i' => '-33.0', 'input_tp' => '-3.0' }
+      gain = described_class.send(:capped_linear_gain, peaky_measured, -20.0, -1.5)
+      expect(gain).to eq(1.5)
+    end
+  end
+
+  describe 'linear_only sample rate pinning' do
+    it 'pins output sample rate to source when no measured peak headroom issue exists' do
+      measured = { 'input_i' => '-25.0', 'input_tp' => '-10.0' }
+      filter, forced_type = described_class.send(
+        :build_audio_filter, measured, -20.0, -1.5, 12.0, 48_000, linear_only: true
+      )
+
+      expect(filter).to eq('volume=5.00dB,aresample=48000')
+      expect(forced_type).to eq('Linear')
+    end
+
+    it 'omits aresample when source sample rate is unknown' do
+      measured = { 'input_i' => '-25.0', 'input_tp' => '-10.0' }
+      filter, = described_class.send(
+        :build_audio_filter, measured, -20.0, -1.5, 12.0, nil, linear_only: true
+      )
+
+      expect(filter).not_to include('aresample')
+    end
+
+    it 'pins aresample on the loudnorm (non-linear-only) path too, to prevent the 192kHz leak' do
+      measured = { 'input_i' => '-25.0', 'input_tp' => '-10.0', 'input_lra' => '8.0', 'input_thresh' => '-30.0', 'target_offset' => '0.0' }
+      filter, forced_type = described_class.send(
+        :build_audio_filter, measured, -20.0, -1.5, 12.0, 48_000, linear_only: false
+      )
+
+      expect(filter).to include('loudnorm=')
+      expect(filter).to end_with('aresample=48000')
+      expect(forced_type).to be_nil
     end
   end
 end

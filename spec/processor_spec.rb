@@ -79,6 +79,22 @@ RSpec.describe Neutraliser::Processor do
       expect(summary[:done]).to eq(1)
       expect(summary[:failed]).to eq(0)
     end
+
+    it 'records normalization_type per file in the run manifest' do
+      processor = described_class.new
+      video = File.join(temp_dir, 'a.mp4')
+      File.write(video, 'x')
+
+      expect(processor).to receive(:process_one).with(video).and_return(
+        { file: video, status: :done, reason: :normalized, message: nil, normalization_type: 'Dynamic' }
+      )
+
+      summary = processor.process(temp_dir)
+      manifest_lines = File.readlines(summary[:manifest_path]).map { |line| JSON.parse(line) }
+      done_entry = manifest_lines.find { |entry| entry['status'] == 'done' }
+
+      expect(done_entry['normalization_type']).to eq('Dynamic')
+    end
   end
 
   describe '#process_file' do
@@ -200,6 +216,28 @@ RSpec.describe Neutraliser::Processor do
 
       expect { processor.send(:normalize_file_with_paths, video_file, video_file, measured_data) }
         .to raise_error(/Output file verification failed/)
+    end
+
+    it 'returns the codec decision including normalization_type' do
+      allow(Neutraliser::FFmpegWrapper).to receive(:apply_normalization_with_multiple_tracks).and_return(
+        { encoder: 'aac', bitrate: 256_000, source_codec: 'aac', source_bitrate: 256_000, lossless_output: false, normalization_type: 'Dynamic' }
+      )
+
+      result = processor.send(:normalize_file_with_paths, video_file, video_file, measured_data)
+
+      expect(result[:normalization_type]).to eq('Dynamic')
+    end
+
+    it 'passes linear_only through to FFmpegWrapper' do
+      linear_processor = described_class.new(replace: false, linear_only: true)
+      File.write(video_file, 'x')
+      allow(linear_processor).to receive(:detect_audio_tracks).and_return([{ index: 0, codec: 'aac', channels: 2, bit_rate: 256000, sample_rate: 48000 }])
+      allow(Neutraliser::FileManager).to receive(:verify_file_integrity).and_return(true)
+
+      linear_processor.send(:normalize_file_with_paths, video_file, video_file, measured_data)
+
+      expect(Neutraliser::FFmpegWrapper).to have_received(:apply_normalization_with_multiple_tracks)
+        .with(video_file, output_file, measured_data, anything, anything, hash_including(linear_only: true))
     end
   end
 

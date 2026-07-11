@@ -62,6 +62,7 @@ module Neutraliser
     option :resume, type: :boolean, default: false, desc: 'Resume from previous run manifest and skip completed files'
     option :fast, type: :boolean, default: false, desc: 'Single-pass normalization (faster, slightly less accurate)'
     option :local_stage, type: :boolean, default: false, desc: 'Copy files to local disk before processing'
+    option :linear_only, type: :boolean, default: false, desc: 'Use constant-gain normalization only — never falls back to dynamic compression (quiet-but-peaky files may land shy of target)'
     def process(path)
       processor = Processor.new(
         replace: options[:replace],
@@ -73,7 +74,8 @@ module Neutraliser
         fast_verify: options[:fast_verify],
         resume: options[:resume],
         fast: options[:fast],
-        local_stage: options[:local_stage]
+        local_stage: options[:local_stage],
+        linear_only: options[:linear_only]
       )
 
       summary = processor.process(path)

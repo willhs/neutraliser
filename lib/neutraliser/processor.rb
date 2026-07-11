@@ -7,7 +7,7 @@ module Neutraliser
     MANIFEST_FILENAME = '.neutraliser-run-manifest.jsonl'.freeze
     TERMINAL_RESUME_STATES = %w[done skipped].freeze
 
-    def initialize(replace: false, target_level: nil, profile: 'livingroom', tolerance: 1.0, cache: true, dry_run: false, parallel: true, max_threads: nil, fast_verify: true, resume: false, fast: false, local_stage: false)
+    def initialize(replace: false, target_level: nil, profile: 'livingroom', tolerance: 1.0, cache: true, dry_run: false, parallel: true, max_threads: nil, fast_verify: true, resume: false, fast: false, local_stage: false, linear_only: false)
       @replace = replace
       @profile = if target_level
                    Profiles.custom_profile(target_level.to_f)
@@ -24,6 +24,7 @@ module Neutraliser
       @manifest_mutex = Mutex.new
       @fast = fast
       @local_stage = local_stage
+      @linear_only = linear_only
       @stager = LocalStager.new if local_stage
     end
 
@@ -98,7 +99,8 @@ module Neutraliser
           manifest_path,
           file: result[:file],
           status: result[:status].to_s,
-          message: result[:message]
+          message: result[:message],
+          normalization_type: result[:normalization_type]
         )
       end
 
@@ -156,7 +158,7 @@ module Neutraliser
       File.join(dir_path, MANIFEST_FILENAME)
     end
 
-    def append_manifest_entry(manifest_path, file:, status:, message: nil)
+    def append_manifest_entry(manifest_path, file:, status:, message: nil, normalization_type: nil)
       entry = {
         timestamp: Time.now.utc.iso8601,
         file: File.expand_path(file),
@@ -165,6 +167,7 @@ module Neutraliser
         target_lufs: @profile[:lufs]
       }
       entry[:message] = message if message && !message.empty?
+      entry[:normalization_type] = normalization_type if normalization_type
 
       File.open(manifest_path, 'a') { |manifest| manifest.puts(JSON.generate(entry)) }
     rescue StandardError => e
@@ -233,8 +236,8 @@ module Neutraliser
           log "  [DRY RUN] Would normalize: #{measured_data['input_i'].to_f.round(1)} LUFS → #{@profile[:lufs]} LUFS"
           file_result(original_path, status: :done, reason: :dry_run)
         else
-          normalize_file_with_paths(original_path, working_path, measured_data)
-          file_result(original_path, status: :done, reason: :normalized)
+          codec_decision = normalize_file_with_paths(original_path, working_path, measured_data)
+          file_result(original_path, status: :done, reason: :normalized, normalization_type: codec_decision[:normalization_type])
         end
       else
         log "  Already at target level, skipping"
@@ -272,7 +275,7 @@ module Neutraliser
       end
 
       commit_output(original_path, working_path, output_path)
-      file_result(original_path, status: :done, reason: :normalized)
+      file_result(original_path, status: :done, reason: :normalized, normalization_type: codec_decision[:normalization_type])
     rescue => e
       FileUtils.rm_f(output_path) if output_path && File.exist?(output_path)
       raise e
@@ -333,7 +336,7 @@ module Neutraliser
       log "  Current: #{current_lufs.round(1)} LUFS, Target: #{target_lufs} LUFS (#{adjustment.round(1)} LU adjustment)"
 
       codec_decision = FFmpegWrapper.apply_normalization_with_multiple_tracks(
-        working_path, output_path, measured_data, audio_tracks, @profile
+        working_path, output_path, measured_data, audio_tracks, @profile, linear_only: @linear_only
       )
 
       log_codec_decision(codec_decision)
@@ -343,6 +346,7 @@ module Neutraliser
       end
 
       commit_output(original_path, working_path, output_path)
+      codec_decision
     rescue => e
       FileUtils.rm_f(output_path) if output_path && File.exist?(output_path)
       raise e
@@ -367,12 +371,13 @@ module Neutraliser
       end
     end
 
-    def file_result(file_path, status:, reason:, message: nil)
+    def file_result(file_path, status:, reason:, message: nil, normalization_type: nil)
       {
         file: File.expand_path(file_path),
         status: status,
         reason: reason,
-        message: message
+        message: message,
+        normalization_type: normalization_type
       }
     end
 
@@ -425,6 +430,7 @@ module Neutraliser
                end
 
       log "  Audio: #{source} -> #{target}"
+      log "  Normalization: #{decision[:normalization_type]}" if decision[:normalization_type]
     end
 
     def generate_temp_path(file_path)
