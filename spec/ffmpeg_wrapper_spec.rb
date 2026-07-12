@@ -1,4 +1,5 @@
 require 'spec_helper'
+require 'shellwords'
 
 RSpec.describe Neutraliser::FFmpegWrapper do
   let(:ok_status) { instance_double(Process::Status, success?: true) }
@@ -81,6 +82,34 @@ RSpec.describe Neutraliser::FFmpegWrapper do
       expect(result[:encoder]).to eq('ac3')
       expect(result[:bitrate]).to eq(448_000)
       expect(result[:normalization_type]).to eq('Linear')
+    end
+
+    it 'maps per-stream metadata from the primary track onto the normalised output stream' do
+      tracks = [
+        { index: 0, channels: 6, codec: 'ac3', bit_rate: 448_000, sample_rate: 48_000 },
+        { index: 1, channels: 2, codec: 'aac', bit_rate: 256_000, sample_rate: 44_100 }
+      ]
+      allow(described_class).to receive(:execute_with_timeout).and_return(['', 'Normalization Type:   Linear', ok_status])
+
+      described_class.apply_normalization_with_multiple_tracks('in.mkv', 'out.mkv', measured_data, tracks, profile)
+
+      expect(described_class).to have_received(:execute_with_timeout) do |cmd, *_rest|
+        expect(cmd).to include('-map_metadata:s:a:0', '0:s:a:0')
+      end
+    end
+
+    it 'maps per-stream metadata back to the primary track source audio index, not always 0' do
+      # Simulates a primary track that is not the first audio stream in the source file.
+      tracks = [
+        { index: 2, channels: 2, codec: 'aac', bit_rate: 256_000, sample_rate: 44_100 }
+      ]
+      allow(described_class).to receive(:execute_with_timeout).and_return(['', 'Normalization Type:   Linear', ok_status])
+
+      described_class.apply_normalization_with_multiple_tracks('in.mkv', 'out.mkv', measured_data, tracks, profile)
+
+      expect(described_class).to have_received(:execute_with_timeout) do |cmd, *_rest|
+        expect(cmd).to include('-map_metadata:s:a:0', '0:s:a:2')
+      end
     end
 
     it 'records Dynamic normalization type when loudnorm falls back silently' do
@@ -281,6 +310,66 @@ RSpec.describe Neutraliser::FFmpegWrapper do
       result = described_class.send(:select_output_codec, make_track(codec: 'aac', bit_rate: 0), 'out.mp4')
       expect(result[:bitrate]).to eq(128_000)
     end
+
+    it 'uses the floor when source bitrate is unknown and no input_path is given for estimation' do
+      expect(described_class).not_to receive(:execute_with_timeout)
+      result = described_class.send(:select_output_codec, make_track(codec: 'aac', bit_rate: nil), 'out.mp4')
+      expect(result[:bitrate]).to eq(128_000)
+    end
+
+    it 'estimates bitrate from the container BPS tag when stream bit_rate is N/A (MKV)' do
+      allow(described_class).to receive(:execute_with_timeout)
+        .with(array_including('stream_tags=BPS'), described_class::PROBE_TIMEOUT, anything)
+        .and_return(["192000\n", '', ok_status])
+
+      result = described_class.send(:select_output_codec, make_track(codec: 'aac', bit_rate: nil), 'out.mkv', 'in.mkv')
+
+      expect(result[:encoder]).to eq('aac')
+      expect(result[:bitrate]).to eq(192_000)
+    end
+
+    it 'falls back to packet-size sampling when no BPS tag is present' do
+      allow(described_class).to receive(:execute_with_timeout)
+        .with(array_including('stream_tags=BPS'), described_class::PROBE_TIMEOUT, anything)
+        .and_return(['N/A', '', ok_status])
+      allow(described_class).to receive(:execute_with_timeout)
+        .with(array_including('packet=size'), described_class::PROBE_TIMEOUT, anything)
+        .and_return(["24000\n24000\n24000\n24000\n24000\n", '', ok_status])
+
+      result = described_class.send(:select_output_codec, make_track(codec: 'aac', bit_rate: nil), 'out.mkv', 'in.mkv')
+
+      # 5 packets * 24000 bytes = 120000 bytes over the 10s default sample window
+      # => (120000 * 8) / 10 = 96000 bps, floored to the AAC stereo minimum (128000)
+      expect(result[:bitrate]).to eq(128_000)
+    end
+
+    it 'uses an estimate above the floor as the source bitrate for the floor/cap logic' do
+      allow(described_class).to receive(:execute_with_timeout)
+        .with(array_including('stream_tags=BPS'), described_class::PROBE_TIMEOUT, anything)
+        .and_return(['N/A', '', ok_status])
+      allow(described_class).to receive(:execute_with_timeout)
+        .with(array_including('packet=size'), described_class::PROBE_TIMEOUT, anything)
+        .and_return(["48000\n48000\n48000\n48000\n48000\n", '', ok_status])
+
+      result = described_class.send(:select_output_codec, make_track(codec: 'aac', bit_rate: nil), 'out.mkv', 'in.mkv')
+
+      # 5 packets * 48000 bytes = 240000 bytes over the 10s default sample window
+      # => (240000 * 8) / 10 = 192000 bps, above the 128000 floor
+      expect(result[:bitrate]).to eq(192_000)
+    end
+
+    it 'falls back to the floor when neither the BPS tag nor packet sampling yield a usable number' do
+      allow(described_class).to receive(:execute_with_timeout)
+        .with(array_including('stream_tags=BPS'), described_class::PROBE_TIMEOUT, anything)
+        .and_return(['N/A', '', ok_status])
+      allow(described_class).to receive(:execute_with_timeout)
+        .with(array_including('packet=size'), described_class::PROBE_TIMEOUT, anything)
+        .and_return(['', '', fail_status])
+
+      result = described_class.send(:select_output_codec, make_track(codec: 'aac', bit_rate: nil), 'out.mkv', 'in.mkv')
+
+      expect(result[:bitrate]).to eq(128_000)
+    end
   end
 
   describe '.parse_loudnorm_json' do
@@ -357,6 +446,60 @@ RSpec.describe Neutraliser::FFmpegWrapper do
       expect(filter).to include('loudnorm=')
       expect(filter).to end_with('aresample=48000')
       expect(forced_type).to be_nil
+    end
+  end
+
+  describe 'integration: metadata + bitrate preservation on a real MKV fixture' do
+    def ffprobe_stream(path, select_streams, show_entries)
+      json = `ffprobe -v error -select_streams #{select_streams} -show_entries #{show_entries} -of json #{path.shellescape} 2>/dev/null`
+      JSON.parse(json)['streams'].first || {}
+    end
+
+    before do
+      skip 'ffmpeg/ffprobe not available on PATH' unless system('which ffmpeg > /dev/null 2>&1') && system('which ffprobe > /dev/null 2>&1')
+    end
+
+    it 'keeps language/title tags on the normalised primary track and copied secondary track, and avoids the bitrate floor for an MKV source with no reported bit_rate' do
+      Dir.mktmpdir do |dir|
+        input = File.join(dir, 'input.mkv')
+        output = File.join(dir, 'output.mkv')
+
+        # 12s so the 10s packet-sampling window reflects real throughput; noise
+        # sources give AAC genuine entropy to encode against (unlike silence/tones).
+        fixture_cmd = [
+          'ffmpeg', '-hide_banner', '-loglevel', 'error', '-y',
+          '-f', 'lavfi', '-i', 'color=c=blue:size=64x64:duration=12',
+          '-f', 'lavfi', '-i', 'anoisesrc=color=pink:duration=12:sample_rate=48000',
+          '-f', 'lavfi', '-i', 'anoisesrc=color=blue:duration=12:sample_rate=48000',
+          '-map', '0:v', '-map', '1:a', '-map', '2:a',
+          '-c:v', 'libx264', '-preset', 'ultrafast',
+          '-c:a:0', 'aac', '-ac:a:0', '2', '-b:a:0', '256k',
+          '-metadata:s:a:0', 'language=eng', '-metadata:s:a:0', 'title=English Track',
+          '-c:a:1', 'aac', '-ac:a:1', '2', '-b:a:1', '128k',
+          '-metadata:s:a:1', 'language=jpn', '-metadata:s:a:1', 'title=Japanese Track',
+          input
+        ]
+        raise 'fixture generation failed' unless system(*fixture_cmd)
+
+        audio_tracks = described_class.detect_audio_tracks(input)
+        expect(audio_tracks.map { |t| t[:bit_rate] }).to all(be_nil) # MKV: no reported bit_rate, forces estimation
+
+        profile = { lufs: -20.0, tp: -1.5, lra: 12.0 }
+        result = described_class.apply_normalization_single_pass(input, output, audio_tracks, profile)
+
+        primary_tags = ffprobe_stream(output, 'a:0', 'stream_tags=language,title')['tags']
+        expect(primary_tags['language']).to eq('eng')
+        expect(primary_tags['title']).to eq('English Track')
+
+        secondary_tags = ffprobe_stream(output, 'a:1', 'stream_tags=language,title')['tags']
+        expect(secondary_tags['language']).to eq('jpn')
+        expect(secondary_tags['title']).to eq('Japanese Track')
+
+        # Estimated from packet sampling (no BPS tag from ffmpeg's own muxer) —
+        # must land near the real ~256k source, not the 128k AAC stereo floor.
+        expect(result[:bitrate]).to be > 128_000
+        expect(result[:source_bitrate]).to be > 128_000
+      end
     end
   end
 end

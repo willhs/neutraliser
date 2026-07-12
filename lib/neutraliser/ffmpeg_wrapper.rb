@@ -136,7 +136,7 @@ module Neutraliser
       audio_tracks ||= detect_audio_tracks(input_path)
       primary_track = audio_tracks.first || { index: 0, channels: 2, codec: 'unknown', bit_rate: nil, sample_rate: nil }
 
-      codec_decision = select_output_codec(primary_track, output_path)
+      codec_decision = select_output_codec(primary_track, output_path, input_path)
       codec_args = build_codec_args(codec_decision)
 
       audio_filter, forced_normalization_type = build_audio_filter(
@@ -167,7 +167,7 @@ module Neutraliser
       audio_tracks ||= detect_audio_tracks(input_path)
       primary_track = audio_tracks.first || { index: 0, channels: 2, codec: 'unknown', bit_rate: nil, sample_rate: nil }
 
-      codec_decision = select_output_codec(primary_track, output_path)
+      codec_decision = select_output_codec(primary_track, output_path, input_path)
       codec_args = build_codec_args(codec_decision)
 
       loudnorm_filter = "loudnorm=I=#{profile[:lufs]}:TP=#{profile[:tp]}:LRA=#{profile[:lra]}:print_format=summary"
@@ -291,7 +291,7 @@ module Neutraliser
       raise FFmpegError, "Failed to parse loudnorm JSON: #{e.message}"
     end
 
-    def self.select_output_codec(track, output_path)
+    def self.select_output_codec(track, output_path, input_path = nil)
       source_codec = track[:codec]&.downcase || 'unknown'
       channels = track[:channels].to_i
       channels = 2 if channels == 0
@@ -301,6 +301,12 @@ module Neutraliser
       allowed = CONTAINER_CODECS.fetch(container, CONTAINER_CODECS['.mkv'])
 
       encoder = resolve_encoder(source_codec, allowed, container, channels)
+
+      if source_bitrate <= 0 && input_path
+        estimated = estimate_source_bitrate(input_path, track)
+        source_bitrate = estimated if estimated && estimated > 0
+      end
+
       bitrate = resolve_bitrate(encoder, source_bitrate, channels)
 
       {
@@ -351,6 +357,54 @@ module Neutraliser
       else
         floor
       end
+    end
+
+    # Estimates a stream's real bitrate when ffprobe reports bit_rate as N/A
+    # (common for MKV). Checks the container's BPS tag (written by mkvmerge)
+    # first, then falls back to sampling packet sizes over a short window.
+    # Returns nil when neither source yields a usable number, so callers fall
+    # through to the existing quality-floor logic.
+    def self.estimate_source_bitrate(input_path, track)
+      stream_spec = "a:#{track[:index]}"
+      estimate_bitrate_from_tag(input_path, stream_spec) || estimate_bitrate_from_packets(input_path, stream_spec)
+    end
+
+    def self.estimate_bitrate_from_tag(input_path, stream_spec)
+      cmd = [
+        "ffprobe", "-v", "error", "-select_streams", stream_spec,
+        "-show_entries", "stream_tags=BPS",
+        "-of", "default=nw=1:nk=1", input_path
+      ]
+
+      stdout, _stderr, status = execute_with_timeout(cmd, PROBE_TIMEOUT, "BPS tag probe")
+      return nil unless status.success?
+
+      value = stdout.strip
+      return nil if value.empty? || value == 'N/A'
+
+      value.to_i
+    rescue StandardError
+      nil
+    end
+
+    def self.estimate_bitrate_from_packets(input_path, stream_spec, sample_seconds: 10)
+      cmd = [
+        "ffprobe", "-v", "error", "-select_streams", stream_spec,
+        "-show_entries", "packet=size",
+        "-read_intervals", "%+#{sample_seconds}",
+        "-of", "csv=p=0", input_path
+      ]
+
+      stdout, _stderr, status = execute_with_timeout(cmd, PROBE_TIMEOUT, "Packet bitrate sampling")
+      return nil unless status.success?
+
+      sizes = stdout.each_line.map(&:strip).reject(&:empty?).map(&:to_i)
+      return nil if sizes.empty?
+
+      total_bytes = sizes.sum
+      ((total_bytes * 8) / sample_seconds.to_f).round
+    rescue StandardError
+      nil
     end
 
     def self.lossless_encoder?(encoder)
@@ -440,9 +494,21 @@ module Neutraliser
         end
       end
 
-      # Metadata and subtitles preservation
+      # Metadata and subtitles preservation. The primary track goes through
+      # filter_complex into a fresh [norm] stream, which loses its source
+      # stream association — -map_metadata 0 (global/container-level only)
+      # doesn't carry per-stream tags (language, title) onto it, so it needs
+      # an explicit per-stream mapping back to its source audio index. Once
+      # any stream-scoped -map_metadata is given, ffmpeg drops its default
+      # automatic per-stream metadata copy entirely — so every audio output
+      # stream (not just the primary) needs its own explicit mapping, or the
+      # copied secondary tracks would go from implicitly-correct to silently
+      # stripped.
+      cmd += ["-map_chapters", "0", "-map_metadata", "0"]
+      audio_tracks.each_with_index do |track, output_index|
+        cmd += ["-map_metadata:s:a:#{output_index}", "0:s:a:#{track[:index]}"]
+      end
       cmd += [
-        "-map_chapters", "0", "-map_metadata", "0",
         "-map", "0:s?", "-c:s", "copy",
         output_path
       ]
