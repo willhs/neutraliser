@@ -17,11 +17,11 @@ module Neutraliser
         raise FileManagerError, "Source file does not exist: #{source_path}"
       end
 
-      # Create backup
-      FileUtils.cp(target_path, backup_path)
+      # Rename original to backup (instant, no extra disk space on same filesystem)
+      FileUtils.mv(target_path, backup_path)
 
       begin
-        # Atomically replace target with source
+        # Move normalized file into place
         FileUtils.mv(source_path, target_path)
         # Success - remove backup
         FileUtils.rm(backup_path)
@@ -30,6 +30,7 @@ module Neutraliser
         if File.exist?(backup_path)
           FileUtils.mv(backup_path, target_path)
         end
+        FileUtils.rm_f(source_path)
         raise FileManagerError, "Atomic replacement failed: #{e.message}"
       end
     end

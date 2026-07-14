@@ -1,5 +1,7 @@
 require 'json'
 require 'time'
+require 'pathname'
+require_relative 'processed_tracker'
 
 module Neutraliser
   class Processor
@@ -32,6 +34,7 @@ module Neutraliser
       if File.directory?(path)
         process_directory(path)
       elsif File.file?(path)
+        @tracker = ProcessedTracker.new(File.dirname(path))
         summarize_results(
           found: 1,
           queued: 1,
@@ -58,6 +61,7 @@ module Neutraliser
     def process_directory(dir_path)
       video_files = find_video_files(dir_path)
       manifest_path = manifest_path_for(dir_path)
+      @tracker = ProcessedTracker.new(dir_path)
 
       if video_files.empty?
         log "No video files found in '#{dir_path}'"
@@ -197,6 +201,11 @@ module Neutraliser
         return file_result(file_path, status: :skipped, reason: :unsupported_format)
       end
 
+      if @tracker&.processed?(file_path, @profile)
+        log "  Already processed, skipping"
+        return file_result(file_path, status: :skipped, reason: :already_processed)
+      end
+
       log "Processing: #{file_path}"
 
       begin
@@ -220,6 +229,11 @@ module Neutraliser
         end
 
         @stager&.cleanup(working_path) if @local_stage
+
+        if result[:status] == :done || result[:status] == :skipped
+          @tracker&.mark_processed(file_path, @profile)
+        end
+
         result
       rescue => e
         @stager&.cleanup(working_path) if @local_stage && working_path != file_path
