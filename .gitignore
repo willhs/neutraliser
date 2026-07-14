@@ -9,3 +9,4 @@
 /coverage/
 *.gem
 benchmark/test_source.mp4
+spec/examples.txt
