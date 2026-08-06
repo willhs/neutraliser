@@ -1,1 +1,1 @@
-/Users/will/projects/neutraliser/.gent/rules.md
+.gent/rules.md
