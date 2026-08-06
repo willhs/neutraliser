@@ -20,7 +20,7 @@ Never adjust your volume between videos again. Neutraliser analyses and adjusts 
 Install FFmpeg (see `Requirements`), then run the CLI straight from source:
 
 ```bash
-git clone https://github.com/your-username/neutraliser.git
+git clone https://github.com/willhs/neutraliser.git
 cd neutraliser
 bundle install
 bundle exec neutraliser --help
@@ -123,7 +123,7 @@ For optional gem builds or development workflow details, see the sections below.
 ## Development
 
 ```bash
-git clone https://github.com/your-username/neutraliser.git
+git clone https://github.com/willhs/neutraliser.git
 cd neutraliser
 bundle install
 ```

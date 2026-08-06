@@ -3,3 +3,6 @@
 
 ## [2026-04-12] fix | Apply docs-lint fixes
 Rebuilt index.md (agent notice, linked entries, all 14 orphaned files added, 4 broken links removed). Created front-matter-schema.json. task-0001 status in_progress → complete. task-0002 Phase 2 codec note updated to reference ADR-0001 supersession. task-0005 context corrected to reflect benchmark outcomes.
+
+## [2026-08-06] update | Repo hygiene for public visibility
+Untracked .env (leaked Plex token — rotated), .idea/, and .claude/skills/check-prod (NAS SSH details). Scrubbed NAS IP from task-0005 context. Removed stray rspec state file from task-0002. Added LICENSE (MIT), filled gemspec/README identity, fixed stale ParallelProcessor row in architecture.md (parallel dispatch lives in Processor).

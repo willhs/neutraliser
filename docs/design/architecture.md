@@ -78,8 +78,8 @@ Both flags are independent and can be combined.
 | CacheManager | `lib/neutraliser/cache_manager.rb` | Sidecar `.loudnorm.json` cache read/write |
 | FastVerifier | `lib/neutraliser/fast_verifier.rb` | Quick LUFS sampling to skip already-normalised files |
 | FileManager | `lib/neutraliser/file_manager.rb` | Atomic file replacement, integrity verification |
-| ParallelProcessor | `lib/neutraliser/parallel_processor.rb` | Thread-pool dispatch for multi-file runs |
 | LocalStager | `lib/neutraliser/local_stager.rb` | Stage files to local NVMe for fast processing, copy result back |
+| ProcessedTracker | `lib/neutraliser/processed_tracker.rb` | Skip files already normalised for a profile |
 
 ## Decisions / Rationale
 
@@ -102,3 +102,4 @@ Both flags are independent and can be combined.
 - 2025-09-24 (agent:create-project): Created architecture placeholder
 - 2026-03-07 (agent:implement-plan): Added pipeline diagram, codec selection, component table
 - 2026-03-08 (agent:implement-plan): Added performance flags section, LocalStager component
+- 2026-08-06 (agent:improve-architecture): Removed stale ParallelProcessor row, added ProcessedTracker

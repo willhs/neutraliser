@@ -1,12 +1,12 @@
 Gem::Specification.new do |spec|
   spec.name          = 'neutraliser'
   spec.version       = '0.1.0'
-  spec.authors       = ['Your Name']
-  spec.email         = ['your.email@example.com']
+  spec.authors       = ['Will Hardwick-Smith']
+  spec.email         = ['whardwicksmith@gmail.com']
 
   spec.summary       = 'Video audio volume normalisation CLI tool'
   spec.description   = 'A Ruby CLI tool for consistent audio volume normalisation across your video library'
-  spec.homepage      = 'https://github.com/your-username/neutraliser'
+  spec.homepage      = 'https://github.com/willhs/neutraliser'
   spec.license       = 'MIT'
   spec.required_ruby_version = '>= 2.7.0'
 
