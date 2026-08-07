@@ -3,7 +3,7 @@ type: architecture
 status: draft
 owner: will
 contributors: []
-updated: 2026-03-07
+updated: 2026-08-07
 review_cycle: 90d
 agent_write: false
 links: []

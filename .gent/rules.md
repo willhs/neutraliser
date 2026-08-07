@@ -14,19 +14,22 @@ A Ruby CLI tool that normalises audio volume in video files using industry-stand
 
 ### Core Components
 - **`Processor`**: Main orchestration class handling file/directory processing
-- **`FFmpegWrapper`**: Two-pass loudnorm implementation with command generation
-- **`AudioAnalyser`**: Analysis coordination with intelligent caching
+- **`SkipDecider`**: Single authority for "already normalised?" — one `.neutraliser` sidecar (size+mtime+profile), quick LUFS sampling as an internal fallback
+- **`FFmpegWrapper`**: Two-pass loudnorm implementation, ffprobe, source-matched codec selection
+- **`AudioAnalyser`**: Full loudnorm measurement coordination with sidecar caching
+- **`Measurement`**: Value object for loudnorm measurement results
 - **`Profiles`**: Normalization profile system (reference/livingroom/night)
 - **`FileManager`**: Atomic file operations with integrity verification
-- **`CacheManager`**: Sidecar JSON caching system for analysis results
-- **`PlexAnalyzer`**: Plex library integration for media analysis
+- **`CacheManager`**: Sidecar `.loudnorm_{profile}.json` caching system for analysis results
+- **`LocalStager`**: Stages files to local disk (`--local-stage`) before processing, copies results back
+- **`PlexAnalyzer`**: Plex library integration for media analysis, routed through FFmpegWrapper/Measurement/Profiles
 - **`CLI`**: Thor-based command-line interface with comprehensive options
 
 ### Processing Pipeline
-1. **Analysis Pass**: FFmpeg loudnorm measurement → sidecar JSON cache
-2. **Decision Logic**: Skip files within tolerance (default: 1.0 LU)
-3. **Normalization Pass**: Two-pass loudnorm with video stream copying
-4. **Codec Intelligence**: AC-3 640k for 5.1+, AAC 256k for stereo
+1. **Skip Decision**: `SkipDecider` checks the `.neutraliser` sidecar (or a quick LUFS sample fallback) — already-normalised files are skipped
+2. **Analysis Pass**: FFmpeg loudnorm measurement → sidecar JSON cache (skipped in `--fast` mode)
+3. **Normalization Pass**: Two-pass loudnorm by default; `--fast` uses single-pass dynamic mode
+4. **Codec Intelligence**: Matches source codec/bitrate where encodable, falls back to FLAC/EAC3/AC3 for non-encodable surround formats — see [ADR-0001](docs/design/adr/0001-smart-codec-selection.md)
 5. **Atomic Operations**: Safe file replacement with integrity verification
 
 ## Implementation Details
@@ -43,10 +46,10 @@ A Ruby CLI tool that normalises audio volume in video files using industry-stand
 
 ### Smart Features
 - **Intelligent Caching**: Profile-specific sidecar JSON with file integrity checks
-- **Codec Selection**: Automatically chooses AC-3 for 5.1+, AAC for stereo
+- **Codec Selection**: Matches source codec/bitrate where encodable; falls back to FLAC/EAC3/AC3 for non-encodable surround formats (see ADR-0001)
 - **Metadata Preservation**: Chapters, subtitles, and metadata fully preserved
 - **Multi-track Handling**: Normalizes primary audio, copies others unchanged
-- **Performance**: Skips files already within target tolerance
+- **Performance**: `SkipDecider` skips already-normalised files; `--fast` and `--local-stage` trade accuracy/IO for speed (see ADR-0002)
 
 ## CLI Commands (Fully Implemented)
 
@@ -62,6 +65,10 @@ A Ruby CLI tool that normalises audio volume in video files using industry-stand
 - `--tolerance N.N` - Skip threshold in LU (default: 1.0)
 - `--dry-run` - Analysis only mode
 - `--cache/--no-cache` - Toggle sidecar caching
+- `--fast` - Single-pass normalization (faster, slightly less accurate)
+- `--local-stage` - Copy files to local disk before processing
+- `--resume` - Resume a prior directory run, skipping completed files
+- `--linear-only` - Constant-gain normalization only, never falls back to dynamic compression
 
 ## Testing Strategy ✅ COMPLETED
 
