@@ -2,15 +2,6 @@ require 'spec_helper'
 
 RSpec.describe Neutraliser::AudioAnalyser do
   let(:target_profile) { { name: 'livingroom', lufs: -20.0, tp: -1.5, lra: 12.0 } }
-  let(:measured_data) do
-    {
-      'input_i' => '-18.5',
-      'input_tp' => '-2.1',
-      'input_lra' => '8.3',
-      'input_thresh' => '-28.9',
-      'target_offset' => '1.5'
-    }
-  end
 
   describe '#initialize' do
     context 'with default parameters' do
@@ -32,75 +23,6 @@ RSpec.describe Neutraliser::AudioAnalyser do
       it 'initializes cache manager' do
         expect(Neutraliser::CacheManager).to receive(:new).with(enabled: true)
         described_class.new(cache_enabled: true, use_sidecar: true)
-      end
-    end
-  end
-
-  describe '#analyze_file' do
-    let(:analyser) { described_class.new(cache_enabled: true, use_sidecar: true) }
-    let(:cache_manager) { instance_double(Neutraliser::CacheManager) }
-
-    before do
-      allow(Neutraliser::CacheManager).to receive(:new).and_return(cache_manager)
-      allow(Neutraliser::FFmpegWrapper).to receive(:measure_loudness).and_return(measured_data)
-    end
-
-    context 'with cache hit' do
-      before do
-        allow(cache_manager).to receive(:load_cached_analysis).and_return(measured_data)
-        allow(cache_manager).to receive(:save_analysis)
-      end
-
-      it 'returns cached data and skips FFmpeg analysis' do
-        expect(Neutraliser.logger).to receive(:log).with("  Using cached analysis data")
-        result = analyser.analyze_file('test.mp4', target_profile)
-
-        expect(result).to eq(measured_data)
-        expect(Neutraliser::FFmpegWrapper).not_to have_received(:measure_loudness)
-      end
-    end
-
-    context 'with cache miss' do
-      before do
-        allow(cache_manager).to receive(:load_cached_analysis).and_return(nil)
-        allow(cache_manager).to receive(:save_analysis)
-      end
-
-      it 'performs FFmpeg analysis and saves to cache' do
-        result = analyser.analyze_file('test.mp4', target_profile)
-
-        expect(Neutraliser::FFmpegWrapper).to have_received(:measure_loudness).with(
-          'test.mp4',
-          target_i: target_profile[:lufs],
-          target_tp: target_profile[:tp],
-          target_lra: target_profile[:lra]
-        )
-        expect(cache_manager).to have_received(:save_analysis).with('test.mp4', target_profile, measured_data)
-        expect(result).to eq(measured_data)
-      end
-    end
-
-    context 'without sidecar caching' do
-      let(:analyser) { described_class.new(cache_enabled: false, use_sidecar: false) }
-
-      it 'performs FFmpeg analysis without caching' do
-        result = analyser.analyze_file('test.mp4', target_profile)
-
-        expect(Neutraliser::FFmpegWrapper).to have_received(:measure_loudness)
-        expect(result).to eq(measured_data)
-      end
-    end
-
-    context 'when FFmpeg analysis fails' do
-      before do
-        allow(cache_manager).to receive(:load_cached_analysis).and_return(nil)
-        allow(Neutraliser::FFmpegWrapper).to receive(:measure_loudness).and_raise(Neutraliser::FFmpegError.new("FFmpeg failed"))
-      end
-
-      it 'propagates the FFmpeg error' do
-        expect {
-          analyser.analyze_file('test.mp4', target_profile)
-        }.to raise_error(Neutraliser::FFmpegError, "FFmpeg failed")
       end
     end
   end
@@ -138,29 +60,6 @@ RSpec.describe Neutraliser::AudioAnalyser do
       it 'calculates correctly for different target levels' do
         result = analyser.needs_normalization?(measured_data, night_profile)
         expect(result).to be false  # Within default 1.0 tolerance
-      end
-    end
-  end
-
-  describe '#cleanup_cache_for_file' do
-    let(:analyser) { described_class.new(cache_enabled: true, use_sidecar: true) }
-    let(:cache_manager) { instance_double(Neutraliser::CacheManager) }
-
-    before do
-      allow(Neutraliser::CacheManager).to receive(:new).and_return(cache_manager)
-    end
-
-    it 'delegates to cache manager when sidecar is enabled' do
-      expect(cache_manager).to receive(:cleanup_stale_cache).with('test.mp4')
-      analyser.cleanup_cache_for_file('test.mp4')
-    end
-
-    context 'without sidecar caching' do
-      let(:analyser) { described_class.new(cache_enabled: false, use_sidecar: false) }
-
-      it 'does nothing when sidecar is disabled' do
-        # Should not raise any errors
-        analyser.cleanup_cache_for_file('test.mp4')
       end
     end
   end

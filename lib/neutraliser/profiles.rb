@@ -48,18 +48,5 @@ module Neutraliser
         "Custom profile with #{profile[:lufs]} LUFS target"
       end
     end
-
-    def self.recommend_profile_for_content(content_type = :unknown)
-      case content_type
-      when :movie, :film
-        REFERENCE  # Movies often have wide dynamic range
-      when :tv, :series
-        LIVING_ROOM  # TV shows are often mixed for living room listening
-      when :music, :concert
-        NIGHT_MODE  # Music often benefits from reduced dynamic range
-      else
-        LIVING_ROOM  # Safe default
-      end
-    end
   end
 end

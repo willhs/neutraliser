@@ -45,23 +45,6 @@ module Neutraliser
       File.join(dir, temp_name)
     end
 
-    def self.cleanup_temp_files(pattern)
-      # Clean up any leftover temporary files matching pattern
-      Dir.glob(pattern).each do |file|
-        begin
-          if File.exist?(file) && file.include?('_neutraliser_')
-            # Only delete files that are clearly our temp files and older than 1 hour
-            if Time.now - File.mtime(file) > 3600
-              FileUtils.rm(file)
-            end
-          end
-        rescue => e
-          # Don't fail cleanup if we can't delete a file
-          Neutraliser.logger.log "  Warning: Could not clean up temp file #{file}: #{e.message}"
-        end
-      end
-    end
-
     def self.verify_file_integrity(file_path)
       # Basic file integrity check
       return false unless File.exist?(file_path)

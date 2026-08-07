@@ -9,7 +9,7 @@ module Neutraliser
     MANIFEST_FILENAME = '.neutraliser-run-manifest.jsonl'.freeze
     TERMINAL_RESUME_STATES = %w[done skipped].freeze
 
-    def initialize(replace: false, target_level: nil, profile: 'livingroom', tolerance: 1.0, cache: true, dry_run: false, parallel: true, max_threads: nil, fast_verify: true, resume: false, fast: false, local_stage: false, linear_only: false)
+    def initialize(replace: false, target_level: nil, profile: 'livingroom', tolerance: 1.0, cache: true, dry_run: false, fast_verify: true, resume: false, fast: false, local_stage: false, linear_only: false)
       @replace = replace
       @profile = if target_level
                    Profiles.custom_profile(target_level.to_f)
@@ -23,7 +23,6 @@ module Neutraliser
       @dry_run = dry_run
       @fast_verify = fast_verify
       @resume = resume
-      @manifest_mutex = Mutex.new
       @fast = fast
       @local_stage = local_stage
       @linear_only = linear_only
@@ -271,7 +270,7 @@ module Neutraliser
                       generate_output_path(working_path)
                     end
 
-      audio_tracks = detect_audio_tracks(working_path)
+      audio_tracks = FFmpegWrapper.detect_audio_tracks(working_path)
       if audio_tracks.length > 1
         log "  Found #{audio_tracks.length} audio tracks, normalizing primary track only"
       end
@@ -342,7 +341,7 @@ module Neutraliser
       target_lufs = @profile[:lufs]
       adjustment = target_lufs - current_lufs
 
-      audio_tracks = detect_audio_tracks(working_path)
+      audio_tracks = FFmpegWrapper.detect_audio_tracks(working_path)
       if audio_tracks.length > 1
         log "  Found #{audio_tracks.length} audio tracks, normalizing primary track only"
       end
@@ -447,14 +446,6 @@ module Neutraliser
       log "  Normalization: #{decision[:normalization_type]}" if decision[:normalization_type]
     end
 
-    def generate_temp_path(file_path)
-      dir = File.dirname(file_path)
-      basename = File.basename(file_path, File.extname(file_path))
-      ext = File.extname(file_path)
-
-      File.join(dir, "#{basename}_temp_#{Time.now.to_i}#{ext}")
-    end
-
     def generate_output_path(file_path)
       dir = File.dirname(file_path)
       basename = File.basename(file_path, File.extname(file_path))
@@ -463,24 +454,5 @@ module Neutraliser
       File.join(dir, "#{basename}_normalized#{ext}")
     end
 
-    def cache_directory
-      # For Phase 1, use a simple cache directory in tmp
-      # This will be enhanced in Phase 3 with sidecar caching
-      tmp_dir = ENV['TMPDIR'] || '/tmp'
-      cache_dir = File.join(tmp_dir, 'neutraliser_cache')
-      FileUtils.mkdir_p(cache_dir) unless File.exist?(cache_dir)
-      cache_dir
-    end
-
-    def detect_audio_tracks(file_path)
-      FFmpegWrapper.detect_audio_tracks(file_path)
-    end
-
-    def cleanup_temp_files
-      # Clean up any leftover temp files in the current directory
-      Dir.glob("*_neutraliser_*").each do |pattern|
-        FileManager.cleanup_temp_files(pattern)
-      end
-    end
   end
 end

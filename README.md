@@ -68,12 +68,10 @@ For optional gem builds or development workflow details, see the sections below.
 - **`--replace`**: Replace originals rather than writing `*_normalized` copies.
 - **`--cache/--no-cache`**: Toggle loudness analysis caching.
 - **`--dry-run`**: Analyse only; no output files.
-- **`--parallel/--no-parallel`**: Enable or disable multi-file parallel processing.
-- **`--max-threads`**: Set worker thread count for parallel processing.
 - **`--fast-verify/--no-fast-verify`**: Enable or disable quick pre-verification before full analysis.
 - **`--resume`**: Resume a prior directory run using `.neutraliser-run-manifest.jsonl` and skip completed files.
 - **`--fast`**: Single-pass normalization — ~30% faster but slightly less accurate than two-pass (see [ADR-0002](docs/design/adr/0002-performance-flags.md)).
-- **`--local-stage`**: Copy files to local disk before processing — may help on slower network mounts or with large parallel batches over SMB/NFS.
+- **`--local-stage`**: Copy files to local disk before processing — may help on slower network mounts or with large batches over SMB/NFS.
 - `process` exits with status `1` when any file fails, so batch runners can detect partial failure.
 
 ### `profiles`

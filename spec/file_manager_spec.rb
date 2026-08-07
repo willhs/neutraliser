@@ -49,27 +49,6 @@ RSpec.describe Neutraliser::FileManager do
     end
   end
 
-  describe '.cleanup_temp_files' do
-    it 'removes only stale neutraliser temp files' do
-      old_temp = File.join(temp_dir, 'movie_neutraliser_old.mp4')
-      fresh_temp = File.join(temp_dir, 'movie_neutraliser_fresh.mp4')
-      other_file = File.join(temp_dir, 'movie.mp4')
-
-      File.write(old_temp, 'x')
-      File.write(fresh_temp, 'x')
-      File.write(other_file, 'x')
-
-      old_time = Time.now - 7200
-      File.utime(old_time, old_time, old_temp)
-
-      described_class.cleanup_temp_files(File.join(temp_dir, '*'))
-
-      expect(File.exist?(old_temp)).to be(false)
-      expect(File.exist?(fresh_temp)).to be(true)
-      expect(File.exist?(other_file)).to be(true)
-    end
-  end
-
   describe '.verify_file_integrity' do
     let(:video) { File.join(temp_dir, 'video.mp4') }
 

@@ -28,9 +28,5 @@ module Neutraliser
     def cleanup(local_path)
       FileUtils.rm_f(local_path)
     end
-
-    def staging_dir
-      @staging_dir
-    end
   end
 end

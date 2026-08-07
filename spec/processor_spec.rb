@@ -194,7 +194,7 @@ RSpec.describe Neutraliser::Processor do
 
     before do
       File.write(video_file, 'x')
-      allow(processor).to receive(:detect_audio_tracks).and_return([{ index: 0, codec: 'aac', channels: 2, bit_rate: 256000, sample_rate: 48000 }])
+      allow(Neutraliser::FFmpegWrapper).to receive(:detect_audio_tracks).and_return([{ index: 0, codec: 'aac', channels: 2, bit_rate: 256000, sample_rate: 48000 }])
       allow(Neutraliser::FFmpegWrapper).to receive(:apply_normalization_with_multiple_tracks).and_return(
         { encoder: 'aac', bitrate: 256_000, source_codec: 'aac', source_bitrate: 256_000, lossless_output: false }
       )
@@ -231,7 +231,7 @@ RSpec.describe Neutraliser::Processor do
     it 'passes linear_only through to FFmpegWrapper' do
       linear_processor = described_class.new(replace: false, linear_only: true)
       File.write(video_file, 'x')
-      allow(linear_processor).to receive(:detect_audio_tracks).and_return([{ index: 0, codec: 'aac', channels: 2, bit_rate: 256000, sample_rate: 48000 }])
+      allow(Neutraliser::FFmpegWrapper).to receive(:detect_audio_tracks).and_return([{ index: 0, codec: 'aac', channels: 2, bit_rate: 256000, sample_rate: 48000 }])
       allow(Neutraliser::FileManager).to receive(:verify_file_integrity).and_return(true)
 
       linear_processor.send(:normalize_file_with_paths, video_file, video_file, measured_data)
@@ -295,7 +295,7 @@ RSpec.describe Neutraliser::Processor do
       processor.send(:process_file, video_file)
 
       stager = processor.instance_variable_get(:@stager)
-      staged_files = Dir.glob(File.join(stager.staging_dir, '*'))
+      staged_files = Dir.glob(File.join(stager.instance_variable_get(:@staging_dir), '*'))
       expect(staged_files).to be_empty
     end
   end
