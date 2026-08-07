@@ -118,16 +118,23 @@ module Neutraliser
     option :library, type: :string, desc: 'Specific library to analyze (default: all video libraries)'
     option :output_format, type: :string, default: 'table', desc: 'Report format: table, csv, json'
     option :sample_percent, type: :numeric, default: 100, desc: 'Analyze only N% of files for large libraries'
+    option :profile, type: :string, default: 'livingroom', desc: 'Normalization profile: reference, livingroom, night'
+    option :tolerance, type: :numeric, default: 1.0, desc: 'Flag files within this many LU of target as OK (matches `process --tolerance`)'
     def analyze_plex
       analyzer = PlexAnalyzer.new(
         server_url: options[:server_url],
         token: options[:token],
         library_name: options[:library],
         output_format: options[:output_format],
-        sample_percent: options[:sample_percent]
+        sample_percent: options[:sample_percent],
+        profile: options[:profile],
+        tolerance: options[:tolerance]
       )
 
       analyzer.analyze
+    rescue => e
+      Neutraliser.logger.log "❌ Analysis failed: #{e.message}"
+      exit 1
     end
 
     desc 'profiles', 'List available normalization profiles'

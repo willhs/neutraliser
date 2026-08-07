@@ -1,7 +1,7 @@
 ---
 title: "Plex Library Audio Volume Analysis Guide"
 created: 2025-09-25
-updated: 2025-09-25
+updated: 2026-08-07
 status: complete
 owner: claude
 contributors: []
@@ -33,22 +33,34 @@ Without analysis, you risk:
 
 ## Audio Level Standards
 
-### Target Levels by Content Type
+### Target Levels: One Authority, Shared with `process`
 
-**Movies & Films: -27 LUFS**
-- Based on Netflix theatrical content standard
-- Preserves intended dynamic range for cinematic experience
-- Acceptable range: -25 to -29 LUFS
+`analyze-plex` no longer keeps its own per-content-type target table. It uses
+the exact same `--profile`/`--tolerance` options as `neutraliser process`, so
+whatever the report flags as "needs adjustment" is guaranteed to match what a
+follow-up `process` run would actually do — no more separate movie/TV/other
+numbers that disagreed with the profile system.
 
-**TV Shows & Series: -23 LUFS**
-- Based on broadcast television standard (ITU-R BS.1770-4)
-- Optimized for consistent home viewing
-- Acceptable range: -21 to -25 LUFS
+Available profiles (see `neutraliser profiles`):
 
-**General/Mixed Content: -14 LUFS**
-- Modern streaming platform standard (Spotify, YouTube, etc.)
-- Good for general purpose content
-- Acceptable range: -12 to -16 LUFS
+| Profile      | Target LUFS | Notes                                   |
+|--------------|-------------|------------------------------------------|
+| `reference`  | -23.0       | Home theater / broadcast standard        |
+| `livingroom` | -20.0       | TV/soundbar (default)                    |
+| `night`      | -16.0       | Reduced dynamics for quiet listening     |
+
+`--tolerance` (default `1.0` LU) controls how far a file can drift from the
+target before it's flagged — same meaning, same default, as `process
+--tolerance`.
+
+If you want different targets for movies vs TV shows, run `analyze-plex`
+(and the matching `process`) once per library with the profile that fits
+that content, rather than relying on a built-in per-type table:
+
+```bash
+neutraliser analyze-plex --library "Movies" --profile reference
+neutraliser analyze-plex --library "TV Shows" --profile livingroom
+```
 
 ### What is LUFS?
 
@@ -116,8 +128,8 @@ Options:
   --library NAME           Specific library to analyze (default: all video libraries)
   --output-format FORMAT   Report format: table, csv, json (default: table)
   --sample-percent N       Analyze only N% of files for large libraries (default: 100)
-  --concurrent-jobs N      Number of concurrent analysis jobs (default: 4)
-  --cache-results          Cache analysis results to avoid re-analyzing
+  --profile NAME           Normalization profile: reference, livingroom, night (default: livingroom)
+  --tolerance N.N          Flag files within this many LU of target as OK (default: 1.0) — same as `process --tolerance`
 
 Token Resolution:
 1. --token option (overrides .env file)
@@ -193,22 +205,24 @@ Start with a sample analysis to understand your library:
 neutraliser analyze-plex --sample-percent 10
 ```
 
-### Step 3: Content Type Strategy
+### Step 3: Profile Strategy
 Based on results, decide on approach:
 
-**Mixed Library**: Use content-specific targets
+**Mixed Library**: Analyze and process each type with the profile that fits it
 ```bash
-# Normalize movies to cinema standard
-neutraliser process /path/to/movies --target-level -27
+# Movies: home-theater/broadcast standard
+neutraliser analyze-plex --library "Movies" --profile reference
+neutraliser process /path/to/movies --profile reference
 
-# Normalize TV shows to broadcast standard
-neutraliser process /path/to/tv --target-level -23
+# TV shows: soundbar/living-room standard (the default)
+neutraliser analyze-plex --library "TV Shows" --profile livingroom
+neutraliser process /path/to/tv --profile livingroom
 ```
 
-**Consistent Playback**: Use single standard
+**Consistent Playback**: Use a single profile for everything
 ```bash
-# Normalize everything to streaming standard
-neutraliser process /path/to/library --target-level -14
+neutraliser analyze-plex --profile livingroom
+neutraliser process /path/to/library --profile livingroom
 ```
 
 ### Step 4: Full Analysis
@@ -232,17 +246,6 @@ For libraries with 1000+ files:
 **Use Sampling**: Analyze a representative sample first
 ```bash
 neutraliser analyze-plex --sample-percent 20
-```
-
-**Concurrent Processing**: Adjust based on system resources
-```bash
-neutraliser analyze-plex --concurrent-jobs 8  # More powerful systems
-neutraliser analyze-plex --concurrent-jobs 2  # Slower systems
-```
-
-**Enable Caching**: Avoid re-analyzing unchanged files
-```bash
-neutraliser analyze-plex --cache-results
 ```
 
 ### System Requirements
@@ -274,9 +277,11 @@ neutraliser analyze-plex --cache-results
 - These files are automatically skipped
 - Consider separate processing for video-only files
 
-**Warning: Could not analyze loudness**
-- Fallback analysis will be used
-- Results may be less accurate
+**Warning: could not analyze loudness / item skipped**
+- A measurement failure (timeout, network error, unreadable stream) makes
+  `analyze-plex` skip that item and log the error — it never fabricates a
+  placeholder LUFS value, so a skipped item never shows up disguised as a
+  real (and wrong) measurement in the report
 - Consider updating FFmpeg to latest version
 
 ### Performance Issues
@@ -311,21 +316,13 @@ print(f"Files needing urgent attention: {len(worst_files)}")
 
 ### Custom Target Levels
 
-Override default targets for specific use cases:
+`--target_level` still works on `process` for a one-off numeric LUFS target
+that doesn't match any named profile (`analyze-plex` doesn't expose this —
+it reports against a named `--profile`, matching what `process` will do by
+default):
 
-**Home Theater Setup**: Use cinema levels for all content
 ```bash
-neutraliser process /library --target-level -27
-```
-
-**Apartment Living**: Use TV levels to avoid disturbing neighbors
-```bash
-neutraliser process /library --target-level -23
-```
-
-**Background Listening**: Use streaming levels for consistency
-```bash
-neutraliser process /library --target-level -14
+neutraliser process /library --target_level -27
 ```
 
 ## Best Practices
@@ -348,15 +345,22 @@ neutraliser process /library --target-level -14
 
 ### LUFS Measurement Accuracy
 
-- Uses FFmpeg's `loudnorm` filter for precise LUFS measurement
-- Falls back to RMS-based approximation if primary measurement fails
-- Measurements align with broadcast and streaming industry standards
+- Streams straight off the Plex server and measures via the same
+  `FFmpegWrapper` executor `process` uses for local files — no shell string,
+  no temp file. Each item samples the first 60s of audio (a fast preview
+  across a whole library, not the definitive measurement `process` performs
+  on the full file when you actually normalize).
+- A failed or timed-out measurement is skipped and logged, never replaced
+  with a fabricated/placeholder LUFS value.
+- Measurements align with broadcast and streaming industry standards.
 
 ### Content Type Detection
 
 - Movies: Detected from Plex library type and metadata
 - TV Shows: Episodes and series from TV library sections
 - Other: Mixed content, music videos, home recordings
+- Content type is used for report grouping only — it no longer selects a
+  different target level per type (see "Target Levels" above).
 
 ### File Processing
 
@@ -364,6 +368,14 @@ neutraliser process /library --target-level -14
 - Only re-encodes audio tracks for normalization
 - Maintains original video quality and compression
 
+### Security: Plex Token Handling
+
+- The token is never embedded in the streaming URL or joined into a shell
+  string. It's sent as an HTTP header for the Plex API and as an `ffmpeg
+  -headers` argument (not part of the URL/argv) for stream measurement, so
+  it never appears in `ps` output or shell history.
+
 ## Change Log
 
+- 2026-08-07: Folded into the main pipeline (FFmpegWrapper/Measurement/Profiles/Logger); fixed the token-in-shell and sentinel-float bugs. `--concurrent-jobs`/`--cache-results` (never implemented) removed from docs; `--profile`/`--tolerance` added, replacing the old per-content-type target table.
 - 2025-09-25: Initial guide creation with comprehensive usage instructions

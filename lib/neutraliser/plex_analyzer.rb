@@ -1,79 +1,72 @@
 module Neutraliser
+  # Raised when the analyzer can't reach or authenticate against the Plex
+  # server. Library code raises rather than exiting — the CLI owns the
+  # process exit code.
+  class PlexAnalyzerError < StandardError; end
+
   class PlexAnalyzer
-    # Audio level targets based on content type (LUFS)
-    TARGET_LEVELS = {
-      movie: -27.0,    # Netflix standard for theatrical content
-      tv: -23.0,       # Broadcast television standard
-      other: -14.0     # General streaming content standard
-    }.freeze
+    # How much of each stream to sample when measuring loudness — a fast
+    # preview across a whole library, not the definitive measurement used by
+    # `process` (which analyzes the full file).
+    STREAM_SAMPLE_DURATION_S = 60
 
-    ACCEPTABLE_VARIANCE = 3.0 # LUFS variance considered acceptable
-
-    attr_reader :server_url, :token, :library_name, :output_format, :sample_percent
+    attr_reader :server_url, :token, :library_name, :output_format, :sample_percent, :profile, :tolerance
 
     def initialize(server_url:, token: nil, library_name: nil, output_format: 'table',
-                   sample_percent: 100)
+                   sample_percent: 100, profile: Profiles.default_profile, tolerance: 1.0)
       @server_url = server_url
       @token = token
       @library_name = library_name
       @output_format = output_format
       @sample_percent = sample_percent
+      @profile = profile.is_a?(Hash) ? profile : Profiles.get_profile(profile)
+      @tolerance = tolerance
       @plex_server = nil
     end
 
     def analyze
-      puts "🎵 Starting Plex library audio analysis..."
+      log "🎵 Starting Plex library audio analysis..."
 
       connect_to_plex
       libraries = discover_video_libraries
 
       if libraries.empty?
-        puts "❌ No video libraries found on Plex server"
+        log "❌ No video libraries found on Plex server"
         return
       end
 
       results = analyze_libraries(libraries)
       generate_report(results)
-    rescue => e
-      puts "❌ Analysis failed: #{e.message}"
-      puts "💡 Make sure your Plex server is running and accessible at #{resolve_server_url}"
-      exit 1
     end
 
     private
 
+    def log(message)
+      Neutraliser.logger.log(message)
+    end
+
     def connect_to_plex
       @server_url = resolve_server_url
-      puts "🔌 Connecting to Plex server at #{@server_url}..."
+      log "🔌 Connecting to Plex server at #{@server_url}..."
 
       @auth_token = resolve_token
       unless @auth_token
-        puts "❌ No Plex token found!"
-        puts "💡 Create a .env file with: PLEX_TOKEN=your_token_here"
-        puts "💡 Or get your token from: #{@server_url}/web/index.html#!/settings/account"
-        exit 1
+        raise PlexAnalyzerError, "No Plex token found! Create a .env file with PLEX_TOKEN=your_token_here, " \
+                                  "or get your token from #{@server_url}/web/index.html#!/settings/account"
       end
 
-      # Test connection with direct HTTP request
-      puts "🔍 Testing connection..."
-      begin
-        response = make_plex_request('/library/sections')
+      log "🔍 Testing connection..."
+      response = make_plex_request('/library/sections')
 
-        if response.code == '200'
-          sections_data = JSON.parse(response.body)
-          section_count = sections_data.dig('MediaContainer', 'size') || 0
-          puts "✅ Connected to Plex server successfully"
-          puts "📚 Found #{section_count} library sections"
-          @connected = true
-        else
-          puts "❌ Connection failed: HTTP #{response.code} - #{response.message}"
-          exit 1
-        end
-      rescue => e
-        puts "❌ Connection test failed: #{e.message}"
-        puts "💡 Debug info: #{e.class}"
-        raise e
+      unless response.code == '200'
+        raise PlexAnalyzerError, "Connection failed: HTTP #{response.code} - #{response.message}"
       end
+
+      sections_data = JSON.parse(response.body)
+      section_count = sections_data.dig('MediaContainer', 'size') || 0
+      log "✅ Connected to Plex server successfully"
+      log "📚 Found #{section_count} library sections"
+      @connected = true
     end
 
     def make_plex_request(path)
@@ -86,8 +79,7 @@ module Neutraliser
       request['X-Plex-Token'] = @auth_token
       request['Accept'] = 'application/json'
 
-      response = http.request(request)
-      response
+      http.request(request)
     end
 
     def resolve_server_url
@@ -96,7 +88,7 @@ module Neutraliser
 
       env_url = ENV['PLEX_SERVER_URL']
       if env_url && !env_url.strip.empty?
-        puts "🌐 Using server URL from .env file"
+        log "🌐 Using server URL from .env file"
         return env_url.strip
       end
 
@@ -107,10 +99,9 @@ module Neutraliser
       # Priority: explicit token parameter > .env file
       return token if token
 
-      # Try .env file
       env_token = ENV['PLEX_TOKEN']
       if env_token && !env_token.strip.empty?
-        puts "🔑 Using token from .env file"
+        log "🔑 Using token from .env file"
         return env_token.strip
       end
 
@@ -118,12 +109,11 @@ module Neutraliser
     end
 
     def discover_video_libraries
-      puts "📚 Discovering video libraries..."
+      log "📚 Discovering video libraries..."
 
       response = make_plex_request('/library/sections')
       unless response.code == '200'
-        puts "❌ Failed to get libraries: HTTP #{response.code}"
-        exit 1
+        raise PlexAnalyzerError, "Failed to get libraries: HTTP #{response.code}"
       end
 
       data = JSON.parse(response.body)
@@ -134,17 +124,16 @@ module Neutraliser
 
       if library_name
         selected_library = video_libraries.find { |lib| lib['title'].downcase == library_name.downcase }
-        if selected_library
-          video_libraries = [selected_library]
-          puts "🎯 Analyzing specific library: #{selected_library['title']}"
-        else
-          puts "⚠️  Library '#{library_name}' not found. Available libraries:"
-          video_libraries.each { |lib| puts "   - #{lib['title']} (#{lib['type']})" }
-          exit 1
+        unless selected_library
+          available = video_libraries.map { |lib| "#{lib['title']} (#{lib['type']})" }.join(', ')
+          raise PlexAnalyzerError, "Library '#{library_name}' not found. Available libraries: #{available}"
         end
+
+        video_libraries = [selected_library]
+        log "🎯 Analyzing specific library: #{selected_library['title']}"
       else
-        puts "📋 Found #{video_libraries.length} video libraries:"
-        video_libraries.each { |lib| puts "   - #{lib['title']} (#{lib['type']})" }
+        log "📋 Found #{video_libraries.length} video libraries:"
+        video_libraries.each { |lib| log "   - #{lib['title']} (#{lib['type']})" }
       end
 
       video_libraries
@@ -162,12 +151,12 @@ module Neutraliser
     end
 
     def analyze_library(library)
-      puts "\n🔍 Analyzing library: #{library['title']}"
+      log "\n🔍 Analyzing library: #{library['title']}"
 
       # Get all media items from the library using Plex API
       response = make_plex_request("/library/sections/#{library['key']}/all")
       unless response.code == '200'
-        puts "❌ Failed to get library contents: HTTP #{response.code}"
+        log "❌ Failed to get library contents: HTTP #{response.code}"
         return []
       end
 
@@ -178,10 +167,8 @@ module Neutraliser
       if sample_percent < 100
         sample_size = (all_items.size * sample_percent / 100.0).ceil
         all_items = all_items.sample(sample_size)
-        puts "📊 Sampling #{sample_size} items (#{sample_percent}% of #{all_items.size} total)"
+        log "📊 Sampling #{sample_size} items (#{sample_percent}% of #{all_items.size} total)"
       end
-
-      # Found items to analyze (reduced logging)
 
       results = []
       processed = 0
@@ -192,62 +179,44 @@ module Neutraliser
           results << result if result
           processed += 1
 
-          # Progress indicator (reduced logging)
-          if processed % 25 == 0
-            puts "   ⏳ Processed #{processed}/#{all_items.size} items..."
-          end
+          log "   ⏳ Processed #{processed}/#{all_items.size} items..." if processed % 25 == 0
         rescue => e
-          puts "   ❌ Error analyzing #{item['title']}: #{e.message}"
+          log "   ❌ Error analyzing #{item['title']}: #{e.message}"
         end
       end
 
-      puts "✅ Completed analysis of #{library['title']}: #{results.size} valid results"
+      log "✅ Completed analysis of #{library['title']}: #{results.size} valid results"
       results
     end
 
     def analyze_media_item(item, library_type)
       title = item['title'] || 'Unknown Title'
 
-      # Get Plex streaming URL
       streaming_url = get_plex_streaming_url(item)
-      unless streaming_url
-        # No streaming URL available (reduced logging)
-        return nil
-      end
+      return nil unless streaming_url
 
-      # Analyzing via Plex stream (reduced logging)
-
-      # Determine content type for target level selection
       content_type = determine_content_type(item, library_type)
-      target_level = TARGET_LEVELS[content_type]
 
-      begin
-        # Analyze audio level from streaming URL
-        current_level = analyze_streaming_audio(streaming_url)
+      measurement = analyze_streaming_audio(streaming_url)
+      return nil unless measurement
 
-        # Skip if we can't get a valid measurement
-        if current_level == -20.0 || current_level == -18.0  # Skip placeholder/fallback values
-          # Skipping placeholder audio level (reduced logging)
-          return nil
-        end
+      current_level = measurement.input_i
+      needs_adjustment = measurement.needs_normalization?(@profile, tolerance: @tolerance)
 
-        # Audio level analyzed (reduced logging)
-
-        {
-          title: title,
-          file_path: streaming_url,
-          library_type: library_type,
-          content_type: content_type,
-          current_level: current_level,
-          target_level: target_level,
-          level_difference: current_level - target_level,
-          needs_adjustment: needs_adjustment?(current_level, target_level),
-          adjustment_type: get_adjustment_type(current_level, target_level)
-        }
-      rescue => e
-        # Error analyzing audio (reduced logging)
-        return nil
-      end
+      {
+        title: title,
+        file_path: streaming_url,
+        library_type: library_type,
+        content_type: content_type,
+        current_level: current_level,
+        target_level: @profile[:lufs],
+        level_difference: current_level - @profile[:lufs],
+        needs_adjustment: needs_adjustment,
+        adjustment_type: adjustment_type(current_level, needs_adjustment)
+      }
+    rescue => e
+      log "   ❌ Error analyzing #{title}: #{e.message}"
+      nil
     end
 
     def get_plex_streaming_url(item)
@@ -261,48 +230,25 @@ module Neutraliser
       part_key = parts_array.first['key']
       return nil unless part_key
 
-      # Construct Plex streaming URL
-      "#{@server_url}#{part_key}?X-Plex-Token=#{@auth_token}"
+      # No token in the URL — kept out of argv/ps by passing it as an ffmpeg
+      # -headers argument instead (see analyze_streaming_audio).
+      "#{@server_url}#{part_key}"
     end
 
+    # Measures loudness straight off the Plex stream via FFmpegWrapper's
+    # timeboxed, argv-form executor — no shell string, no temp file, no
+    # sentinel-float fallback. A failed/timed-out measurement raises and is
+    # handled by the caller (analyze_media_item), which skips the item.
     def analyze_streaming_audio(streaming_url)
-      # Use ffmpeg to analyze audio from streaming URL
-      temp_analysis_file = "/tmp/plex_loudness_analysis_#{Time.now.to_i}.txt"
-
-      begin
-        # Run ffmpeg loudnorm filter with HTTP input
-        cmd = [
-          'ffmpeg', '-hide_banner', '-nostats',
-          '-i', streaming_url,
-          '-t', '60', # Analyze first 60 seconds for speed
-          '-af', 'loudnorm=I=-16:dual_mono=true:TP=-1.5:LRA=11:print_format=summary',
-          '-f', 'null', '-',
-          '2>', temp_analysis_file
-        ].join(' ')
-
-        system(cmd)
-
-        if File.exist?(temp_analysis_file)
-          analysis_output = File.read(temp_analysis_file)
-
-          # Parse the integrated loudness from ffmpeg output
-          if match = analysis_output.match(/Input Integrated:\s*([-\d.]+)\s*LUFS/)
-            integrated_loudness = match[1].to_f
-            return integrated_loudness
-          end
-        end
-
-        # Fallback
-        -18.0
-      rescue => e
-        # Stream analysis failed, using fallback (reduced logging)
-        -18.0
-      ensure
-        File.delete(temp_analysis_file) if File.exist?(temp_analysis_file)
-      end
+      FFmpegWrapper.measure_loudness(
+        streaming_url,
+        target_i: @profile[:lufs],
+        target_tp: @profile[:tp],
+        target_lra: @profile[:lra],
+        input_args: ['-headers', "X-Plex-Token: #{@auth_token}\r\n"],
+        duration: STREAM_SAMPLE_DURATION_S
+      )
     end
-
-
 
     def determine_content_type(item, library_type)
       case library_type
@@ -315,28 +261,19 @@ module Neutraliser
       end
     end
 
-    def needs_adjustment?(current_level, target_level)
-      (current_level - target_level).abs > ACCEPTABLE_VARIANCE
-    end
+    def adjustment_type(current_level, needs_adjustment)
+      return 'OK' unless needs_adjustment
 
-    def get_adjustment_type(current_level, target_level)
-      diff = current_level - target_level
-      if diff.abs <= ACCEPTABLE_VARIANCE
-        'OK'
-      elsif diff > 0
-        'Too Loud'
-      else
-        'Too Quiet'
-      end
+      current_level > @profile[:lufs] ? 'Too Loud' : 'Too Quiet'
     end
 
     def generate_report(results)
-      puts "\n" + "="*80
-      puts "🎵 PLEX LIBRARY AUDIO ANALYSIS REPORT"
-      puts "="*80
+      log "\n" + "="*80
+      log "🎵 PLEX LIBRARY AUDIO ANALYSIS REPORT"
+      log "="*80
 
       if results.empty?
-        puts "❌ No valid audio analysis results found"
+        log "❌ No valid audio analysis results found"
         return
       end
 
@@ -348,7 +285,7 @@ module Neutraliser
       when 'json'
         generate_json_report(results)
       else
-        puts "❌ Unknown output format: #{output_format}"
+        log "❌ Unknown output format: #{output_format}"
         generate_table_report(results)
       end
     end
@@ -359,23 +296,24 @@ module Neutraliser
       needs_adjustment = results.count { |r| r[:needs_adjustment] }
       by_type = results.group_by { |r| r[:content_type] }
 
-      puts "\n📊 SUMMARY STATISTICS"
-      puts "Total files analyzed: #{total_files}"
-      puts "Files needing adjustment: #{needs_adjustment} (#{(needs_adjustment.to_f / total_files * 100).round(1)}%)"
-      puts "Files within target range: #{total_files - needs_adjustment} (#{((total_files - needs_adjustment).to_f / total_files * 100).round(1)}%)"
+      log "\n📊 SUMMARY STATISTICS"
+      log "Target: #{@profile[:name]} (#{@profile[:lufs]} LUFS, ±#{@tolerance} LU tolerance)"
+      log "Total files analyzed: #{total_files}"
+      log "Files needing adjustment: #{needs_adjustment} (#{(needs_adjustment.to_f / total_files * 100).round(1)}%)"
+      log "Files within target range: #{total_files - needs_adjustment} (#{((total_files - needs_adjustment).to_f / total_files * 100).round(1)}%)"
 
-      puts "\n📋 BY CONTENT TYPE"
+      log "\n📋 BY CONTENT TYPE"
       by_type.each do |type, items|
         needs_adj = items.count { |r| r[:needs_adjustment] }
-        puts "#{type.to_s.capitalize}: #{items.size} files, #{needs_adj} need adjustment"
+        log "#{type.to_s.capitalize}: #{items.size} files, #{needs_adj} need adjustment"
       end
 
       # Detailed results table
-      puts "\n🎬 DETAILED RESULTS (files needing adjustment)"
+      log "\n🎬 DETAILED RESULTS (files needing adjustment)"
       problematic_files = results.select { |r| r[:needs_adjustment] }
 
       if problematic_files.empty?
-        puts "🎉 All files are within acceptable volume ranges!"
+        log "🎉 All files are within acceptable volume ranges!"
         return
       end
 
@@ -393,24 +331,19 @@ module Neutraliser
         end
       end
 
-      puts table
+      log table.to_s
 
       # Recommendations
-      puts "\n💡 RECOMMENDATIONS"
+      log "\n💡 RECOMMENDATIONS"
       too_loud = problematic_files.count { |r| r[:adjustment_type] == 'Too Loud' }
       too_quiet = problematic_files.count { |r| r[:adjustment_type] == 'Too Quiet' }
 
-      puts "Files too loud: #{too_loud} (will be reduced in volume)"
-      puts "Files too quiet: #{too_quiet} (will be increased in volume)"
+      log "Files too loud: #{too_loud} (will be reduced in volume)"
+      log "Files too quiet: #{too_quiet} (will be increased in volume)"
 
       if needs_adjustment > 0
-        puts "\nTo normalize these files, run:"
-        puts "neutraliser process [PATH_TO_PLEX_LIBRARY] --target_level [APPROPRIATE_TARGET]"
-        puts "\nConsider processing by content type for best results:"
-        by_type.each do |type, items|
-          target = TARGET_LEVELS[type]
-          puts "#{type.to_s.capitalize} content: --target_level #{target}"
-        end
+        log "\nTo normalize these files, run:"
+        log "neutraliser process [PATH_TO_PLEX_LIBRARY] --profile #{@profile[:name]} --tolerance #{@tolerance}"
       end
     end
 
@@ -438,7 +371,7 @@ module Neutraliser
         end
       end
 
-      puts "📊 CSV report saved to: #{filename}"
+      log "📊 CSV report saved to: #{filename}"
     end
 
     def generate_json_report(results)
@@ -447,17 +380,18 @@ module Neutraliser
       report_data = {
         analysis_date: Time.now.iso8601,
         server_url: server_url,
+        profile: @profile[:name],
+        target_level: @profile[:lufs],
+        tolerance: @tolerance,
         total_files: results.size,
         files_needing_adjustment: results.count { |r| r[:needs_adjustment] },
-        target_levels: TARGET_LEVELS,
-        acceptable_variance: ACCEPTABLE_VARIANCE,
         results: results
       }
 
       filename = "plex_audio_analysis_#{Time.now.strftime('%Y%m%d_%H%M%S')}.json"
       File.write(filename, JSON.pretty_generate(report_data))
 
-      puts "📊 JSON report saved to: #{filename}"
+      log "📊 JSON report saved to: #{filename}"
     end
   end
 end

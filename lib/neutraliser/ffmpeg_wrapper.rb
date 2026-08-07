@@ -85,9 +85,18 @@ module Neutraliser
       '.flv'  => 'aac',
     }.freeze
 
-    def self.measure_loudness(input_path, target_i: -20.0, target_tp: -1.5, target_lra: 12.0)
+    # input_args are inserted before -i (e.g. ["-headers", "X-Plex-Token: ...\r\n"]
+    # for authenticating a remote stream without ever putting the credential
+    # into the URL, where it would land in argv and thus `ps` output).
+    # duration, when given, caps how much of the input is read (-t) — useful
+    # for a fast preview measurement of a remote stream rather than a full
+    # pass.
+    def self.measure_loudness(input_path, target_i: -20.0, target_tp: -1.5, target_lra: 12.0, input_args: [], duration: nil)
       cmd = [
-        "ffmpeg", "-hide_banner", "-nostats", "-i", input_path,
+        "ffmpeg", "-hide_banner", "-nostats", *input_args, "-i", input_path
+      ]
+      cmd += ["-t", duration.to_s] if duration
+      cmd += [
         "-map", "a:0",
         "-af", "loudnorm=I=#{target_i}:TP=#{target_tp}:LRA=#{target_lra}:print_format=json",
         "-f", "null", "-"
