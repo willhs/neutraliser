@@ -92,7 +92,7 @@ module Neutraliser
         raise FFmpegError, "Measurement failed (exit #{exit_status}): #{stderr}"
       end
 
-      parse_loudnorm_json(stderr)
+      Measurement.from_loudnorm_json(parse_loudnorm_json(stderr))
     end
 
     def self.quick_loudness_sample(input_path, duration: 30, target_i: -20.0)
@@ -126,7 +126,7 @@ module Neutraliser
       stdout, stderr, status = execute_with_timeout(cmd, QUICK_TIMEOUT, "Quick loudness sample")
       return nil unless status.success?
 
-      parse_loudnorm_json(stderr)
+      Measurement.from_loudnorm_json(parse_loudnorm_json(stderr))
     rescue => e
       # Return nil on any error to fall back to full analysis
       nil
@@ -421,11 +421,11 @@ module Neutraliser
 
     def self.build_loudnorm_filter(measured, target_i, target_tp, target_lra)
       "loudnorm=I=#{target_i}:TP=#{target_tp}:LRA=#{target_lra}" \
-      ":measured_I=#{measured['input_i']}" \
-      ":measured_TP=#{measured['input_tp']}" \
-      ":measured_LRA=#{measured['input_lra']}" \
-      ":measured_thresh=#{measured['input_thresh']}" \
-      ":offset=#{measured['target_offset']}" \
+      ":measured_I=#{measured.input_i}" \
+      ":measured_TP=#{measured.input_tp}" \
+      ":measured_LRA=#{measured.input_lra}" \
+      ":measured_thresh=#{measured.input_thresh}" \
+      ":offset=#{measured.target_offset}" \
       ":linear=true:print_format=summary"
     end
 
@@ -461,8 +461,8 @@ module Neutraliser
     end
 
     def self.capped_linear_gain(measured, target_i, target_tp)
-      desired_gain = target_i - measured['input_i'].to_f
-      max_safe_gain = target_tp - measured['input_tp'].to_f
+      desired_gain = target_i - measured.input_i
+      max_safe_gain = target_tp - measured.input_tp
       [desired_gain, max_safe_gain].min
     end
 

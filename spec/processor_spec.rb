@@ -124,17 +124,16 @@ RSpec.describe Neutraliser::Processor do
     it 'prints dry-run output using numeric conversion for measured input' do
       processor = described_class.new(dry_run: true)
       movie = instance_double(FFMPEG::Movie, path: video_file, audio_stream: true)
-      measured = {
+      measured = Neutraliser::Measurement.from_loudnorm_json(
         'input_i' => '-18.0',
         'input_tp' => '-2.0',
         'input_lra' => '8.0',
         'input_thresh' => '-28.0',
         'target_offset' => '2.0'
-      }
+      )
 
       allow(FFMPEG::Movie).to receive(:new).and_return(movie)
       allow(processor).to receive(:analyze_loudness_for_path).and_return(measured)
-      allow(processor).to receive(:needs_processing?).and_return(true)
 
       expect { processor.send(:process_file, video_file) }
         .to output(/\[DRY RUN\] Would normalize: -18.0 LUFS → -20.0 LUFS/).to_stdout
@@ -155,23 +154,25 @@ RSpec.describe Neutraliser::Processor do
   describe '#analyze_loudness_for_path' do
     let(:processor) { described_class.new }
     let(:analyser) { instance_double(Neutraliser::AudioAnalyser) }
+    let(:profile) { processor.instance_variable_get(:@profile) }
 
     before do
       allow(Neutraliser::AudioAnalyser).to receive(:new).and_return(analyser)
     end
 
-    it 'skips full analysis when fast verification indicates no work is needed' do
-      allow(analyser).to receive(:should_analyze_file?).and_return(false)
+    it 'delegates to AudioAnalyser#analyze with staging paths, caching under the original path' do
+      measurement = Neutraliser::Measurement.already_at_target(profile)
+      expect(analyser).to receive(:analyze)
+        .with('/working/movie.mp4', cached_as: '/orig/movie.mp4', profile: profile, tolerance: 1.0)
+        .and_return(measurement)
 
-      result = processor.send(:analyze_loudness_for_path, '/tmp/movie.mp4', '/tmp/movie.mp4')
+      result = processor.send(:analyze_loudness_for_path, '/working/movie.mp4', '/orig/movie.mp4')
 
-      expect(result['fast_verified']).to eq(true)
-      expect(result['target_offset']).to eq(0.0)
+      expect(result).to eq(measurement)
     end
 
     it 'raises ffmpeg errors from measurement instead of using fake fallback data' do
-      allow(analyser).to receive(:should_analyze_file?).and_return(true)
-      allow(Neutraliser::FFmpegWrapper).to receive(:measure_loudness).and_raise(Neutraliser::FFmpegError, 'boom')
+      allow(analyser).to receive(:analyze).and_raise(Neutraliser::FFmpegError, 'boom')
 
       expect { processor.send(:analyze_loudness_for_path, '/tmp/movie.mp4', '/tmp/movie.mp4') }
         .to raise_error(Neutraliser::FFmpegError, /boom/)
@@ -183,13 +184,13 @@ RSpec.describe Neutraliser::Processor do
     let(:video_file) { File.join(temp_dir, 'movie.mp4') }
     let(:output_file) { File.join(temp_dir, 'movie_normalized.mp4') }
     let(:measured_data) do
-      {
+      Neutraliser::Measurement.from_loudnorm_json(
         'input_i' => '-18.0',
         'input_tp' => '-2.0',
         'input_lra' => '8.0',
         'input_thresh' => '-28.0',
         'target_offset' => '2.0'
-      }
+      )
     end
 
     before do

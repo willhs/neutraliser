@@ -69,12 +69,12 @@ RSpec.describe 'Error Handling and Edge Cases' do
     end
   end
 
-  describe Neutraliser::AudioAnalyser do
+  describe Neutraliser::Measurement do
     it 'handles missing LUFS fields without crashing' do
-      analyser = described_class.new
       profile = { lufs: -20.0 }
+      measurement = described_class.from_loudnorm_json({})
 
-      expect { analyser.needs_normalization?({}, profile) }.not_to raise_error
+      expect { measurement.needs_normalization?(profile) }.not_to raise_error
     end
   end
 end

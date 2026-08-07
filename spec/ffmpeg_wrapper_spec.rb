@@ -31,7 +31,8 @@ RSpec.describe Neutraliser::FFmpegWrapper do
         described_class::ANALYSIS_TIMEOUT,
         'Loudness measurement'
       )
-      expect(result['input_i']).to eq('-18.5')
+      expect(result).to be_a(Neutraliser::Measurement)
+      expect(result.input_i).to eq(-18.5)
     end
 
     it 'raises FFmpegError including stderr when command fails' do
@@ -53,13 +54,13 @@ RSpec.describe Neutraliser::FFmpegWrapper do
 
   describe '.apply_normalization_with_multiple_tracks' do
     let(:measured_data) do
-      {
+      Neutraliser::Measurement.from_loudnorm_json(
         'input_i' => '-18.5',
         'input_tp' => '-2.1',
         'input_lra' => '8.3',
         'input_thresh' => '-28.9',
         'target_offset' => '1.5'
-      }
+      )
     end
 
     let(:profile) { { lufs: -20.0, tp: -1.5, lra: 12.0 } }
@@ -400,7 +401,7 @@ RSpec.describe Neutraliser::FFmpegWrapper do
   end
 
   describe '.capped_linear_gain' do
-    let(:measured) { { 'input_i' => '-25.0', 'input_tp' => '-20.0' } }
+    let(:measured) { Neutraliser::Measurement.from_loudnorm_json('input_i' => '-25.0', 'input_tp' => '-20.0', 'input_lra' => '0', 'input_thresh' => '0', 'target_offset' => '0') }
 
     it 'uses the full gain needed to reach target loudness when peak headroom allows it' do
       gain = described_class.send(:capped_linear_gain, measured, -20.0, -1.5)
@@ -411,7 +412,7 @@ RSpec.describe Neutraliser::FFmpegWrapper do
       # Desired gain (13.0) would push -3.0 dBTP up to +10.0 dBTP — way past -1.5.
       # Gain must be capped to the max safe headroom (-1.5 - (-3.0) = 1.5 dB),
       # landing the file shy of target_i instead of engaging dynamic compression.
-      peaky_measured = { 'input_i' => '-33.0', 'input_tp' => '-3.0' }
+      peaky_measured = Neutraliser::Measurement.from_loudnorm_json('input_i' => '-33.0', 'input_tp' => '-3.0', 'input_lra' => '0', 'input_thresh' => '0', 'target_offset' => '0')
       gain = described_class.send(:capped_linear_gain, peaky_measured, -20.0, -1.5)
       expect(gain).to eq(1.5)
     end
@@ -419,7 +420,7 @@ RSpec.describe Neutraliser::FFmpegWrapper do
 
   describe 'linear_only sample rate pinning' do
     it 'pins output sample rate to source when no measured peak headroom issue exists' do
-      measured = { 'input_i' => '-25.0', 'input_tp' => '-10.0' }
+      measured = Neutraliser::Measurement.from_loudnorm_json('input_i' => '-25.0', 'input_tp' => '-10.0', 'input_lra' => '0', 'input_thresh' => '0', 'target_offset' => '0')
       filter, forced_type = described_class.send(
         :build_audio_filter, measured, -20.0, -1.5, 12.0, 48_000, linear_only: true
       )
@@ -429,7 +430,7 @@ RSpec.describe Neutraliser::FFmpegWrapper do
     end
 
     it 'omits aresample when source sample rate is unknown' do
-      measured = { 'input_i' => '-25.0', 'input_tp' => '-10.0' }
+      measured = Neutraliser::Measurement.from_loudnorm_json('input_i' => '-25.0', 'input_tp' => '-10.0', 'input_lra' => '0', 'input_thresh' => '0', 'target_offset' => '0')
       filter, = described_class.send(
         :build_audio_filter, measured, -20.0, -1.5, 12.0, nil, linear_only: true
       )
@@ -438,7 +439,7 @@ RSpec.describe Neutraliser::FFmpegWrapper do
     end
 
     it 'pins aresample on the loudnorm (non-linear-only) path too, to prevent the 192kHz leak' do
-      measured = { 'input_i' => '-25.0', 'input_tp' => '-10.0', 'input_lra' => '8.0', 'input_thresh' => '-30.0', 'target_offset' => '0.0' }
+      measured = Neutraliser::Measurement.from_loudnorm_json('input_i' => '-25.0', 'input_tp' => '-10.0', 'input_lra' => '8.0', 'input_thresh' => '-30.0', 'target_offset' => '0.0')
       filter, forced_type = described_class.send(
         :build_audio_filter, measured, -20.0, -1.5, 12.0, 48_000, linear_only: false
       )

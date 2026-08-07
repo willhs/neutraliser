@@ -4,33 +4,43 @@ require_relative 'fast_verifier'
 
 module Neutraliser
   class AudioAnalyser
-    def initialize(cache_enabled: true, use_sidecar: true, fast_verification: true)
+    def initialize(cache_enabled: true, fast_verification: true)
       @cache_enabled = cache_enabled
-      @use_sidecar = use_sidecar
-      @fast_verification = fast_verification
-      @cache_manager = CacheManager.new(enabled: cache_enabled) if use_sidecar
+      @cache_manager = CacheManager.new(enabled: cache_enabled)
       @fast_verifier = FastVerifier.new(cache_manager: @cache_manager) if fast_verification
     end
 
-    def should_analyze_file?(file_path, target_profile, tolerance: 1.0)
-      # Fast verification to avoid expensive analysis when possible
-      if @fast_verification && @fast_verifier
-        return @fast_verifier.needs_analysis?(file_path, target_profile, tolerance: tolerance)
+    # The single production entry point for turning a file on disk into a
+    # Measurement. Owns the full path: fast-verification short-circuit ->
+    # cache lookup -> ffmpeg measurement -> cache write.
+    #
+    # working_path and cached_as are separate to express staging: the file
+    # may be measured from a local working copy while the sidecar cache is
+    # keyed by (and lives next to) the original path.
+    def analyze(working_path, cached_as:, profile:, tolerance: 1.0)
+      if @fast_verifier && !@fast_verifier.needs_analysis?(cached_as, profile, tolerance: tolerance)
+        Neutraliser.logger.log "  Fast verification: file already at target level"
+        return Measurement.already_at_target(profile)
       end
 
-      # Fallback: check cache only
-      if @use_sidecar && @cache_manager
-        return @cache_manager.load_cached_analysis(file_path, target_profile).nil?
+      if @cache_enabled
+        cached = @cache_manager.load_cached_analysis(cached_as, profile)
+        if cached
+          Neutraliser.logger.log "  Using cached analysis data"
+          return cached
+        end
       end
 
-      # No optimization available
-      true
-    end
+      measurement = FFmpegWrapper.measure_loudness(
+        working_path,
+        target_i: profile[:lufs],
+        target_tp: profile[:tp],
+        target_lra: profile[:lra]
+      )
 
-    def needs_normalization?(measured_data, target_profile, tolerance: 1.0)
-      current_lufs = measured_data['input_i'].to_f
-      target_lufs = target_profile[:lufs]
-      (current_lufs - target_lufs).abs > tolerance
+      @cache_manager.save_analysis(cached_as, profile, measurement) if @cache_enabled
+
+      measurement
     end
   end
 end

@@ -242,14 +242,14 @@ module Neutraliser
     end
 
     def process_file_two_pass(original_path, working_path, movie)
-      measured_data = analyze_loudness_for_path(working_path, original_path)
+      measurement = analyze_loudness_for_path(working_path, original_path)
 
-      if needs_processing?(measured_data)
+      if measurement.needs_normalization?(@profile, tolerance: @tolerance)
         if @dry_run
-          log "  [DRY RUN] Would normalize: #{measured_data['input_i'].to_f.round(1)} LUFS → #{@profile[:lufs]} LUFS"
+          log "  [DRY RUN] Would normalize: #{measurement.input_i.round(1)} LUFS → #{@profile[:lufs]} LUFS"
           file_result(original_path, status: :done, reason: :dry_run)
         else
-          codec_decision = normalize_file_with_paths(original_path, working_path, measured_data)
+          codec_decision = normalize_file_with_paths(original_path, working_path, measurement)
           file_result(original_path, status: :done, reason: :normalized, normalization_type: codec_decision[:normalization_type])
         end
       else
@@ -295,49 +295,18 @@ module Neutraliser
     end
 
     def analyze_loudness_for_path(working_path, original_path)
-      analyzer = AudioAnalyser.new(
-        cache_enabled: @cache_enabled,
-        use_sidecar: @cache_enabled,
-        fast_verification: @fast_verify
-      )
-
-      if @fast_verify && !analyzer.should_analyze_file?(original_path, @profile, tolerance: @tolerance)
-        log "  Fast verification: file already at target level"
-        return create_target_level_data(@profile)
-      end
-
-      if @cache_enabled
-        cache_manager = CacheManager.new(enabled: true)
-        cached = cache_manager.load_cached_analysis(original_path, @profile)
-        if cached
-          log "  Using cached analysis data"
-          return cached
-        end
-      end
-
-      measured_data = FFmpegWrapper.measure_loudness(
-        working_path,
-        target_i: @profile[:lufs],
-        target_tp: @profile[:tp],
-        target_lra: @profile[:lra]
-      )
-
-      if @cache_enabled
-        cache_manager = CacheManager.new(enabled: true)
-        cache_manager.save_analysis(original_path, @profile, measured_data)
-      end
-
-      measured_data
+      analyzer = AudioAnalyser.new(cache_enabled: @cache_enabled, fast_verification: @fast_verify)
+      analyzer.analyze(working_path, cached_as: original_path, profile: @profile, tolerance: @tolerance)
     end
 
-    def normalize_file_with_paths(original_path, working_path, measured_data)
+    def normalize_file_with_paths(original_path, working_path, measurement)
       output_path = if @replace
                       FileManager.safe_temp_path(working_path)
                     else
                       generate_output_path(working_path)
                     end
 
-      current_lufs = measured_data['input_i'].to_f
+      current_lufs = measurement.input_i
       target_lufs = @profile[:lufs]
       adjustment = target_lufs - current_lufs
 
@@ -349,7 +318,7 @@ module Neutraliser
       log "  Current: #{current_lufs.round(1)} LUFS, Target: #{target_lufs} LUFS (#{adjustment.round(1)} LU adjustment)"
 
       codec_decision = FFmpegWrapper.apply_normalization_with_multiple_tracks(
-        working_path, output_path, measured_data, audio_tracks, @profile, linear_only: @linear_only
+        working_path, output_path, measurement, audio_tracks, @profile, linear_only: @linear_only
       )
 
       log_codec_decision(codec_decision)
@@ -411,23 +380,6 @@ module Neutraliser
 
     def video_file?(file_path)
       SUPPORTED_FORMATS.include?(File.extname(file_path).downcase)
-    end
-
-    def create_target_level_data(profile)
-      # Return analysis data that indicates file is already at target level
-      {
-        'input_i' => profile[:lufs],  # Already at target LUFS
-        'input_tp' => profile[:tp],
-        'input_lra' => profile[:lra],
-        'input_thresh' => profile[:lufs] - 10.0,
-        'target_offset' => 0.0,       # No offset needed
-        'fast_verified' => true
-      }
-    end
-
-    def needs_processing?(measured_data)
-      analyzer = AudioAnalyser.new
-      analyzer.needs_normalization?(measured_data, @profile, tolerance: @tolerance)
     end
 
     def log_codec_decision(decision)

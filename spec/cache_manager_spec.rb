@@ -5,14 +5,14 @@ RSpec.describe Neutraliser::CacheManager do
   let(:temp_dir) { Dir.mktmpdir }
   let(:video_file) { File.join(temp_dir, 'movie.mp4') }
   let(:profile) { { name: 'livingroom', lufs: -20.0, tp: -1.5, lra: 12.0 } }
-  let(:analysis_data) do
-    {
+  let(:measurement) do
+    Neutraliser::Measurement.from_loudnorm_json(
       'input_i' => '-18.5',
       'input_tp' => '-2.1',
       'input_lra' => '8.3',
       'input_thresh' => '-28.9',
       'target_offset' => '1.5'
-    }
+    )
   end
 
   after do
@@ -27,10 +27,10 @@ RSpec.describe Neutraliser::CacheManager do
     it 'round-trips loudnorm analysis data' do
       manager = described_class.new(enabled: true)
 
-      manager.save_analysis(video_file, profile, analysis_data)
+      manager.save_analysis(video_file, profile, measurement)
       loaded = manager.load_cached_analysis(video_file, profile)
 
-      expect(loaded).to eq(analysis_data)
+      expect(loaded).to eq(measurement)
     end
 
     it 'invalidates cache when version mismatches' do
@@ -46,7 +46,7 @@ RSpec.describe Neutraliser::CacheManager do
 
     it 'invalidates cache when source video is newer than cache' do
       manager = described_class.new(enabled: true)
-      manager.save_analysis(video_file, profile, analysis_data)
+      manager.save_analysis(video_file, profile, measurement)
       cache_file = manager.cache_path(video_file, profile)
 
       # Bump source file mtime to be newer than cache

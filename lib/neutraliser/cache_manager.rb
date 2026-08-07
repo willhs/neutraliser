@@ -45,15 +45,16 @@ module Neutraliser
           return nil
         end
 
-        # Validate required loudnorm data is present
-        required_keys = ['input_i', 'input_tp', 'input_lra', 'input_thresh', 'target_offset']
-        unless required_keys.all? { |key| cached_data.key?(key) }
+        # Validate required loudnorm data is present and rebuild the typed
+        # Measurement (the cache metadata like cache_version/profile is
+        # deliberately dropped here, not carried in the returned value).
+        measurement = Measurement.from_cache_h(cached_data)
+        unless measurement
           File.delete(cache_file)
           return nil
         end
 
-        # Return only the loudnorm data, not the cache metadata
-        cached_data.select { |key, _| required_keys.include?(key) }
+        measurement
 
       rescue JSON::ParserError, StandardError => e
         # Corrupt or invalid cache file
@@ -62,20 +63,13 @@ module Neutraliser
       end
     end
 
-    def save_analysis(video_path, profile, analysis_data)
+    def save_analysis(video_path, profile, measurement)
       return unless @enabled
 
       cache_file = cache_path(video_path, profile)
 
       begin
-        cache_data = {
-          # Core loudnorm data
-          'input_i' => analysis_data['input_i'],
-          'input_tp' => analysis_data['input_tp'],
-          'input_lra' => analysis_data['input_lra'],
-          'input_thresh' => analysis_data['input_thresh'],
-          'target_offset' => analysis_data['target_offset'],
-
+        cache_data = measurement.to_cache_h.merge(
           # Cache metadata
           'cache_version' => CACHE_VERSION,
           'cached_at' => Time.now.iso8601,
@@ -88,7 +82,7 @@ module Neutraliser
             'tp' => profile[:tp],
             'lra' => profile[:lra]
           }
-        }
+        )
 
         File.write(cache_file, JSON.pretty_generate(cache_data))
       rescue StandardError => e

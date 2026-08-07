@@ -62,7 +62,7 @@ module Neutraliser
                                                           target_i: profile[:lufs])
 
         if quick_result
-          estimated_lufs = quick_result['input_i'].to_f
+          estimated_lufs = quick_result.input_i
           target_lufs = profile[:lufs]
           difference = (estimated_lufs - target_lufs).abs
 
