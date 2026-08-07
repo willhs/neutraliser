@@ -1,9 +1,15 @@
-require 'open3'
 require 'fileutils'
 require 'securerandom'
 
 module Neutraliser
   class FileManagerError < StandardError; end
+
+  # Raised specifically when a just-written output file fails its integrity
+  # check — the one case where the original must not be replaced. Kept
+  # distinct from FileManagerError (atomic-replace/temp-path failures) so
+  # the Processor seam can rescue it and refuse to commit deliberately,
+  # rather than lumping it in with a generic processing failure.
+  class OutputVerificationError < StandardError; end
 
   class FileManager
     def self.atomic_replace(source_path, target_path)
@@ -50,14 +56,21 @@ module Neutraliser
       return false unless File.exist?(file_path)
       return false if File.size(file_path) == 0
 
-      # Try to probe the file with FFmpeg to verify it's valid
+      # Probe via FFmpegWrapper so this runs through the same timeboxed
+      # executor as every other subprocess call — this is checking a
+      # freshly-written, possibly-truncated file, exactly the input most
+      # likely to hang ffprobe indefinitely.
       begin
-        stdout, stderr, status = Open3.capture3(
-          'ffprobe', '-v', 'error', '-show_entries', 'format=duration',
-          '-of', 'default=nw=1:nk=1', file_path
-        )
-        status.success? && !stdout.strip.empty?
-      rescue
+        !FFmpegWrapper.probe_duration(file_path).nil?
+      rescue Errno::ENOENT => e
+        # ffprobe isn't installed/on PATH — an environment problem, not a
+        # verdict on this file's integrity. Distinguish it from "corrupt
+        # output" (which returns false above) rather than conflating both
+        # under one silent false.
+        raise FileManagerError, "Cannot verify file integrity - ffprobe not found: #{e.message}"
+      rescue FFmpegTimeoutError, FFmpegError
+        # Probe ran but timed out or errored on this specific file - treat
+        # as corrupt/unverifiable output rather than an environment problem.
         false
       end
     end

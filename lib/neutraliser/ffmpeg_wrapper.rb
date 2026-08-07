@@ -32,6 +32,13 @@ module Neutraliser
     # Codecs considered lossless
     LOSSLESS_CODECS = %w[flac pcm_s16le pcm_s16be pcm_s24le pcm_f32le truehd pcm_s32le].freeze
 
+    # Single-sourced placeholder used wherever a real audio track can't be
+    # determined. `unknown: true` marks it so callers can tell "we genuinely
+    # don't know this file's audio format" apart from a real stereo/unknown
+    # track and react deliberately (e.g. warn before letting it drive
+    # encoder/bitrate selection) instead of silently trusting fabricated data.
+    UNKNOWN_AUDIO_TRACK = { index: 0, channels: 2, codec: 'unknown', bit_rate: nil, sample_rate: nil, unknown: true }.freeze
+
     # Minimum quality floor bitrates per encoder (in bps)
     QUALITY_FLOORS = {
       'aac'        => { 2 => 128_000, 6 => 256_000 },
@@ -95,20 +102,31 @@ module Neutraliser
       Measurement.from_loudnorm_json(parse_loudnorm_json(stderr))
     end
 
-    def self.quick_loudness_sample(input_path, duration: 30, target_i: -20.0)
-      # Quick LUFS estimation using a sample from the middle of the file
-      # Much faster than analyzing the entire file
-
-      # First get the total duration
-      duration_cmd = [
+    # Probes a file's duration via ffprobe, timeboxed like every other
+    # subprocess call here. Returns nil when ffprobe runs but reports
+    # failure (e.g. a corrupt/truncated container) or when its output is
+    # unparseable; raises Errno::ENOENT if ffprobe itself isn't installed
+    # and FFmpegTimeoutError if it hangs — both distinct from "the media is
+    # bad", so callers (e.g. FileManager) can tell the difference.
+    def self.probe_duration(input_path)
+      cmd = [
         "ffprobe", "-v", "error", "-show_entries", "format=duration",
         "-of", "default=nw=1:nk=1", input_path
       ]
 
-      stdout, stderr, status = execute_with_timeout(duration_cmd, PROBE_TIMEOUT, "Duration probe")
+      stdout, _stderr, status = execute_with_timeout(cmd, PROBE_TIMEOUT, "Duration probe")
       return nil unless status.success?
 
-      total_duration = stdout.to_f
+      duration = stdout.to_f
+      duration.positive? ? duration : nil
+    end
+
+    def self.quick_loudness_sample(input_path, duration: 30, target_i: -20.0)
+      # Quick LUFS estimation using a sample from the middle of the file
+      # Much faster than analyzing the entire file
+
+      total_duration = probe_duration(input_path)
+      return nil unless total_duration
       return nil if total_duration < duration * 2 # File too short for meaningful sample
 
       # Start sampling from middle of file
@@ -127,14 +145,18 @@ module Neutraliser
       return nil unless status.success?
 
       Measurement.from_loudnorm_json(parse_loudnorm_json(stderr))
-    rescue => e
-      # Return nil on any error to fall back to full analysis
+    rescue StandardError
+      # A quick sample is a best-effort optimisation, not a required step —
+      # any failure here (parse error, unexpected ffmpeg behaviour, etc.)
+      # just falls back to the full analysis pass. FFmpegTimeoutError,
+      # which subclasses StandardError via FFmpegError, is deliberately
+      # included: a slow/hung quick sample should not block processing.
       nil
     end
 
     def self.apply_normalization(input_path, output_path, measured_data, target_i: -20.0, target_tp: -1.5, target_lra: 12.0, audio_tracks: nil, linear_only: false)
       audio_tracks ||= detect_audio_tracks(input_path)
-      primary_track = audio_tracks.first || { index: 0, channels: 2, codec: 'unknown', bit_rate: nil, sample_rate: nil }
+      primary_track = audio_tracks.first || UNKNOWN_AUDIO_TRACK
 
       codec_decision = select_output_codec(primary_track, output_path, input_path)
       codec_args = build_codec_args(codec_decision)
@@ -154,18 +176,9 @@ module Neutraliser
       codec_decision.merge(normalization_type: normalization_type)
     end
 
-    def self.apply_normalization_with_multiple_tracks(input_path, output_path, measured_data, audio_tracks, profile, linear_only: false)
-      apply_normalization(input_path, output_path, measured_data,
-                         target_i: profile[:lufs],
-                         target_tp: profile[:tp],
-                         target_lra: profile[:lra],
-                         audio_tracks: audio_tracks,
-                         linear_only: linear_only)
-    end
-
     def self.apply_normalization_single_pass(input_path, output_path, audio_tracks, profile)
       audio_tracks ||= detect_audio_tracks(input_path)
-      primary_track = audio_tracks.first || { index: 0, channels: 2, codec: 'unknown', bit_rate: nil, sample_rate: nil }
+      primary_track = audio_tracks.first || UNKNOWN_AUDIO_TRACK
 
       codec_decision = select_output_codec(primary_track, output_path, input_path)
       codec_args = build_codec_args(codec_decision)
@@ -196,12 +209,20 @@ module Neutraliser
 
       stdout, stderr, status = execute_with_timeout(cmd, PROBE_TIMEOUT, "Audio track detection")
       unless status.success?
-        return [{ index: 0, channels: 2, codec: 'unknown', bit_rate: nil, sample_rate: nil }]
+        # A genuinely failed probe is a hard error, not "assume stereo" —
+        # letting it silently pass a fabricated track downstream would have
+        # it drive real encoder/bitrate selection on made-up data.
+        raise FFmpegError, "Audio track detection failed: #{stderr}"
       end
 
       tracks = parse_audio_tracks_json(stdout)
 
-      tracks.empty? ? [{ index: 0, channels: 2, codec: 'unknown', bit_rate: nil, sample_rate: nil }] : tracks
+      # The probe itself succeeded but yielded nothing usable (no audio
+      # streams, or unparseable JSON) — return an explicitly-marked unknown
+      # track rather than raising, since callers already know audio exists
+      # here (Processor checks movie.audio_stream first) and can still
+      # proceed, just deliberately, with conservative defaults.
+      tracks.empty? ? [UNKNOWN_AUDIO_TRACK] : tracks
     end
 
     def self.parse_audio_tracks_json(json_text)
@@ -228,7 +249,11 @@ module Neutraliser
       value.to_i
     end
 
-    private
+    # NOTE: `private` here has no effect on `def self.foo` methods (Ruby
+    # only makes it private on instances of the *next* class body it
+    # applies to, not the singleton class) — it was a no-op silently
+    # leaving every method below public. Real privacy is enforced via
+    # `private_class_method` at the bottom of the class instead.
 
     def self.execute_with_timeout(cmd, timeout_seconds, operation_name)
       # Use Open3.popen3 with manual timeout to avoid thread corruption from Timeout.timeout
@@ -525,5 +550,31 @@ module Neutraliser
       # ffmpeg writes the loudnorm summary (including "Normalization Type") to stderr
       stderr
     end
+
+    # The real public surface is measure_loudness, apply_normalization,
+    # apply_normalization_single_pass, quick_loudness_sample,
+    # detect_audio_tracks, and probe_duration — everything else is an
+    # implementation detail and made genuinely private here (see the NOTE
+    # above `execute_with_timeout` on why the old `private` keyword didn't
+    # do this).
+    private_class_method :execute_with_timeout,
+                          :parse_loudnorm_json,
+                          :parse_audio_tracks_json,
+                          :parse_bit_rate,
+                          :select_output_codec,
+                          :resolve_encoder,
+                          :resolve_bitrate,
+                          :estimate_source_bitrate,
+                          :estimate_bitrate_from_tag,
+                          :estimate_bitrate_from_packets,
+                          :lossless_encoder?,
+                          :build_codec_args,
+                          :build_loudnorm_filter,
+                          :build_audio_filter,
+                          :build_volume_gain_filter,
+                          :capped_linear_gain,
+                          :parse_normalization_type,
+                          :build_complete_ffmpeg_command,
+                          :execute_with_progress
   end
 end

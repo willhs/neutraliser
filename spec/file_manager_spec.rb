@@ -56,18 +56,37 @@ RSpec.describe Neutraliser::FileManager do
       File.write(video, 'content')
     end
 
-    it 'returns true when ffprobe succeeds and duration is present' do
-      status = instance_double(Process::Status, success?: true)
-      allow(Open3).to receive(:capture3).and_return(["12.3\n", '', status])
+    it 'returns true when the probe succeeds and duration is present' do
+      allow(Neutraliser::FFmpegWrapper).to receive(:probe_duration).with(video).and_return(12.3)
 
       expect(described_class.verify_file_integrity(video)).to be(true)
     end
 
-    it 'returns false when ffprobe fails' do
-      status = instance_double(Process::Status, success?: false)
-      allow(Open3).to receive(:capture3).and_return(['', 'bad', status])
+    it 'returns false when the probe reports no usable duration (corrupt output)' do
+      allow(Neutraliser::FFmpegWrapper).to receive(:probe_duration).with(video).and_return(nil)
 
       expect(described_class.verify_file_integrity(video)).to be(false)
+    end
+
+    it 'returns false when the probe times out (treated as unverifiable output, not an environment problem)' do
+      allow(Neutraliser::FFmpegWrapper).to receive(:probe_duration).with(video)
+        .and_raise(Neutraliser::FFmpegTimeoutError, 'timed out')
+
+      expect(described_class.verify_file_integrity(video)).to be(false)
+    end
+
+    it 'raises FileManagerError, distinct from a corrupt-output false, when ffprobe is missing' do
+      allow(Neutraliser::FFmpegWrapper).to receive(:probe_duration).with(video)
+        .and_raise(Errno::ENOENT, 'ffprobe')
+
+      expect { described_class.verify_file_integrity(video) }
+        .to raise_error(Neutraliser::FileManagerError, /ffprobe not found/)
+    end
+
+    it 'goes through FFmpegWrapper.probe_duration rather than an unbounded direct ffprobe call' do
+      expect(Neutraliser::FFmpegWrapper).to receive(:probe_duration).with(video).and_return(1.0)
+
+      described_class.verify_file_integrity(video)
     end
 
     it 'returns false for missing files' do

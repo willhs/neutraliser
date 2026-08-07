@@ -59,13 +59,23 @@ RSpec.describe 'Error Handling and Edge Cases' do
   end
 
   describe Neutraliser::FileManager do
-    it 'returns false when ffprobe invocation raises' do
+    it 'returns false when the probe reports a corrupt/unverifiable output file' do
       video = File.join(temp_dir, 'movie.mp4')
       File.write(video, 'x')
 
-      allow(Open3).to receive(:capture3).and_raise(StandardError, 'ffprobe unavailable')
+      allow(Neutraliser::FFmpegWrapper).to receive(:probe_duration).and_raise(Neutraliser::FFmpegError, 'boom')
 
       expect(described_class.verify_file_integrity(video)).to be(false)
+    end
+
+    it 'raises distinctly when ffprobe itself is unavailable, rather than reporting the file as corrupt' do
+      video = File.join(temp_dir, 'movie.mp4')
+      File.write(video, 'x')
+
+      allow(Neutraliser::FFmpegWrapper).to receive(:probe_duration).and_raise(Errno::ENOENT, 'ffprobe')
+
+      expect { described_class.verify_file_integrity(video) }
+        .to raise_error(Neutraliser::FileManagerError)
     end
   end
 

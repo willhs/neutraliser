@@ -234,6 +234,31 @@ module Neutraliser
         end
 
         result
+      rescue FFmpegTimeoutError => e
+        # Retryable: the subprocess ran out of time, not evidence the file
+        # (or the output already committed) is bad.
+        @stager&.cleanup(working_path) if @local_stage && working_path != file_path
+        log "  Timed out processing file: #{e.message}"
+        file_result(file_path, status: :failed, reason: :timeout, message: e.message)
+      rescue OutputVerificationError => e
+        # The one case where the original must not be replaced - surfaced
+        # distinctly so the manifest doesn't read as "same as any other
+        # failure" when the real story is "output looked corrupt, original
+        # is untouched".
+        @stager&.cleanup(working_path) if @local_stage && working_path != file_path
+        log "  Output verification failed: #{e.message}"
+        file_result(file_path, status: :failed, reason: :output_verification_failed, message: e.message)
+      rescue FFmpegError => e
+        # Non-retryable ffmpeg/ffprobe failure (bad container, unsupported
+        # codec, failed probe) - distinct from a timeout so the manifest
+        # doesn't conflate "try again" with "this file is broken".
+        @stager&.cleanup(working_path) if @local_stage && working_path != file_path
+        log "  FFmpeg error processing file: #{e.message}"
+        file_result(file_path, status: :failed, reason: :ffmpeg_error, message: e.message)
+      rescue FileManagerError => e
+        @stager&.cleanup(working_path) if @local_stage && working_path != file_path
+        log "  File management error processing file: #{e.message}"
+        file_result(file_path, status: :failed, reason: :file_manager_error, message: e.message)
       rescue => e
         @stager&.cleanup(working_path) if @local_stage && working_path != file_path
         log "  Error processing file: #{e.message}"
@@ -271,6 +296,7 @@ module Neutraliser
                     end
 
       audio_tracks = FFmpegWrapper.detect_audio_tracks(working_path)
+      warn_if_audio_track_unknown(audio_tracks)
       if audio_tracks.length > 1
         log "  Found #{audio_tracks.length} audio tracks, normalizing primary track only"
       end
@@ -284,7 +310,7 @@ module Neutraliser
       log_codec_decision(codec_decision)
 
       unless FileManager.verify_file_integrity(output_path)
-        raise "Output file verification failed - processing aborted"
+        raise OutputVerificationError, "Output file verification failed - processing aborted"
       end
 
       commit_output(original_path, working_path, output_path)
@@ -292,6 +318,17 @@ module Neutraliser
     rescue => e
       FileUtils.rm_f(output_path) if output_path && File.exist?(output_path)
       raise e
+    end
+
+    # detect_audio_tracks marks a track UNKNOWN_AUDIO_TRACK-shaped when ffprobe
+    # succeeded but yielded no real stream data. It's still handed to the
+    # encoder/bitrate logic (audio genuinely exists - movie.audio_stream was
+    # already checked), but deliberately, with an explicit warning rather
+    # than silently trusting fabricated stereo/unknown data.
+    def warn_if_audio_track_unknown(audio_tracks)
+      return unless audio_tracks.first && audio_tracks.first[:unknown]
+
+      log "  Warning: could not determine audio track format, using conservative defaults"
     end
 
     def analyze_loudness_for_path(working_path, original_path)
@@ -313,20 +350,23 @@ module Neutraliser
       adjustment = target_lufs - current_lufs
 
       audio_tracks = FFmpegWrapper.detect_audio_tracks(working_path)
+      warn_if_audio_track_unknown(audio_tracks)
       if audio_tracks.length > 1
         log "  Found #{audio_tracks.length} audio tracks, normalizing primary track only"
       end
 
       log "  Current: #{current_lufs.round(1)} LUFS, Target: #{target_lufs} LUFS (#{adjustment.round(1)} LU adjustment)"
 
-      codec_decision = FFmpegWrapper.apply_normalization_with_multiple_tracks(
-        working_path, output_path, measurement, audio_tracks, @profile, linear_only: @linear_only
+      codec_decision = FFmpegWrapper.apply_normalization(
+        working_path, output_path, measurement,
+        target_i: @profile[:lufs], target_tp: @profile[:tp], target_lra: @profile[:lra],
+        audio_tracks: audio_tracks, linear_only: @linear_only
       )
 
       log_codec_decision(codec_decision)
 
       unless FileManager.verify_file_integrity(output_path)
-        raise "Output file verification failed - processing aborted"
+        raise OutputVerificationError, "Output file verification failed - processing aborted"
       end
 
       commit_output(original_path, working_path, output_path)

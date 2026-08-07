@@ -149,6 +149,52 @@ RSpec.describe Neutraliser::Processor do
       expect { processor.send(:process_file, video_file) }
         .to output(/Error processing file: analysis failed/).to_stdout
     end
+
+    it 'records a distinct :timeout reason for FFmpegTimeoutError, not the generic processing_error bucket' do
+      processor = described_class.new
+      movie = instance_double(FFMPEG::Movie, path: video_file, audio_stream: true)
+
+      allow(FFMPEG::Movie).to receive(:new).and_return(movie)
+      allow(processor).to receive(:analyze_loudness_for_path)
+        .and_raise(Neutraliser::FFmpegTimeoutError, 'timed out')
+
+      result = nil
+      expect { result = processor.send(:process_file, video_file) }
+        .to output(/Timed out processing file: timed out/).to_stdout
+
+      expect(result[:status]).to eq(:failed)
+      expect(result[:reason]).to eq(:timeout)
+    end
+
+    it 'records a distinct :output_verification_failed reason, not the generic processing_error bucket' do
+      processor = described_class.new
+      movie = instance_double(FFMPEG::Movie, path: video_file, audio_stream: true)
+
+      allow(FFMPEG::Movie).to receive(:new).and_return(movie)
+      allow(processor).to receive(:analyze_loudness_for_path)
+        .and_raise(Neutraliser::OutputVerificationError, 'Output file verification failed - processing aborted')
+
+      result = nil
+      expect { result = processor.send(:process_file, video_file) }
+        .to output(/Output verification failed/).to_stdout
+
+      expect(result[:status]).to eq(:failed)
+      expect(result[:reason]).to eq(:output_verification_failed)
+    end
+
+    it 'records a distinct :ffmpeg_error reason for a non-timeout FFmpegError' do
+      processor = described_class.new
+      movie = instance_double(FFMPEG::Movie, path: video_file, audio_stream: true)
+
+      allow(FFMPEG::Movie).to receive(:new).and_return(movie)
+      allow(processor).to receive(:analyze_loudness_for_path)
+        .and_raise(Neutraliser::FFmpegError, 'corrupt container')
+
+      result = processor.send(:process_file, video_file)
+
+      expect(result[:status]).to eq(:failed)
+      expect(result[:reason]).to eq(:ffmpeg_error)
+    end
   end
 
   describe '#analyze_loudness_for_path' do
@@ -196,7 +242,7 @@ RSpec.describe Neutraliser::Processor do
     before do
       File.write(video_file, 'x')
       allow(Neutraliser::FFmpegWrapper).to receive(:detect_audio_tracks).and_return([{ index: 0, codec: 'aac', channels: 2, bit_rate: 256000, sample_rate: 48000 }])
-      allow(Neutraliser::FFmpegWrapper).to receive(:apply_normalization_with_multiple_tracks).and_return(
+      allow(Neutraliser::FFmpegWrapper).to receive(:apply_normalization).and_return(
         { encoder: 'aac', bitrate: 256_000, source_codec: 'aac', source_bitrate: 256_000, lossless_output: false }
       )
       allow(Neutraliser::FileManager).to receive(:verify_file_integrity).and_return(true)
@@ -205,22 +251,22 @@ RSpec.describe Neutraliser::Processor do
     it 'writes to _normalized output in copy mode' do
       processor.send(:normalize_file_with_paths, video_file, video_file, measured_data)
 
-      expect(Neutraliser::FFmpegWrapper).to have_received(:apply_normalization_with_multiple_tracks)
+      expect(Neutraliser::FFmpegWrapper).to have_received(:apply_normalization)
         .with(video_file, output_file, measured_data, any_args)
     end
 
-    it 'raises when output fails integrity checks' do
+    it 'raises a distinct OutputVerificationError when output fails integrity checks' do
       allow(Neutraliser::FileManager).to receive(:verify_file_integrity).and_return(false)
       allow(File).to receive(:exist?).and_call_original
       allow(File).to receive(:exist?).with(output_file).and_return(true)
       allow(FileUtils).to receive(:rm_f)
 
       expect { processor.send(:normalize_file_with_paths, video_file, video_file, measured_data) }
-        .to raise_error(/Output file verification failed/)
+        .to raise_error(Neutraliser::OutputVerificationError, /Output file verification failed/)
     end
 
     it 'returns the codec decision including normalization_type' do
-      allow(Neutraliser::FFmpegWrapper).to receive(:apply_normalization_with_multiple_tracks).and_return(
+      allow(Neutraliser::FFmpegWrapper).to receive(:apply_normalization).and_return(
         { encoder: 'aac', bitrate: 256_000, source_codec: 'aac', source_bitrate: 256_000, lossless_output: false, normalization_type: 'Dynamic' }
       )
 
@@ -237,8 +283,8 @@ RSpec.describe Neutraliser::Processor do
 
       linear_processor.send(:normalize_file_with_paths, video_file, video_file, measured_data)
 
-      expect(Neutraliser::FFmpegWrapper).to have_received(:apply_normalization_with_multiple_tracks)
-        .with(video_file, output_file, measured_data, anything, anything, hash_including(linear_only: true))
+      expect(Neutraliser::FFmpegWrapper).to have_received(:apply_normalization)
+        .with(video_file, output_file, measured_data, hash_including(linear_only: true))
     end
   end
 
