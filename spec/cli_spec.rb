@@ -1,4 +1,33 @@
 require 'spec_helper'
+require 'fileutils'
+
+RSpec.describe Neutraliser::CacheCommands do
+  describe '.start clean' do
+    let(:temp_dir) { Dir.mktmpdir }
+
+    after { FileUtils.remove_entry(temp_dir) if Dir.exist?(temp_dir) }
+
+    it 'removes legacy .neutralised_<profile> marker sidecars alongside cache cleanup' do
+      video = File.join(temp_dir, 'movie.mp4')
+      File.write(video, 'x')
+      legacy_marker = File.join(temp_dir, '.movie.neutralised_livingroom')
+      File.write(legacy_marker, '{}')
+
+      expect { described_class.start(['clean', temp_dir]) }
+        .to output(/Removed 1 legacy '\.neutralised_<profile>' marker file\(s\)/).to_stdout
+
+      expect(File.exist?(legacy_marker)).to be false
+    end
+
+    it 'does not print a removal line when there are no legacy markers' do
+      video = File.join(temp_dir, 'movie.mp4')
+      File.write(video, 'x')
+
+      expect { described_class.start(['clean', temp_dir]) }
+        .not_to output(/legacy/).to_stdout
+    end
+  end
+end
 
 RSpec.describe Neutraliser::CLI do
   describe '.start process command' do

@@ -10,10 +10,11 @@ RSpec.describe Neutraliser::AudioAnalyser do
   end
 
   describe '#analyze' do
-    context 'when fast verification says no analysis is needed' do
-      it 'returns an already-at-target Measurement without measuring or hitting the cache' do
+    context 'when the skip decider says the file is already normalised' do
+      it 'returns an already-at-target Measurement without measuring' do
         analyser = described_class.new(cache_enabled: true, fast_verification: true)
-        allow_any_instance_of(Neutraliser::FastVerifier).to receive(:needs_analysis?).and_return(false)
+        allow_any_instance_of(Neutraliser::CacheManager).to receive(:load_cached_analysis).and_return(nil)
+        allow_any_instance_of(Neutraliser::SkipDecider).to receive(:skip?).and_return(true)
         expect(Neutraliser::FFmpegWrapper).not_to receive(:measure_loudness)
 
         result = analyser.analyze('/working/movie.mp4', cached_as: '/orig/movie.mp4', profile: profile)
@@ -24,9 +25,10 @@ RSpec.describe Neutraliser::AudioAnalyser do
     end
 
     context 'when a cached measurement exists' do
-      it 'returns the cached Measurement without re-measuring' do
-        analyser = described_class.new(cache_enabled: true, fast_verification: false)
+      it 'returns the cached Measurement without re-measuring, even if the skip decider would also say skip' do
+        analyser = described_class.new(cache_enabled: true, fast_verification: true)
         allow_any_instance_of(Neutraliser::CacheManager).to receive(:load_cached_analysis).and_return(measurement)
+        expect_any_instance_of(Neutraliser::SkipDecider).not_to receive(:skip?)
         expect(Neutraliser::FFmpegWrapper).not_to receive(:measure_loudness)
 
         result = analyser.analyze('/working/movie.mp4', cached_as: '/orig/movie.mp4', profile: profile)
@@ -35,7 +37,7 @@ RSpec.describe Neutraliser::AudioAnalyser do
       end
     end
 
-    context 'on a cache miss' do
+    context 'on a cache miss with no skip verdict' do
       it 'measures the working path, caches it under cached_as, and returns the Measurement' do
         analyser = described_class.new(cache_enabled: true, fast_verification: false)
         allow_any_instance_of(Neutraliser::CacheManager).to receive(:load_cached_analysis).and_return(nil)
@@ -63,6 +65,17 @@ RSpec.describe Neutraliser::AudioAnalyser do
 
         expect(result).to eq(measurement)
       end
+    end
+
+    it 'shares a single SkipDecider instance across calls when one is passed in' do
+      shared_decider = instance_double(Neutraliser::SkipDecider)
+      allow(shared_decider).to receive(:skip?).and_return(false)
+      analyser = described_class.new(cache_enabled: false, fast_verification: true, skip_decider: shared_decider)
+      allow(Neutraliser::FFmpegWrapper).to receive(:measure_loudness).and_return(measurement)
+
+      expect(Neutraliser::SkipDecider).not_to receive(:new)
+
+      analyser.analyze('/working/movie.mp4', cached_as: '/orig/movie.mp4', profile: profile)
     end
 
     it 'raises ffmpeg errors instead of falling back to fake data' do

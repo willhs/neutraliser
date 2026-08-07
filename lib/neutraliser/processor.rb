@@ -1,7 +1,7 @@
 require 'json'
 require 'time'
 require 'pathname'
-require_relative 'processed_tracker'
+require_relative 'skip_decider'
 
 module Neutraliser
   class Processor
@@ -33,7 +33,7 @@ module Neutraliser
       if File.directory?(path)
         process_directory(path)
       elsif File.file?(path)
-        @tracker = ProcessedTracker.new(File.dirname(path))
+        @skip_decider = SkipDecider.new(File.dirname(path), fast_verification: @fast_verify)
         summarize_results(
           found: 1,
           queued: 1,
@@ -60,7 +60,7 @@ module Neutraliser
     def process_directory(dir_path)
       video_files = find_video_files(dir_path)
       manifest_path = manifest_path_for(dir_path)
-      @tracker = ProcessedTracker.new(dir_path)
+      @skip_decider = SkipDecider.new(dir_path, fast_verification: @fast_verify)
 
       if video_files.empty?
         log "No video files found in '#{dir_path}'"
@@ -200,7 +200,7 @@ module Neutraliser
         return file_result(file_path, status: :skipped, reason: :unsupported_format)
       end
 
-      if @tracker&.processed?(file_path, @profile)
+      if @skip_decider&.already_processed?(file_path, @profile)
         log "  Already processed, skipping"
         return file_result(file_path, status: :skipped, reason: :already_processed)
       end
@@ -230,7 +230,7 @@ module Neutraliser
         @stager&.cleanup(working_path) if @local_stage
 
         if result[:status] == :done || result[:status] == :skipped
-          @tracker&.mark_processed(file_path, @profile)
+          @skip_decider&.mark_processed(file_path, @profile)
         end
 
         result
@@ -295,7 +295,9 @@ module Neutraliser
     end
 
     def analyze_loudness_for_path(working_path, original_path)
-      analyzer = AudioAnalyser.new(cache_enabled: @cache_enabled, fast_verification: @fast_verify)
+      analyzer = AudioAnalyser.new(
+        cache_enabled: @cache_enabled, fast_verification: @fast_verify, skip_decider: @skip_decider
+      )
       analyzer.analyze(working_path, cached_as: original_path, profile: @profile, tolerance: @tolerance)
     end
 

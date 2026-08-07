@@ -27,8 +27,8 @@ Input File
 │  Processor          │  Orchestrates the pipeline per file
 │                     │
 │  ┌───────────────┐  │
-│  │ Fast Verifier │  │  Quick LUFS check — skip if already at target
-│  └───────┬───────┘  │
+│  │ SkipDecider   │  │  Single "already normalised?" authority (sidecar
+│  └───────┬───────┘  │  hit, or quick LUFS sample as a fallback strategy)
 │          ▼          │
 │  ┌───────────────┐  │
 │  │ AudioAnalyser │  │  Full loudnorm measurement (with sidecar cache)
@@ -75,17 +75,17 @@ Both flags are independent and can be combined.
 | Processor | `lib/neutraliser/processor.rb` | Pipeline orchestration, resume (serial dispatch) |
 | FFmpegWrapper | `lib/neutraliser/ffmpeg_wrapper.rb` | ffmpeg/ffprobe commands, codec selection, loudnorm filter |
 | AudioAnalyser | `lib/neutraliser/audio_analyser.rb` | Loudness analysis with sidecar caching |
-| CacheManager | `lib/neutraliser/cache_manager.rb` | Sidecar `.loudnorm.json` cache read/write |
-| FastVerifier | `lib/neutraliser/fast_verifier.rb` | Quick LUFS sampling to skip already-normalised files |
+| CacheManager | `lib/neutraliser/cache_manager.rb` | Sidecar `.loudnorm_{profile}.json` analysis cache read/write |
+| SkipDecider | `lib/neutraliser/skip_decider.rb` | Single authority for "already normalised?" — one `.neutraliser` sidecar (size+mtime+profile, never expires), quick LUFS sampling as an internal fallback strategy |
 | FileManager | `lib/neutraliser/file_manager.rb` | Atomic file replacement, integrity verification |
 | LocalStager | `lib/neutraliser/local_stager.rb` | Stage files to local NVMe for fast processing, copy result back |
-| ProcessedTracker | `lib/neutraliser/processed_tracker.rb` | Skip files already normalised for a profile |
 
 ## Decisions / Rationale
 
 - **Two-pass loudnorm** — first pass measures, second pass applies with measured values for accurate normalisation.
 - **Smart codec selection** — match source codec and bitrate to avoid quality loss. See [ADR-0001](adr/0001-smart-codec-selection.md).
-- **Sidecar caching** — `.loudnorm.json` files next to videos avoid re-analysis on repeated runs.
+- **Sidecar caching** — `.loudnorm_{profile}.json` files next to videos avoid re-analysis on repeated runs.
+- **One skip decider** — SkipDecider is the single place that answers "is this file already normalised?", backed by one sidecar (`.neutraliser`) and one staleness rule (size+mtime+profile, never expires). Quick LUFS sampling lives inside it as an internal fallback strategy and never writes its own marker file; a verified quick sample is recorded through the same sidecar. The legacy `.{basename}.neutralised_{profile}` marker format is retired; `neutraliser cache clean` removes any left over from older runs.
 - **Atomic replace** — write to temp file, verify integrity, then rename to prevent corruption.
 
 ## Next Actions
@@ -103,3 +103,4 @@ Both flags are independent and can be combined.
 - 2026-03-07 (agent:implement-plan): Added pipeline diagram, codec selection, component table
 - 2026-03-08 (agent:implement-plan): Added performance flags section, LocalStager component
 - 2026-08-06 (agent:improve-architecture): Removed stale ParallelProcessor row, added ProcessedTracker
+- 2026-08-07 (agent:consolidate-already-normalised-decision): Replaced ProcessedTracker + FastVerifier with a single SkipDecider (one sidecar, one staleness rule); quick-sample tolerance margin is now an explicit documented constant instead of a hidden `tolerance * 0.8`

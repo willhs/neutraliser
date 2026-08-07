@@ -47,6 +47,30 @@ module Neutraliser
       end
 
       puts "Cleaned cache files for #{cleaned_count} video files"
+
+      legacy_marker_count = clean_legacy_markers(path)
+      if legacy_marker_count.positive?
+        puts "Removed #{legacy_marker_count} legacy '.neutralised_<profile>' marker file(s)"
+      end
+    end
+
+    private
+
+    # The old FastVerifier wrote its own '.{basename}.neutralised_{profile}'
+    # marker sidecar alongside the ProcessedTracker '.neutraliser' file and
+    # the CacheManager '.loudnorm_{profile}.json' cache. That format is
+    # retired now that SkipDecider is the single authority, but files left
+    # over from older runs still exist on disk — sweep them up here rather
+    # than leaving orphaned sidecars.
+    def clean_legacy_markers(path)
+      legacy_pattern = File.join(path, '**', '.*.neutralised_*')
+      Dir.glob(legacy_pattern).count do |marker_file|
+        File.delete(marker_file)
+        true
+      rescue StandardError => e
+        puts "Warning: Could not remove legacy marker #{marker_file}: #{e.message}"
+        false
+      end
     end
   end
 
