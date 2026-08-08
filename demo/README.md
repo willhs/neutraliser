@@ -1,6 +1,34 @@
 # Demo
 
-Generates the before/after loudness chart in the main README.
+Two scripts, both regenerating charts used in the main README.
+
+| Script | Output | Answers |
+|---|---|---|
+| `demo/ab.rb` | `loudness-over-time.svg` | "What does a sitting sound like?" — four files back to back, perceived loudness before vs after |
+| `demo/run.rb` | `loudness-before-after.svg` | "What happens across a library?" — per-file integrated loudness before vs after |
+
+## A/B test — `demo/ab.rb`
+
+```bash
+ruby demo/ab.rb
+```
+
+Builds two playlists from the same source clips (one untouched, one normalised),
+plots short-term loudness across each, and writes `before.mkv` / `after.mkv` into
+the work dir **so you can listen to the difference**, not just look at it.
+
+Example output:
+
+```
+  quiet film        -26.9 ->  -20.0 LUFS
+  loud remaster     -11.6 ->  -20.1 LUFS
+  quiet doco        -23.4 ->  -20.2 LUFS
+  TV episode        -15.4 ->  -20.2 LUFS
+
+swing across the sitting: 15.5 LU -> 0.5 LU
+```
+
+## Library sweep — `demo/run.rb`
 
 ```bash
 ruby demo/run.rb
@@ -9,7 +37,7 @@ ruby demo/run.rb
 The default run builds 8 synthetic clips deliberately spread from about −30 to
 −11 LUFS, normalises them with `--profile livingroom --replace`, and measures
 each one before and after. It writes `demo/loudness-before-after.svg` and prints
-a table:
+a table (exact figures vary slightly run to run — the synthetic audio is random):
 
 ```
 file                             before      after
@@ -27,15 +55,36 @@ spread: 18.7 LU -> 0.3 LU
 
 ## Run it against your own library
 
-The synthetic clips prove the mechanism, not that it works on your files. Point
-it at a real directory to check for yourself:
+The synthetic clips prove the mechanism, not that it works on your files. Both
+scripts take `--source`:
 
 ```bash
 ruby demo/run.rb --source ~/media/movies --limit 8
+ruby demo/ab.rb  --source ~/media/movies
 ```
 
 Files are **copied** into the scratch work dir first and normalised there — your
 originals are never touched.
+
+## Verified on real film audio
+
+A real film clip at −34.9 LUFS, normalised to `livingroom` (a 14.7 LU boost):
+
+| | before | after |
+|---|---|---|
+| Integrated loudness | −34.9 LUFS | −20.2 LUFS |
+| Loudness range (LRA) | 12.5 LU | 12.5 LU — unchanged |
+| True peak | −17.8 dBFS | −3.0 dBFS |
+| Audio codec | AAC 162k | AAC 162k |
+| Video bitstream | — | MD5-identical, stream-copied |
+
+The unchanged LRA is the important row: Neutraliser applied constant gain rather
+than compression, so the mix's own dynamics survive intact. The clip itself isn't
+in the repo (it's copyrighted); reproduce the check on any file with:
+
+```bash
+ffmpeg -i FILE -map a:0 -af ebur128=peak=true:framelog=quiet -f null -
+```
 
 ## How it's measured
 
@@ -51,5 +100,7 @@ numbers are an independent check, not the tool grading its own homework.
 | `--limit N` | `8` | Max files to take from `--source` |
 | `--work-dir DIR` | temp dir | Scratch directory; wiped at the start of each run |
 | `--profile NAME` | `livingroom` | Profile to normalise against |
-| `--duration SECS` | `20` | Length of each synthetic clip |
-| `--output PATH` | `demo/loudness-before-after.svg` | Where to write the chart |
+| `--duration SECS` | `20` (`run.rb`) / `15` (`ab.rb`) | Length of each synthetic clip |
+| `--output PATH` | per script | Where to write the chart |
+
+`--limit` applies to `run.rb` only; `ab.rb` always uses up to 4 files.

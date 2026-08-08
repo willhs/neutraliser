@@ -14,8 +14,9 @@ require 'fileutils'
 require 'optparse'
 require 'open3'
 require 'tmpdir'
+require_relative 'support'
 
-ROOT = File.expand_path('..', __dir__)
+ROOT = DemoSupport::ROOT
 
 options = {
   source: nil,
@@ -34,58 +35,22 @@ OptionParser.new do |o|
   o.on('--duration SECS', Integer, 'Synthetic clip length (default: 20)') { |v| options[:duration] = v }
   o.on('--limit N', Integer, 'Max files to use from --source (default: 8)') { |v| options[:limit] = v }
   o.on('--output PATH', 'Where to write the SVG') { |v| options[:output] = v }
-  o.on('-h', '--help') { puts o; exit }
+  o.on('-h', '--help') do
+    puts o
+    exit
+  end
 end.parse!
 
-TARGETS = {
-  'reference' => -23.0,
-  'livingroom' => -20.0,
-  'night' => -16.0
-}.freeze
-
-target = TARGETS.fetch(options[:profile]) do
-  abort "Unknown profile: #{options[:profile]}. Use one of: #{TARGETS.keys.join(', ')}"
-end
+target = DemoSupport.target_for(options[:profile])
 
 # Loudness levels chosen to look like a real mixed library: a couple of very
 # quiet films, a cluster near broadcast standard, and a loud remaster.
 SYNTHETIC_OFFSETS = [-31.5, -27.0, -24.5, -21.0, -19.5, -17.0, -14.5, -12.0].freeze
 
-def run!(*cmd)
-  out, status = Open3.capture2e(*cmd)
-  raise "Command failed: #{cmd.join(' ')}\n#{out}" unless status.success?
-
-  out
-end
-
-# Integrated loudness via ebur128 — deliberately a *different* filter from the
-# loudnorm one neutraliser uses to decide, so the measurement isn't just
-# echoing back the tool's own numbers.
-def measure_lufs(path)
-  out, = Open3.capture2e(
-    'ffmpeg', '-hide_banner', '-nostats', '-i', path,
-    '-map', 'a:0', '-af', 'ebur128=framelog=quiet', '-f', 'null', '-'
-  )
-  match = out[/Integrated loudness:.*?I:\s*(-?\d+\.?\d*)\s*LUFS/m]
-  raise "Could not measure loudness of #{path}\n#{out}" unless match
-
-  Regexp.last_match(1).to_f
-end
-
-def generate_clips(dir, duration)
+def generate_clips(dir, duration, target)
   SYNTHETIC_OFFSETS.each_with_index.map do |offset, i|
-    path = File.join(dir, format('clip_%02d.mkv', i + 1))
-    # Pink noise is broadband, so it behaves much more like film audio under
-    # loudnorm than a pure tone would.
-    run!(
-      'ffmpeg', '-hide_banner', '-loglevel', 'error',
-      '-f', 'lavfi', '-i', "testsrc2=size=320x240:rate=10:duration=#{duration}",
-      '-f', 'lavfi', '-i', "anoisesrc=color=pink:duration=#{duration}:amplitude=0.7",
-      '-af', "volume=#{offset + 20.0}dB",
-      '-c:v', 'libx264', '-preset', 'ultrafast', '-crf', '30',
-      '-c:a', 'aac', '-b:a', '192k', '-shortest', '-y', path
-    )
-    path
+    DemoSupport.generate_clip(File.join(dir, format('clip_%02d.mkv', i + 1)),
+                              offset_lufs: offset, duration: duration, target: target)
   end
 end
 
@@ -120,12 +85,12 @@ def svg(rows, target, profile)
 
   # An explicit card background keeps this legible on both light and dark
   # GitHub themes, rather than depending on the page's own colours.
-  bg     = '#ffffff'
-  ink    = '#1b1f24'
-  muted  = '#6a737d'
-  before = '#d1495b'
-  after  = '#2a9d8f'
-  grid   = '#e3e6ea'
+  bg     = DemoSupport::BG
+  ink    = DemoSupport::INK
+  muted  = DemoSupport::MUTED
+  before = DemoSupport::RED
+  after  = DemoSupport::GREEN
+  grid   = DemoSupport::GRID
 
   parts = []
   parts << %(<svg xmlns="http://www.w3.org/2000/svg" width="#{width}" height="#{height}" viewBox="0 0 #{width} #{height}" font-family="-apple-system,BlinkMacSystemFont,Segoe UI,Helvetica,Arial,sans-serif">)
@@ -184,19 +149,18 @@ files =
     collect_sources(options[:source], work, options[:limit])
   else
     puts "Generating #{SYNTHETIC_OFFSETS.size} synthetic clips (#{options[:duration]}s each)..."
-    generate_clips(work, options[:duration])
+    generate_clips(work, options[:duration], target)
   end
 
 puts 'Measuring before...'
-before = files.to_h { |f| [f, measure_lufs(f)] }
+before = files.to_h { |f| [f, DemoSupport.measure_lufs(f)] }
 
 puts "Normalising (--profile #{options[:profile]} --replace)..."
-neutraliser = File.join(ROOT, 'bin', 'neutraliser')
-run!('bundle', 'exec', neutraliser, 'process', '--replace', '--profile', options[:profile], work)
+DemoSupport.neutralise!(work, options[:profile])
 
 puts 'Measuring after...'
 rows = files.map do |f|
-  { name: File.basename(f), before: before[f], after: measure_lufs(f) }
+  { name: File.basename(f), before: before[f], after: DemoSupport.measure_lufs(f) }
 end.sort_by { |r| r[:before] }
 
 puts

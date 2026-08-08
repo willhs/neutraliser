@@ -2,42 +2,42 @@
 <rect width="760" height="440" rx="8" fill="#ffffff"/>
 <text x="32" y="34" font-size="17" font-weight="600" fill="#1b1f24">Integrated loudness, before and after</text>
 <text x="32" y="54" font-size="12.5" fill="#6a737d">8 files &#183; neutraliser --profile livingroom &#183; measured with ffmpeg ebur128</text>
-<line x1="170" y1="225.6" x2="728" y2="225.6" stroke="#e3e6ea" stroke-width="1.5" stroke-dasharray="5 4"/>
-<text x="728" y="195.6" font-size="11.5" fill="#6a737d" text-anchor="end">target -20.0 LUFS</text>
+<line x1="170" y1="225.0" x2="728" y2="225.0" stroke="#e3e6ea" stroke-width="1.5" stroke-dasharray="5 4"/>
+<text x="728" y="195.0" font-size="11.5" fill="#6a737d" text-anchor="end">target -20.0 LUFS</text>
 <text x="230" y="82" font-size="12.5" font-weight="600" fill="#d1495b" text-anchor="middle">BEFORE</text>
 <text x="540" y="82" font-size="12.5" font-weight="600" fill="#2a9d8f" text-anchor="middle">AFTER</text>
-<line x1="230" y1="327.9" x2="540" y2="227.8" stroke="#6a737d" stroke-width="1.1" opacity="0.45"/>
-<circle cx="230" cy="327.9" r="5" fill="#d1495b"/>
-<circle cx="540" cy="227.8" r="5" fill="#2a9d8f"/>
-<text x="216" y="331.9" font-size="11.5" fill="#1b1f24" text-anchor="end">-29.4</text>
-<line x1="230" y1="278.9" x2="540" y2="228.8" stroke="#6a737d" stroke-width="1.1" opacity="0.45"/>
-<circle cx="230" cy="278.9" r="5" fill="#d1495b"/>
-<circle cx="540" cy="228.8" r="5" fill="#2a9d8f"/>
-<text x="216" y="282.9" font-size="11.5" fill="#1b1f24" text-anchor="end">-24.9</text>
-<line x1="230" y1="251.7" x2="540" y2="227.8" stroke="#6a737d" stroke-width="1.1" opacity="0.45"/>
-<circle cx="230" cy="251.7" r="5" fill="#d1495b"/>
-<circle cx="540" cy="227.8" r="5" fill="#2a9d8f"/>
-<text x="216" y="255.7" font-size="11.5" fill="#1b1f24" text-anchor="end">-22.4</text>
-<line x1="230" y1="213.6" x2="540" y2="228.8" stroke="#6a737d" stroke-width="1.1" opacity="0.45"/>
-<circle cx="230" cy="213.6" r="5" fill="#d1495b"/>
-<circle cx="540" cy="228.8" r="5" fill="#2a9d8f"/>
-<text x="216" y="217.6" font-size="11.5" fill="#1b1f24" text-anchor="end">-18.9</text>
-<line x1="230" y1="197.3" x2="540" y2="227.8" stroke="#6a737d" stroke-width="1.1" opacity="0.45"/>
-<circle cx="230" cy="197.3" r="5" fill="#d1495b"/>
-<circle cx="540" cy="227.8" r="5" fill="#2a9d8f"/>
-<text x="216" y="201.3" font-size="11.5" fill="#1b1f24" text-anchor="end">-17.4</text>
-<line x1="230" y1="170.1" x2="540" y2="226.7" stroke="#6a737d" stroke-width="1.1" opacity="0.45"/>
-<circle cx="230" cy="170.1" r="5" fill="#d1495b"/>
-<circle cx="540" cy="226.7" r="5" fill="#2a9d8f"/>
-<text x="216" y="174.1" font-size="11.5" fill="#1b1f24" text-anchor="end">-14.9</text>
-<line x1="230" y1="142.8" x2="540" y2="226.7" stroke="#6a737d" stroke-width="1.1" opacity="0.45"/>
-<circle cx="230" cy="142.8" r="5" fill="#d1495b"/>
-<circle cx="540" cy="226.7" r="5" fill="#2a9d8f"/>
-<text x="216" y="146.8" font-size="11.5" fill="#1b1f24" text-anchor="end">-12.4</text>
-<line x1="230" y1="124.3" x2="540" y2="225.6" stroke="#6a737d" stroke-width="1.1" opacity="0.45"/>
-<circle cx="230" cy="124.3" r="5" fill="#d1495b"/>
-<circle cx="540" cy="225.6" r="5" fill="#2a9d8f"/>
-<text x="216" y="128.3" font-size="11.5" fill="#1b1f24" text-anchor="end">-10.7</text>
-<text x="560" y="231.2" font-size="12" font-weight="600" fill="#2a9d8f">all within 0.3 LU of target</text>
-<text x="32" y="420" font-size="12.5" fill="#1b1f24">Spread across the set: <tspan fill="#d1495b" font-weight="600">18.7 LU</tspan> &#8594; <tspan fill="#2a9d8f" font-weight="600">0.3 LU</tspan></text>
+<line x1="230" y1="327.7" x2="540" y2="226.1" stroke="#6a737d" stroke-width="1.1" opacity="0.45"/>
+<circle cx="230" cy="327.7" r="5" fill="#d1495b"/>
+<circle cx="540" cy="226.1" r="5" fill="#2a9d8f"/>
+<text x="216" y="331.7" font-size="11.5" fill="#1b1f24" text-anchor="end">-29.4</text>
+<line x1="230" y1="278.5" x2="540" y2="227.1" stroke="#6a737d" stroke-width="1.1" opacity="0.45"/>
+<circle cx="230" cy="278.5" r="5" fill="#d1495b"/>
+<circle cx="540" cy="227.1" r="5" fill="#2a9d8f"/>
+<text x="216" y="282.5" font-size="11.5" fill="#1b1f24" text-anchor="end">-24.9</text>
+<line x1="230" y1="251.2" x2="540" y2="227.1" stroke="#6a737d" stroke-width="1.1" opacity="0.45"/>
+<circle cx="230" cy="251.2" r="5" fill="#d1495b"/>
+<circle cx="540" cy="227.1" r="5" fill="#2a9d8f"/>
+<text x="216" y="255.2" font-size="11.5" fill="#1b1f24" text-anchor="end">-22.4</text>
+<line x1="230" y1="212.9" x2="540" y2="227.1" stroke="#6a737d" stroke-width="1.1" opacity="0.45"/>
+<circle cx="230" cy="212.9" r="5" fill="#d1495b"/>
+<circle cx="540" cy="227.1" r="5" fill="#2a9d8f"/>
+<text x="216" y="216.9" font-size="11.5" fill="#1b1f24" text-anchor="end">-18.9</text>
+<line x1="230" y1="196.5" x2="540" y2="227.1" stroke="#6a737d" stroke-width="1.1" opacity="0.45"/>
+<circle cx="230" cy="196.5" r="5" fill="#d1495b"/>
+<circle cx="540" cy="227.1" r="5" fill="#2a9d8f"/>
+<text x="216" y="200.5" font-size="11.5" fill="#1b1f24" text-anchor="end">-17.4</text>
+<line x1="230" y1="169.2" x2="540" y2="226.1" stroke="#6a737d" stroke-width="1.1" opacity="0.45"/>
+<circle cx="230" cy="169.2" r="5" fill="#d1495b"/>
+<circle cx="540" cy="226.1" r="5" fill="#2a9d8f"/>
+<text x="216" y="173.2" font-size="11.5" fill="#1b1f24" text-anchor="end">-14.9</text>
+<line x1="230" y1="141.9" x2="540" y2="226.1" stroke="#6a737d" stroke-width="1.1" opacity="0.45"/>
+<circle cx="230" cy="141.9" r="5" fill="#d1495b"/>
+<circle cx="540" cy="226.1" r="5" fill="#2a9d8f"/>
+<text x="216" y="145.9" font-size="11.5" fill="#1b1f24" text-anchor="end">-12.4</text>
+<line x1="230" y1="124.4" x2="540" y2="225.0" stroke="#6a737d" stroke-width="1.1" opacity="0.45"/>
+<circle cx="230" cy="124.4" r="5" fill="#d1495b"/>
+<circle cx="540" cy="225.0" r="5" fill="#2a9d8f"/>
+<text x="216" y="128.4" font-size="11.5" fill="#1b1f24" text-anchor="end">-10.8</text>
+<text x="560" y="230.1" font-size="12" font-weight="600" fill="#2a9d8f">all within 0.2 LU of target</text>
+<text x="32" y="420" font-size="12.5" fill="#1b1f24">Spread across the set: <tspan fill="#d1495b" font-weight="600">18.6 LU</tspan> &#8594; <tspan fill="#2a9d8f" font-weight="600">0.2 LU</tspan></text>
 </svg>

@@ -10,14 +10,34 @@ neutraliser process /media/movies --profile livingroom
 
 ## What it actually does
 
-![Integrated loudness before and after normalisation: eight files spread across 18.7 LU converge to within 0.3 LU of the -20 LUFS target](demo/loudness-before-after.svg)
+Four files played back to back — the loud remaster after the quiet film is the moment you reach for the remote:
 
-Eight files spread across 18.7 LU, levelled to within 0.3 LU of target. Don't take
-the chart's word for it — [`demo/run.rb`](demo/README.md) regenerates it from
-scratch, and `ruby demo/run.rb --source ~/media/movies` runs the same before/after
-measurement over your own library (on copies; originals untouched). Loudness is
-measured with ffmpeg's `ebur128` filter, not the `loudnorm` filter Neutraliser uses
-to decide — so it isn't grading its own homework.
+![Perceived loudness across four files played back to back. Before normalisation the level steps between -27 and -11 LUFS at each file boundary; after, it holds flat at -20 LUFS](demo/loudness-over-time.svg)
+
+Across a whole library, the same thing per file — 8 files spread over ~19 LU, levelled to within a fraction of a LU of target:
+
+![Integrated loudness before and after normalisation: eight files spread across roughly 19 LU converge onto the -20 LUFS target](demo/loudness-before-after.svg)
+
+Don't take the charts' word for it. [`demo/run.rb`](demo/README.md) and
+[`demo/ab.rb`](demo/README.md) regenerate both from scratch, `--source ~/media/movies`
+runs them over your own library (on copies; originals untouched), and `ab.rb` also
+writes `before.mkv`/`after.mkv` so you can *listen* rather than squint at a line.
+Loudness is measured with ffmpeg's `ebur128` filter, not the `loudnorm` filter
+Neutraliser uses to decide — so it isn't grading its own homework.
+
+**On a real film clip** at −34.9 LUFS (a 14.7 LU boost — the kind of correction where
+artifacts would show up if they were going to):
+
+| | before | after |
+|---|---|---|
+| Integrated loudness | −34.9 LUFS | −20.2 LUFS |
+| Loudness range (LRA) | 12.5 LU | **12.5 LU** — unchanged |
+| True peak | −17.8 dBFS | −3.0 dBFS — still clear of the −1.5 dBTP ceiling |
+| Audio codec | AAC 162k | AAC 162k |
+| Video bitstream | — | **MD5-identical**, stream-copied |
+
+Constant gain, not compression: the dynamic range is preserved exactly, so quiet
+scenes stay quiet relative to loud ones. Only the overall level moves.
 
 ## Why this exists
 
