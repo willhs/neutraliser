@@ -98,7 +98,7 @@ module Neutraliser
 
     def tracker_key(file_path)
       # Store relative path from the root dir so the sidecar is portable
-      root = File.dirname(@path)
+      root = File.expand_path(File.dirname(@path))
       Pathname.new(File.expand_path(file_path)).relative_path_from(Pathname.new(root)).to_s
     end
 
