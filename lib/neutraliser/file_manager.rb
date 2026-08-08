@@ -12,9 +12,17 @@ module Neutraliser
   class OutputVerificationError < StandardError; end
 
   class FileManager
+    # A single rename(2) is atomic on POSIX filesystems: it either fully
+    # succeeds (target_path now holds source_path's content) or fully fails
+    # (target_path is left completely untouched) - there is no intermediate
+    # state where target_path doesn't exist. That's a strictly stronger
+    # guarantee than the old backup-then-swap approach (two renames, with a
+    # window between them where target_path was briefly missing, and a
+    # kill/crash in that window stranded the original at "#{target_path}.bak"
+    # with no auto-recovery). Callers are expected to have already verified
+    # source_path (see FileManager.verify_file_integrity) before calling
+    # this, so no backup-for-rollback is needed here.
     def self.atomic_replace(source_path, target_path)
-      backup_path = "#{target_path}.bak"
-
       unless File.exist?(target_path)
         raise FileManagerError, "Target file does not exist: #{target_path}"
       end
@@ -23,22 +31,63 @@ module Neutraliser
         raise FileManagerError, "Source file does not exist: #{source_path}"
       end
 
-      # Rename original to backup (instant, no extra disk space on same filesystem)
-      FileUtils.mv(target_path, backup_path)
-
       begin
-        # Move normalized file into place
-        FileUtils.mv(source_path, target_path)
-        # Success - remove backup
-        FileUtils.rm(backup_path)
+        # A rename replaces the directory entry, so the source file's mode
+        # becomes the destination's mode. Preserve the original permissions
+        # rather than accidentally making a private media file world-readable
+        # according to the process umask.
+        target_mode = File.stat(target_path).mode & 0o7777
+        File.chmod(target_mode, source_path)
+        File.rename(source_path, target_path)
+      rescue Errno::EXDEV => e
+        # source_path and target_path are on different filesystems - rename(2)
+        # can't do this atomically, and silently falling back to copy+delete
+        # (as FileUtils.mv would) means a crash mid-copy corrupts target_path
+        # with nothing to recover from. Fail loudly instead of pretending.
+        raise FileManagerError,
+              "Atomic replacement failed: source and target are on different " \
+              "filesystems (#{e.message}) - refusing a non-atomic cross-filesystem replace"
       rescue => e
-        # Rollback on failure
-        if File.exist?(backup_path)
-          FileUtils.mv(backup_path, target_path)
-        end
-        FileUtils.rm_f(source_path)
         raise FileManagerError, "Atomic replacement failed: #{e.message}"
       end
+    end
+
+    # Writes content to path without ever leaving a truncated/corrupt file
+    # in place: write to a same-directory temp file, then rename it over
+    # path (same single-rename atomicity as atomic_replace above).
+    def self.atomic_write(path, content)
+      temp_path = safe_temp_path(path)
+      published = false
+      mode = File.exist?(path) ? File.stat(path).mode & 0o7777 : 0o600
+      File.open(temp_path, File::WRONLY | File::CREAT | File::EXCL, mode) do |file|
+        file.write(content)
+      end
+      File.rename(temp_path, path)
+      published = true
+    ensure
+      FileUtils.rm_f(temp_path) if temp_path && !published
+    end
+
+    # Copies a potentially large file without exposing a partial destination.
+    # The copy is completed beside the destination and published with one
+    # rename, so ENOSPC, network errors, and interrupts leave any existing
+    # destination untouched.
+    def self.atomic_copy(source_path, destination_path)
+      temp_path = safe_temp_path(destination_path)
+      mode = if File.exist?(destination_path)
+               File.stat(destination_path).mode & 0o7777
+             else
+               File.stat(source_path).mode & 0o7777
+             end
+
+      File.open(temp_path, File::WRONLY | File::CREAT | File::EXCL, mode) do |destination|
+        File.open(source_path, 'rb') do |source|
+          IO.copy_stream(source, destination)
+        end
+      end
+      File.rename(temp_path, destination_path)
+    ensure
+      FileUtils.rm_f(temp_path) if temp_path
     end
 
     def self.safe_temp_path(original_path)

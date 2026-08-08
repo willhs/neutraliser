@@ -41,6 +41,18 @@ RSpec.describe Neutraliser::LocalStager do
 
       expect(path_a).not_to eq(path_b)
     end
+
+    it 'removes a partial staged file when the copy is interrupted' do
+      source = File.join(source_dir, 'movie.mp4')
+      File.write(source, 'video content')
+      allow(FileUtils).to receive(:cp) do |_source, destination|
+        File.write(destination, 'partial')
+        raise Interrupt
+      end
+
+      expect { stager.stage_in(source) }.to raise_error(Interrupt)
+      expect(Dir.children(staging_dir)).to be_empty
+    end
   end
 
   describe '#stage_out' do
@@ -52,6 +64,16 @@ RSpec.describe Neutraliser::LocalStager do
       stager.stage_out(local, dest)
 
       expect(File.read(dest)).to eq('processed')
+    end
+
+    it 'uses an atomic copy so a failed stage-out cannot expose a partial destination' do
+      local = File.join(staging_dir, 'output.mp4')
+      File.write(local, 'processed')
+      dest = File.join(source_dir, 'output.mp4')
+
+      expect(Neutraliser::FileManager).to receive(:atomic_copy).with(local, dest)
+
+      stager.stage_out(local, dest)
     end
   end
 

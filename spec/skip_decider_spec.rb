@@ -45,6 +45,16 @@ RSpec.describe Neutraliser::SkipDecider do
       other_profile = profile.merge(name: 'night')
       expect(decider.already_processed?(video_path, other_profile)).to be false
     end
+
+    it 'ignores a sidecar that cannot be read' do
+      sidecar = File.join(temp_dir, '.neutraliser')
+      File.write(sidecar, '{}')
+      allow(File).to receive(:read).with(sidecar).and_raise(Errno::EACCES, 'permission denied')
+
+      decider = described_class.new(temp_dir)
+
+      expect(decider.already_processed?(video_path, profile)).to be false
+    end
   end
 
   describe '#skip?' do

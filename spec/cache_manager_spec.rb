@@ -58,6 +58,16 @@ RSpec.describe Neutraliser::CacheManager do
       expect(loaded).to be_nil
       expect(File.exist?(cache_file)).to be(false)
     end
+
+    it 'falls back to fresh analysis when an invalid cache cannot be deleted' do
+      manager = described_class.new(enabled: true)
+      cache_file = manager.cache_path(video_file, profile)
+      File.write(cache_file, JSON.pretty_generate({ 'cache_version' => '0.0' }))
+      allow(File).to receive(:delete).with(cache_file).and_raise(Errno::EROFS, 'read-only filesystem')
+
+      expect(manager.load_cached_analysis(video_file, profile)).to be_nil
+      expect(File.exist?(cache_file)).to be(true)
+    end
   end
 
   describe '#cleanup_stale_cache' do

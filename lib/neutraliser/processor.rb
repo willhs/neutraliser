@@ -174,7 +174,7 @@ module Neutraliser
 
       File.open(manifest_path, 'a') { |manifest| manifest.puts(JSON.generate(entry)) }
     rescue StandardError => e
-      log "Warning: Could not write run manifest entry: #{e.message}"
+      log "Warning: Could not write run manifest entry (#{e.class}): #{e.message}"
     end
 
     def summarize_results(found:, queued:, resumed:, manifest_path:, results:)
@@ -320,9 +320,10 @@ module Neutraliser
     # Shared render step for both normalization strategies (fast single-pass
     # and two-pass): pick the output path, detect audio tracks, apply the
     # caller-supplied normalization (the only variation point), verify, and
-    # commit - with a single rescue->cleanup->re-raise for a partially
-    # written output_path.
+    # commit - with a single ensure-based cleanup for a partially written
+    # output_path.
     def render_normalization(original_path, working_path, log_message:)
+      committed = false
       output_path = if @replace
                       FileManager.safe_temp_path(working_path)
                     else
@@ -344,10 +345,13 @@ module Neutraliser
       end
 
       commit_output(original_path, output_path)
+      committed = true
       codec_decision
-    rescue => e
-      FileUtils.rm_f(output_path) if output_path && File.exist?(output_path)
-      raise e
+    ensure
+      # ensure (not rescue) so this also runs on Interrupt/SignalException,
+      # e.g. Ctrl-C mid-run - rescue => only catches StandardError and would
+      # silently leak this temp file on a signal.
+      FileUtils.rm_f(output_path) if output_path && !committed && File.exist?(output_path)
     end
 
     def commit_output(original_path, output_path)

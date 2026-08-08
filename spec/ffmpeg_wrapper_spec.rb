@@ -561,4 +561,39 @@ RSpec.describe Neutraliser::FFmpegWrapper do
       end
     end
   end
+
+  # Regression coverage for the class of bug fixed in 36811f5: a filename or
+  # path built into a shell string (`.join(' ')` + `system(cmd)`) lets shell
+  # metacharacters escape the intended single argument. execute_with_timeout
+  # runs `Open3.popen3(*cmd)` (array-form, no shell), so these paths are
+  # never tokenized/interpreted - they're each just one argv element handed
+  # straight to the ffprobe/ffmpeg process. Real (unmocked) subprocess calls,
+  # deliberately, so a future regression to string-built shell commands would
+  # actually execute the injected command and fail this test.
+  describe 'shell-injection safety (regression for the 36811f5 token-in-shell bug)' do
+    it 'never invokes a shell, even when the path contains shell metacharacters' do
+      marker = File.join(Dir.mktmpdir, 'pwned')
+      malicious_path = "/nonexistent; touch #{marker}; echo '.mp4"
+
+      expect(described_class.probe_duration(malicious_path)).to be_nil
+      expect(File.exist?(marker)).to be(false)
+    end
+
+    it 'treats a command-substitution-laden path as a literal filename, not a subshell' do
+      marker = File.join(Dir.mktmpdir, 'pwned')
+      malicious_path = "/nonexistent/$(touch #{marker}).mp4"
+
+      expect(described_class.probe_duration(malicious_path)).to be_nil
+      expect(File.exist?(marker)).to be(false)
+    end
+
+    it 'handles quotes, spaces, and unicode in filenames as a single literal argument' do
+      dir = Dir.mktmpdir
+      weird_path = File.join(dir, %(a "quoted" 'file' & spaced 名前.mp4))
+
+      expect(described_class.probe_duration(weird_path)).to be_nil
+    ensure
+      FileUtils.remove_entry(dir) if dir
+    end
+  end
 end
