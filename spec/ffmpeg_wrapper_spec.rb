@@ -88,14 +88,15 @@ RSpec.describe Neutraliser::FFmpegWrapper do
   end
 
   describe 'public surface' do
-    it 'exposes only the intended ~6 methods' do
+    it 'exposes only the intended ~7 methods' do
       expect(described_class.singleton_methods(false)).to contain_exactly(
         :measure_loudness,
         :probe_duration,
         :quick_loudness_sample,
         :apply_normalization,
         :apply_normalization_single_pass,
-        :detect_audio_tracks
+        :detect_audio_tracks,
+        :stream_counts
       )
     end
   end
@@ -112,6 +113,10 @@ RSpec.describe Neutraliser::FFmpegWrapper do
     end
 
     let(:profile) { { lufs: -20.0, tp: -1.5, lra: 12.0 } }
+
+    before do
+      allow(described_class).to receive(:stream_counts).and_return(video: 0, subtitle: 0)
+    end
 
     it 'uses source-matched codec for primary track and copies additional tracks' do
       tracks = [
@@ -161,6 +166,27 @@ RSpec.describe Neutraliser::FFmpegWrapper do
       end
     end
 
+    it 'maps per-stream metadata for every video and subtitle stream, not just audio' do
+      # Issuing any stream-scoped -map_metadata disables ffmpeg's default
+      # implicit per-stream metadata copy for the whole command, so video
+      # and subtitle streams need their own explicit mapping too, or their
+      # language/title tags come out empty despite being plain stream-copies.
+      tracks = [{ index: 0, channels: 2, codec: 'aac', bit_rate: 128_000, sample_rate: 48_000 }]
+      allow(described_class).to receive(:stream_counts).and_return(video: 2, subtitle: 3)
+      allow(described_class).to receive(:execute_with_timeout).and_return(['', 'Normalization Type:   Linear', ok_status])
+
+      described_class.apply_normalization('in.mkv', 'out.mkv', measured_data, profile, audio_tracks: tracks)
+
+      expect(described_class).to have_received(:execute_with_timeout) do |cmd, *_rest|
+        expect(cmd).to include('-map_metadata:s:v:0', '0:s:v:0', '-map_metadata:s:v:1', '0:s:v:1')
+        expect(cmd).to include(
+          '-map_metadata:s:s:0', '0:s:s:0',
+          '-map_metadata:s:s:1', '0:s:s:1',
+          '-map_metadata:s:s:2', '0:s:s:2'
+        )
+      end
+    end
+
     it 'records Dynamic normalization type when loudnorm falls back silently' do
       tracks = [{ index: 0, channels: 2, codec: 'aac', bit_rate: 128_000, sample_rate: 48_000 }]
       allow(described_class).to receive(:execute_with_timeout).and_return(['', 'Normalization Type:   Dynamic', ok_status])
@@ -187,6 +213,10 @@ RSpec.describe Neutraliser::FFmpegWrapper do
 
   describe '.apply_normalization_single_pass' do
     let(:profile) { { lufs: -20.0, tp: -1.5, lra: 12.0, name: 'livingroom' } }
+
+    before do
+      allow(described_class).to receive(:stream_counts).and_return(video: 0, subtitle: 0)
+    end
 
     it 'builds a loudnorm filter without measured values' do
       allow(described_class).to receive(:detect_audio_tracks).and_return(
@@ -530,15 +560,21 @@ RSpec.describe Neutraliser::FFmpegWrapper do
           '-f', 'lavfi', '-i', 'color=c=blue:size=64x64:duration=12',
           '-f', 'lavfi', '-i', 'anoisesrc=color=pink:duration=12:sample_rate=48000',
           '-f', 'lavfi', '-i', 'anoisesrc=color=blue:duration=12:sample_rate=48000',
-          '-map', '0:v', '-map', '1:a', '-map', '2:a',
+          '-f', 'srt', '-i', '-',
+          '-map', '0:v', '-map', '1:a', '-map', '2:a', '-map', '3:s',
           '-c:v', 'libx264', '-preset', 'ultrafast',
+          '-metadata:s:v:0', 'language=eng', '-metadata:s:v:0', 'title=Video Track',
           '-c:a:0', 'aac', '-ac:a:0', '2', '-b:a:0', '256k',
           '-metadata:s:a:0', 'language=eng', '-metadata:s:a:0', 'title=English Track',
           '-c:a:1', 'aac', '-ac:a:1', '2', '-b:a:1', '128k',
           '-metadata:s:a:1', 'language=jpn', '-metadata:s:a:1', 'title=Japanese Track',
+          '-c:s', 'srt',
+          '-metadata:s:s:0', 'language=fre', '-metadata:s:s:0', 'title=French Subs',
           input
         ]
-        raise 'fixture generation failed' unless system(*fixture_cmd)
+        srt_fixture = "1\n00:00:00,000 --> 00:00:01,000\nBonjour\n"
+        Open3.popen2(*fixture_cmd) { |stdin, _stdout, wait_thr| stdin.write(srt_fixture); stdin.close; wait_thr.value }
+        raise 'fixture generation failed' unless File.exist?(input)
 
         audio_tracks = described_class.detect_audio_tracks(input)
         expect(audio_tracks.map { |t| t[:bit_rate] }).to all(be_nil) # MKV: no reported bit_rate, forces estimation
@@ -553,6 +589,18 @@ RSpec.describe Neutraliser::FFmpegWrapper do
         secondary_tags = ffprobe_stream(output, 'a:1', 'stream_tags=language,title')['tags']
         expect(secondary_tags['language']).to eq('jpn')
         expect(secondary_tags['title']).to eq('Japanese Track')
+
+        # Regression coverage: video and subtitle streams are plain stream-copies,
+        # but issuing any stream-scoped -map_metadata (as the audio tracks above
+        # require) disables ffmpeg's implicit per-stream metadata auto-copy for
+        # the whole command — video/subtitle need their own explicit mapping too.
+        video_tags = ffprobe_stream(output, 'v:0', 'stream_tags=language,title')['tags']
+        expect(video_tags['language']).to eq('eng')
+        expect(video_tags['title']).to eq('Video Track')
+
+        subtitle_tags = ffprobe_stream(output, 's:0', 'stream_tags=language,title')['tags']
+        expect(subtitle_tags['language']).to eq('fre')
+        expect(subtitle_tags['title']).to eq('French Subs')
 
         # Estimated from packet sampling (no BPS tag from ffmpeg's own muxer) —
         # must land near the real ~256k source, not the 128k AAC stereo floor.

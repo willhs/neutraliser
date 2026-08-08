@@ -176,7 +176,7 @@ module Neutraliser
 
       cmd = build_complete_ffmpeg_command(
         input_path, output_path, audio_filter,
-        codec_args, audio_tracks
+        codec_args, audio_tracks, stream_counts(input_path)
       )
 
       ffmpeg_output = execute_with_progress(cmd)
@@ -197,7 +197,7 @@ module Neutraliser
 
       cmd = build_complete_ffmpeg_command(
         input_path, output_path, loudnorm_filter,
-        codec_args, audio_tracks
+        codec_args, audio_tracks, stream_counts(input_path)
       )
 
       ffmpeg_output = execute_with_progress(cmd)
@@ -207,6 +207,35 @@ module Neutraliser
       normalization_type = parse_normalization_type(ffmpeg_output) || 'Dynamic'
 
       codec_decision.merge(normalization_type: normalization_type)
+    end
+
+    # Counts video and subtitle streams so build_complete_ffmpeg_command can
+    # emit an explicit -map_metadata:s:v:N / :s:s:N pair for each one. Once
+    # the audio loop below issues any stream-scoped -map_metadata, ffmpeg's
+    # implicit "auto-copy every output stream's metadata from its matching
+    # input stream" behaviour is disabled for the whole command — video and
+    # subtitle streams need the same explicit treatment or their language/
+    # title tags come out empty despite being stream-copied. Best-effort:
+    # a failed/unparseable probe just means no video/subtitle metadata
+    # mappings are added, not a hard failure of the normalization itself.
+    def self.stream_counts(input_path)
+      cmd = [
+        "ffprobe", "-v", "error", "-select_streams", "v",
+        "-show_entries", "stream=index", "-of", "csv=p=0", input_path
+      ]
+      video_stdout, _stderr, status = execute_with_timeout(cmd, PROBE_TIMEOUT, "Video stream count")
+      video_count = status.success? ? video_stdout.each_line.count { |l| !l.strip.empty? } : 0
+
+      cmd = [
+        "ffprobe", "-v", "error", "-select_streams", "s",
+        "-show_entries", "stream=index", "-of", "csv=p=0", input_path
+      ]
+      subtitle_stdout, _stderr, status = execute_with_timeout(cmd, PROBE_TIMEOUT, "Subtitle stream count")
+      subtitle_count = status.success? ? subtitle_stdout.each_line.count { |l| !l.strip.empty? } : 0
+
+      { video: video_count, subtitle: subtitle_count }
+    rescue StandardError
+      { video: 0, subtitle: 0 }
     end
 
     def self.detect_audio_tracks(input_path)
@@ -507,7 +536,7 @@ module Neutraliser
       match && match[1].capitalize
     end
 
-    def self.build_complete_ffmpeg_command(input_path, output_path, loudnorm_filter, primary_codec, audio_tracks)
+    def self.build_complete_ffmpeg_command(input_path, output_path, loudnorm_filter, primary_codec, audio_tracks, stream_counts = { video: 0, subtitle: 0 })
       cmd = [
         "ffmpeg", "-hide_banner", "-y", "-i", input_path,
         # Video stream - always copy
@@ -534,13 +563,20 @@ module Neutraliser
       # doesn't carry per-stream tags (language, title) onto it, so it needs
       # an explicit per-stream mapping back to its source audio index. Once
       # any stream-scoped -map_metadata is given, ffmpeg drops its default
-      # automatic per-stream metadata copy entirely — so every audio output
-      # stream (not just the primary) needs its own explicit mapping, or the
-      # copied secondary tracks would go from implicitly-correct to silently
-      # stripped.
+      # automatic per-stream metadata copy entirely for the whole command —
+      # so every audio, video, and subtitle output stream (not just the
+      # primary audio one) needs its own explicit mapping, or streams that
+      # are otherwise a plain stream-copy would go from implicitly-correct
+      # to silently stripped of language/title tags.
       cmd += ["-map_chapters", "0", "-map_metadata", "0"]
       audio_tracks.each_with_index do |track, output_index|
         cmd += ["-map_metadata:s:a:#{output_index}", "0:s:a:#{track[:index]}"]
+      end
+      stream_counts[:video].to_i.times do |i|
+        cmd += ["-map_metadata:s:v:#{i}", "0:s:v:#{i}"]
+      end
+      stream_counts[:subtitle].to_i.times do |i|
+        cmd += ["-map_metadata:s:s:#{i}", "0:s:s:#{i}"]
       end
       cmd += [
         "-map", "0:s?", "-c:s", "copy",

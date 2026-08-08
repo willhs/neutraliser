@@ -33,6 +33,7 @@ Entry point and navigation map for the neutraliser documentation set. Neutralise
 
 ## Research
 - [`research/landscape.md`](research/landscape.md) — Market and prior-art survey
+- [`research/library-validation-2026-08.md`](research/library-validation-2026-08.md) — Pre-release validation run over a real NAS/Plex library slice; found and fixed a video/subtitle metadata-preservation bug
 
 ## Tasks
 - [`tasks/0001-plex-library-analysis/task.md`](tasks/0001-plex-library-analysis/task.md) — Plex library audio analysis command (complete)
@@ -51,3 +52,4 @@ Entry point and navigation map for the neutraliser documentation set. Neutralise
 ### Change Log
 - 2025-09-24 (agent:create-project): Created initial documentation index scaffold
 - 2026-04-12 (agent:docs-lint): Rebuilt with agent notice, linked entries, orphaned files added, broken links removed
+- 2026-08-09 (agent:validation-run): Added library-validation-2026-08.md; linked new research entry
