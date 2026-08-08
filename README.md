@@ -8,6 +8,17 @@ It uses FFmpeg's EBU R128 `loudnorm` filter to bring every file to the same perc
 neutraliser process /media/movies --profile livingroom
 ```
 
+## What it actually does
+
+![Integrated loudness before and after normalisation: eight files spread across 18.7 LU converge to within 0.3 LU of the -20 LUFS target](demo/loudness-before-after.svg)
+
+Eight files spread across 18.7 LU, levelled to within 0.3 LU of target. Don't take
+the chart's word for it — [`demo/run.rb`](demo/README.md) regenerates it from
+scratch, and `ruby demo/run.rb --source ~/media/movies` runs the same before/after
+measurement over your own library (on copies; originals untouched). Loudness is
+measured with ffmpeg's `ebur128` filter, not the `loudnorm` filter Neutraliser uses
+to decide — so it isn't grading its own homework.
+
 ## Why this exists
 
 Plex's own "Normalize Multi-Channel Audio" setting doesn't fix it — it doesn't touch dynamic range within a file and doesn't apply to every client. The usual workarounds are client-side band-aids (soundbar night mode, Windows loudness equalisation) or a full transcode-automation platform like Tdarr, which people accurately describe as powerful but annoying to set up for one job.
