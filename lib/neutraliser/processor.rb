@@ -222,7 +222,11 @@ module Neutraliser
                      process_file_two_pass(file_path, working_path, movie)
                    end
 
-          if result[:status] == :done || result[:status] == :skipped
+          # A dry run must never stamp the sidecar. Its :dry_run result is
+          # status :done ("we handled this file"), but nothing was written —
+          # marking it processed would make the real run that follows skip
+          # the file as already normalised, silently leaving it untouched.
+          if !@dry_run && (result[:status] == :done || result[:status] == :skipped)
             @skip_decider&.mark_processed(file_path, @profile)
           end
 

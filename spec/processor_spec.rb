@@ -139,6 +139,33 @@ RSpec.describe Neutraliser::Processor do
         .to output(/\[DRY RUN\] Would normalize: -18.0 LUFS → -20.0 LUFS/).to_stdout
     end
 
+    it 'does not mark a file processed during a dry run' do
+      # Regression: a dry run returns status :done, which used to satisfy the
+      # mark-processed condition and stamp the sidecar. The real run that
+      # followed then skipped the file as already normalised, silently
+      # leaving it untouched — the exact sequence the README recommends.
+      processor = described_class.new(dry_run: true)
+      movie = instance_double(FFMPEG::Movie, path: video_file, audio_stream: true)
+      measured = Neutraliser::Measurement.from_loudnorm_json(
+        'input_i' => '-40.0',
+        'input_tp' => '-12.0',
+        'input_lra' => '8.0',
+        'input_thresh' => '-50.0',
+        'target_offset' => '0.0'
+      )
+      skip_decider = instance_double(Neutraliser::SkipDecider, already_processed?: false)
+
+      allow(FFMPEG::Movie).to receive(:new).and_return(movie)
+      allow(processor).to receive(:analyze_loudness_for_path).and_return(measured)
+      processor.instance_variable_set(:@skip_decider, skip_decider)
+
+      expect(skip_decider).not_to receive(:mark_processed)
+
+      result = nil
+      expect { result = processor.send(:process_file, video_file) }.to output(/DRY RUN/).to_stdout
+      expect(result[:reason]).to eq(:dry_run)
+    end
+
     it 'handles analysis errors by reporting and continuing' do
       processor = described_class.new
       movie = instance_double(FFMPEG::Movie, path: video_file, audio_stream: true)
