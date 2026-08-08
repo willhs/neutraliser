@@ -70,6 +70,18 @@ RSpec.describe Neutraliser::FileManager do
       expect(File.read(target)).to eq('old')
       expect(File.read(source)).to eq('new')
     end
+
+    it 'preserves the original file permission bits' do
+      source = File.join(temp_dir, 'source.mp4')
+      target = File.join(temp_dir, 'target.mp4')
+      File.write(source, 'new')
+      File.write(target, 'old')
+      File.chmod(0o600, target)
+
+      described_class.atomic_replace(source, target)
+
+      expect(File.stat(target).mode & 0o7777).to eq(0o600)
+    end
   end
 
   describe '.atomic_write' do
@@ -97,9 +109,53 @@ RSpec.describe Neutraliser::FileManager do
 
     it 'cleans up the temp file and re-raises if the write fails' do
       path = File.join(temp_dir, 'cache.json')
-      allow(File).to receive(:write).and_raise(Errno::ENOSPC, 'no space left on device')
+      allow_any_instance_of(File).to receive(:write).and_raise(Errno::ENOSPC, 'no space left on device')
 
       expect { described_class.atomic_write(path, 'content') }.to raise_error(Errno::ENOSPC)
+      expect(Dir.glob(File.join(temp_dir, '*_neutraliser_*'))).to be_empty
+    end
+
+    it 'cleans up the temp file when the write is interrupted' do
+      path = File.join(temp_dir, 'cache.json')
+      allow_any_instance_of(File).to receive(:write).and_raise(Interrupt)
+
+      expect { described_class.atomic_write(path, 'content') }.to raise_error(Interrupt)
+      expect(Dir.glob(File.join(temp_dir, '*_neutraliser_*'))).to be_empty
+    end
+
+    it 'creates new sidecars with private permissions' do
+      path = File.join(temp_dir, 'cache.json')
+
+      described_class.atomic_write(path, 'content')
+
+      expect(File.stat(path).mode & 0o7777).to eq(0o600)
+    end
+  end
+
+  describe '.atomic_copy' do
+    it 'publishes a completed copy and preserves existing destination permissions' do
+      source = File.join(temp_dir, 'source.mp4')
+      destination = File.join(temp_dir, 'destination.mp4')
+      File.write(source, 'new content')
+      File.write(destination, 'old content')
+      File.chmod(0o600, destination)
+
+      described_class.atomic_copy(source, destination)
+
+      expect(File.read(destination)).to eq('new content')
+      expect(File.stat(destination).mode & 0o7777).to eq(0o600)
+    end
+
+    it 'leaves an existing destination untouched and cleans up after a partial-copy failure' do
+      source = File.join(temp_dir, 'source.mp4')
+      destination = File.join(temp_dir, 'destination.mp4')
+      File.write(source, 'new content')
+      File.write(destination, 'old content')
+      allow(IO).to receive(:copy_stream).and_raise(Errno::ENOSPC, 'no space left on device')
+
+      expect { described_class.atomic_copy(source, destination) }.to raise_error(Errno::ENOSPC)
+
+      expect(File.read(destination)).to eq('old content')
       expect(Dir.glob(File.join(temp_dir, '*_neutraliser_*'))).to be_empty
     end
   end

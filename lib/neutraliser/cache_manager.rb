@@ -29,19 +29,19 @@ module Neutraliser
 
         # Version compatibility check
         if cached_data['cache_version'] != CACHE_VERSION
-          File.delete(cache_file)
+          discard_cache(cache_file)
           return nil
         end
 
         # Profile compatibility check
         if !profiles_compatible?(cached_data['profile'], profile)
-          File.delete(cache_file)
+          discard_cache(cache_file)
           return nil
         end
 
         # File modification time check
         if File.mtime(video_path) > File.mtime(cache_file)
-          File.delete(cache_file)
+          discard_cache(cache_file)
           return nil
         end
 
@@ -50,15 +50,17 @@ module Neutraliser
         # deliberately dropped here, not carried in the returned value).
         measurement = Measurement.from_cache_h(cached_data)
         unless measurement
-          File.delete(cache_file)
+          discard_cache(cache_file)
           return nil
         end
 
         measurement
 
-      rescue JSON::ParserError, StandardError => e
-        # Corrupt or invalid cache file
-        File.delete(cache_file) if File.exist?(cache_file)
+      rescue StandardError => e
+        # Cache I/O is always best-effort. A read-only or temporarily
+        # unavailable network filesystem must not block media processing.
+        Neutraliser.logger.log "  Warning: Could not read analysis cache (#{e.class}): #{e.message}"
+        discard_cache(cache_file)
         nil
       end
     end
@@ -135,6 +137,12 @@ module Neutraliser
     end
 
     private
+
+    def discard_cache(cache_file)
+      File.delete(cache_file) if File.exist?(cache_file)
+    rescue StandardError => e
+      Neutraliser.logger.log "  Warning: Could not remove analysis cache (#{e.class}): #{e.message}"
+    end
 
     def profiles_compatible?(cached_profile, current_profile)
       return false unless cached_profile && current_profile

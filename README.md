@@ -114,7 +114,7 @@ For optional gem builds or development workflow details, see the sections below.
 
 ## Requirements
 
-- **Ruby** 2.7+
+- **Ruby** 3.2+
 - **FFmpeg** 4.2+ available on the command line
 - *(Optional)* **Plex token** in `.env` when using `analyze-plex`
 

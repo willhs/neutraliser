@@ -207,8 +207,8 @@ module Neutraliser
 
       log "Processing: #{file_path}"
 
+      working_path = file_path
       begin
-        working_path = file_path
         if @local_stage
           working_path = @stager.stage_in(file_path)
         end
@@ -217,7 +217,6 @@ module Neutraliser
 
         unless movie.audio_stream
           log "  No audio track found, skipping"
-          @stager&.cleanup(working_path) if @local_stage
           return file_result(file_path, status: :skipped, reason: :no_audio_track)
         end
 
@@ -227,8 +226,6 @@ module Neutraliser
           result = process_file_two_pass(file_path, working_path, movie)
         end
 
-        @stager&.cleanup(working_path) if @local_stage
-
         if result[:status] == :done || result[:status] == :skipped
           @skip_decider&.mark_processed(file_path, @profile)
         end
@@ -237,7 +234,6 @@ module Neutraliser
       rescue FFmpegTimeoutError => e
         # Retryable: the subprocess ran out of time, not evidence the file
         # (or the output already committed) is bad.
-        @stager&.cleanup(working_path) if @local_stage && working_path != file_path
         log "  Timed out processing file: #{e.message}"
         file_result(file_path, status: :failed, reason: :timeout, message: e.message)
       rescue OutputVerificationError => e
@@ -245,24 +241,24 @@ module Neutraliser
         # distinctly so the manifest doesn't read as "same as any other
         # failure" when the real story is "output looked corrupt, original
         # is untouched".
-        @stager&.cleanup(working_path) if @local_stage && working_path != file_path
         log "  Output verification failed: #{e.message}"
         file_result(file_path, status: :failed, reason: :output_verification_failed, message: e.message)
       rescue FFmpegError => e
         # Non-retryable ffmpeg/ffprobe failure (bad container, unsupported
         # codec, failed probe) - distinct from a timeout so the manifest
         # doesn't conflate "try again" with "this file is broken".
-        @stager&.cleanup(working_path) if @local_stage && working_path != file_path
         log "  FFmpeg error processing file: #{e.message}"
         file_result(file_path, status: :failed, reason: :ffmpeg_error, message: e.message)
       rescue FileManagerError => e
-        @stager&.cleanup(working_path) if @local_stage && working_path != file_path
         log "  File management error processing file: #{e.message}"
         file_result(file_path, status: :failed, reason: :file_manager_error, message: e.message)
       rescue => e
-        @stager&.cleanup(working_path) if @local_stage && working_path != file_path
         log "  Error processing file: #{e.message}"
         file_result(file_path, status: :failed, reason: :processing_error, message: e.message)
+      ensure
+        # This also runs for Interrupt/SignalException, which intentionally
+        # bypass the StandardError rescue branches above.
+        @stager&.cleanup(working_path) if @local_stage && working_path != file_path
       end
     end
 

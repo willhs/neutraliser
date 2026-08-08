@@ -32,6 +32,12 @@ module Neutraliser
       end
 
       begin
+        # A rename replaces the directory entry, so the source file's mode
+        # becomes the destination's mode. Preserve the original permissions
+        # rather than accidentally making a private media file world-readable
+        # according to the process umask.
+        target_mode = File.stat(target_path).mode & 0o7777
+        File.chmod(target_mode, source_path)
         File.rename(source_path, target_path)
       rescue Errno::EXDEV => e
         # source_path and target_path are on different filesystems - rename(2)
@@ -51,11 +57,37 @@ module Neutraliser
     # path (same single-rename atomicity as atomic_replace above).
     def self.atomic_write(path, content)
       temp_path = safe_temp_path(path)
-      File.write(temp_path, content)
+      published = false
+      mode = File.exist?(path) ? File.stat(path).mode & 0o7777 : 0o600
+      File.open(temp_path, File::WRONLY | File::CREAT | File::EXCL, mode) do |file|
+        file.write(content)
+      end
       File.rename(temp_path, path)
-    rescue => e
+      published = true
+    ensure
+      FileUtils.rm_f(temp_path) if temp_path && !published
+    end
+
+    # Copies a potentially large file without exposing a partial destination.
+    # The copy is completed beside the destination and published with one
+    # rename, so ENOSPC, network errors, and interrupts leave any existing
+    # destination untouched.
+    def self.atomic_copy(source_path, destination_path)
+      temp_path = safe_temp_path(destination_path)
+      mode = if File.exist?(destination_path)
+               File.stat(destination_path).mode & 0o7777
+             else
+               File.stat(source_path).mode & 0o7777
+             end
+
+      File.open(temp_path, File::WRONLY | File::CREAT | File::EXCL, mode) do |destination|
+        File.open(source_path, 'rb') do |source|
+          IO.copy_stream(source, destination)
+        end
+      end
+      File.rename(temp_path, destination_path)
+    ensure
       FileUtils.rm_f(temp_path) if temp_path
-      raise e
     end
 
     def self.safe_temp_path(original_path)

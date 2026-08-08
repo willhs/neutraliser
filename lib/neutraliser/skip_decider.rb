@@ -106,7 +106,10 @@ module Neutraliser
       return {} unless File.exist?(@path)
 
       JSON.parse(File.read(@path))
-    rescue JSON::ParserError
+    rescue StandardError => e
+      # Sidecars are an optimisation. Permission errors and transient network
+      # filesystem failures should trigger normal analysis, not abort a run.
+      Neutraliser.logger.log "  Warning: Could not read tracker file (#{e.class}): #{e.message}"
       {}
     end
 

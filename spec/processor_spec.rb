@@ -394,5 +394,20 @@ RSpec.describe Neutraliser::Processor do
       staged_files = Dir.glob(File.join(stager.instance_variable_get(:@staging_dir), '*'))
       expect(staged_files).to be_empty
     end
+
+    it 'cleans up the staged input when processing is interrupted' do
+      staged_file = File.join(staging_dir, 'movie_staged.mp4')
+      stager = instance_double(Neutraliser::LocalStager)
+      processor.instance_variable_set(:@stager, stager)
+      allow(stager).to receive(:stage_in).with(video_file).and_return(staged_file)
+      allow(stager).to receive(:cleanup)
+      allow(FFMPEG::Movie).to receive(:new).with(staged_file).and_return(
+        instance_double(FFMPEG::Movie, audio_stream: true)
+      )
+      allow(processor).to receive(:process_file_two_pass).and_raise(Interrupt)
+
+      expect { processor.send(:process_file, video_file) }.to raise_error(Interrupt)
+      expect(stager).to have_received(:cleanup).with(staged_file)
+    end
   end
 end
