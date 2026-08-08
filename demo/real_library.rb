@@ -46,12 +46,10 @@ end.sort_by { |r| r[:before] }
 abort 'No usable rows' if rows.empty?
 
 def svg(rows, target, profile)
-  width  = 780
+  width  = 840
   row_h  = 26
   pad_top = 116
   height = pad_top + (rows.size * row_h) + 62
-  x_before = 250
-  x_after  = 560
 
   all = rows.flat_map { |r| [r[:before], r[:after]] } + [target]
   lo = all.min - 1.0
@@ -71,32 +69,32 @@ def svg(rows, target, profile)
   [-30, -25, -20, -15].each do |lufs|
     next unless lufs.between?(lo, hi)
 
-    sx = xl.call(lufs, 250, width - 40).round(1)
+    sx = xl.call(lufs, 300, width - 90).round(1)
     parts << %(<line x1="#{sx}" y1="#{scale_y + 6}" x2="#{sx}" y2="#{pad_top + (rows.size * row_h) - 6}" ) +
              %(stroke="#{DemoSupport::GRID}" stroke-width="1"/>)
     parts << %(<text x="#{sx}" y="#{scale_y}" font-size="11" fill="#{DemoSupport::MUTED}" text-anchor="middle">#{lufs}</text>)
   end
-  tx = xl.call(target, 250, width - 40).round(1)
+  tx = xl.call(target, 300, width - 90).round(1)
   parts << %(<line x1="#{tx}" y1="#{scale_y + 6}" x2="#{tx}" y2="#{pad_top + (rows.size * row_h) - 6}" ) +
            %(stroke="#{DemoSupport::GREEN}" stroke-width="1.5" stroke-dasharray="4 3" opacity="0.7"/>)
   parts << %(<text x="40" y="#{scale_y}" font-size="11" fill="#{DemoSupport::MUTED}">LUFS</text>)
 
   rows.each_with_index do |r, i|
     cy = pad_top + (i * row_h) + 4
-    bx = xl.call(r[:before], 250, width - 40).round(1)
-    ax = xl.call(r[:after], 250, width - 40).round(1)
-    label = r[:label].length > 30 ? "#{r[:label][0, 29]}…" : r[:label]
-    parts << %(<text x="238" y="#{cy + 4}" font-size="11.5" fill="#{DemoSupport::INK}" text-anchor="end">#{label}</text>)
+    bx = xl.call(r[:before], 300, width - 90).round(1)
+    ax = xl.call(r[:after], 300, width - 90).round(1)
+    label = r[:label].length > 38 ? "#{r[:label][0, 37]}…" : r[:label]
+    parts << %(<text x="288" y="#{cy + 4}" font-size="11.5" fill="#{DemoSupport::INK}" text-anchor="end">#{label}</text>)
     parts << %(<line x1="#{bx}" y1="#{cy}" x2="#{ax}" y2="#{cy}" stroke="#{DemoSupport::MUTED}" stroke-width="1.4" opacity="0.35"/>)
     parts << %(<circle cx="#{bx}" cy="#{cy}" r="4.5" fill="#{DemoSupport::RED}"/>)
     parts << %(<circle cx="#{ax}" cy="#{cy}" r="4.5" fill="#{DemoSupport::GREEN}"/>)
   end
 
   legend_y = pad_top - 52
-  parts << %(<circle cx="256" cy="#{legend_y}" r="5" fill="#{DemoSupport::RED}"/>)
-  parts << %(<text x="268" y="#{legend_y + 4}" font-size="12.5" fill="#{DemoSupport::INK}">before</text>)
-  parts << %(<circle cx="336" cy="#{legend_y}" r="5" fill="#{DemoSupport::GREEN}"/>)
-  parts << %(<text x="348" y="#{legend_y + 4}" font-size="12.5" fill="#{DemoSupport::INK}">after</text>)
+  parts << %(<circle cx="306" cy="#{legend_y}" r="5" fill="#{DemoSupport::RED}"/>)
+  parts << %(<text x="318" y="#{legend_y + 4}" font-size="12.5" fill="#{DemoSupport::INK}">before</text>)
+  parts << %(<circle cx="386" cy="#{legend_y}" r="5" fill="#{DemoSupport::GREEN}"/>)
+  parts << %(<text x="398" y="#{legend_y + 4}" font-size="12.5" fill="#{DemoSupport::INK}">after</text>)
 
   sb = rows.map { |r| r[:before] }
   sa = rows.map { |r| r[:after] }

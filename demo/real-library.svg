@@ -1,0 +1,60 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="840" height="438" viewBox="0 0 840 438" font-family="-apple-system,BlinkMacSystemFont,Segoe UI,Helvetica,Arial,sans-serif">
+<rect width="840" height="438" rx="8" fill="#ffffff"/>
+<text x="32" y="34" font-size="17" font-weight="600" fill="#1b1f24">A real library: 10 films, before and after</text>
+<text x="32" y="54" font-size="12.5" fill="#6a737d">measured with ffmpeg ebur128 &#183; "before" from neutraliser's own analysis sidecars &#183; target -20.0 LUFS</text>
+<line x1="332.7" y1="92" x2="332.7" y2="370" stroke="#e3e6ea" stroke-width="1"/>
+<text x="332.7" y="86" font-size="11" fill="#6a737d" text-anchor="middle">-30</text>
+<line x1="452.9" y1="92" x2="452.9" y2="370" stroke="#e3e6ea" stroke-width="1"/>
+<text x="452.9" y="86" font-size="11" fill="#6a737d" text-anchor="middle">-25</text>
+<line x1="573.1" y1="92" x2="573.1" y2="370" stroke="#e3e6ea" stroke-width="1"/>
+<text x="573.1" y="86" font-size="11" fill="#6a737d" text-anchor="middle">-20</text>
+<line x1="693.3" y1="92" x2="693.3" y2="370" stroke="#e3e6ea" stroke-width="1"/>
+<text x="693.3" y="86" font-size="11" fill="#6a737d" text-anchor="middle">-15</text>
+<line x1="573.1" y1="92" x2="573.1" y2="370" stroke="#2a9d8f" stroke-width="1.5" stroke-dasharray="4 3" opacity="0.7"/>
+<text x="40" y="86" font-size="11" fill="#6a737d">LUFS</text>
+<text x="288" y="124" font-size="11.5" fill="#1b1f24" text-anchor="end">The Road to El Dorado (2000) (1080p)</text>
+<line x1="324.0" y1="120" x2="570.7" y2="120" stroke="#6a737d" stroke-width="1.4" opacity="0.35"/>
+<circle cx="324.0" cy="120" r="4.5" fill="#d1495b"/>
+<circle cx="570.7" cy="120" r="4.5" fill="#2a9d8f"/>
+<text x="288" y="150" font-size="11.5" fill="#1b1f24" text-anchor="end">The Revenant (2015)</text>
+<line x1="382.9" y1="146" x2="570.7" y2="146" stroke="#6a737d" stroke-width="1.4" opacity="0.35"/>
+<circle cx="382.9" cy="146" r="4.5" fill="#d1495b"/>
+<circle cx="570.7" cy="146" r="4.5" fill="#2a9d8f"/>
+<text x="288" y="176" font-size="11.5" fill="#1b1f24" text-anchor="end">The Promotion (2008)</text>
+<line x1="427.2" y1="172" x2="573.1" y2="172" stroke="#6a737d" stroke-width="1.4" opacity="0.35"/>
+<circle cx="427.2" cy="172" r="4.5" fill="#d1495b"/>
+<circle cx="573.1" cy="172" r="4.5" fill="#2a9d8f"/>
+<text x="288" y="202" font-size="11.5" fill="#1b1f24" text-anchor="end">Wayne's World 2 (1993)</text>
+<line x1="443.5" y1="198" x2="573.1" y2="198" stroke="#6a737d" stroke-width="1.4" opacity="0.35"/>
+<circle cx="443.5" cy="198" r="4.5" fill="#d1495b"/>
+<circle cx="573.1" cy="198" r="4.5" fill="#2a9d8f"/>
+<text x="288" y="228" font-size="11.5" fill="#1b1f24" text-anchor="end">The Road to El Dorado (2000) (SD)</text>
+<line x1="483.4" y1="224" x2="573.1" y2="224" stroke="#6a737d" stroke-width="1.4" opacity="0.35"/>
+<circle cx="483.4" cy="224" r="4.5" fill="#d1495b"/>
+<circle cx="573.1" cy="224" r="4.5" fill="#2a9d8f"/>
+<text x="288" y="254" font-size="11.5" fill="#1b1f24" text-anchor="end">Toy Story 3 (2010)</text>
+<line x1="516.6" y1="250" x2="570.7" y2="250" stroke="#6a737d" stroke-width="1.4" opacity="0.35"/>
+<circle cx="516.6" cy="250" r="4.5" fill="#d1495b"/>
+<circle cx="570.7" cy="250" r="4.5" fill="#2a9d8f"/>
+<text x="288" y="280" font-size="11.5" fill="#1b1f24" text-anchor="end">The Scorpion King (2002)</text>
+<line x1="632.2" y1="276" x2="573.1" y2="276" stroke="#6a737d" stroke-width="1.4" opacity="0.35"/>
+<circle cx="632.2" cy="276" r="4.5" fill="#d1495b"/>
+<circle cx="573.1" cy="276" r="4.5" fill="#2a9d8f"/>
+<text x="288" y="306" font-size="11.5" fill="#1b1f24" text-anchor="end">Upgrade (2018)</text>
+<line x1="635.6" y1="302" x2="573.1" y2="302" stroke="#6a737d" stroke-width="1.4" opacity="0.35"/>
+<circle cx="635.6" cy="302" r="4.5" fill="#d1495b"/>
+<circle cx="573.1" cy="302" r="4.5" fill="#2a9d8f"/>
+<text x="288" y="332" font-size="11.5" fill="#1b1f24" text-anchor="end">X-Men (2000)</text>
+<line x1="676.7" y1="328" x2="573.1" y2="328" stroke="#6a737d" stroke-width="1.4" opacity="0.35"/>
+<circle cx="676.7" cy="328" r="4.5" fill="#d1495b"/>
+<circle cx="573.1" cy="328" r="4.5" fill="#2a9d8f"/>
+<text x="288" y="358" font-size="11.5" fill="#1b1f24" text-anchor="end">The Mummy (1999)</text>
+<line x1="726.0" y1="354" x2="573.1" y2="354" stroke="#6a737d" stroke-width="1.4" opacity="0.35"/>
+<circle cx="726.0" cy="354" r="4.5" fill="#d1495b"/>
+<circle cx="573.1" cy="354" r="4.5" fill="#2a9d8f"/>
+<circle cx="306" cy="64" r="5" fill="#d1495b"/>
+<text x="318" y="68" font-size="12.5" fill="#1b1f24">before</text>
+<circle cx="386" cy="64" r="5" fill="#2a9d8f"/>
+<text x="398" y="68" font-size="12.5" fill="#1b1f24">after</text>
+<text x="40" y="416" font-size="12.5" fill="#1b1f24">Spread: <tspan fill="#d1495b" font-weight="600">16.7 LU</tspan> &#8594; <tspan fill="#2a9d8f" font-weight="600">0.1 LU</tspan></text>
+</svg>

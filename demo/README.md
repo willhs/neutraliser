@@ -101,9 +101,24 @@ Re-measure those files to get the "after" side, build a
 ruby demo/real_library.rb --pairs pairs.tsv
 ```
 
+The data behind the README's chart is committed as `demo/real-library-pairs.tsv`,
+so the chart can be regenerated without access to the library it came from.
+
 Measuring runs wherever the library lives (a NAS is usually far slower than a
 laptop — budget minutes per film), which is why this step is a separate script
-rather than folded into `run.rb`.
+rather than folded into `run.rb`. A loop over the pairs looks like:
+
+```bash
+while IFS= read -r f; do
+  ffmpeg -nostdin -hide_banner -nostats -i "$f" -map a:0 \
+         -af ebur128=framelog=quiet -f null - 2>&1 |
+    grep -A2 'Integrated loudness' | grep 'I:'
+done < paths.txt
+```
+
+`-nostdin` is not optional here. Without it ffmpeg consumes the very list being
+fed to the `read` loop, and every iteration after the first gets a truncated
+path.
 
 ## Verified on real film audio
 

@@ -10,11 +10,24 @@ neutraliser process /media/movies --profile livingroom
 
 ## What it actually does
 
+Ten films from a real 800-film Plex library, before and after — **16.7 LU of spread reduced to 0.1 LU**:
+
+![Ten real films charted before and after normalisation. Before, they range from -30.4 to -13.6 LUFS; after, all ten sit at -20.0 or -20.1](demo/real-library.svg)
+
+Nothing here is staged. The "before" figures are what Neutraliser recorded in its own
+analysis sidecars when it first saw each file; the "after" is an independent `ebur128`
+measurement of those same files today. `demo/real_library.rb` builds this from any
+library Neutraliser has run over — [the method is documented](demo/README.md).
+
+Across that whole library, **716 of 804 films (89%) now sit within 1 LU of the target**.
+The remainder are files added since the last run — which is what `--resume` and the
+skip-already-normalised sidecars are for.
+
 Four files played back to back — the loud remaster after the quiet film is the moment you reach for the remote:
 
 ![Perceived loudness across four files played back to back. Before normalisation the level steps between -27 and -11 LUFS at each file boundary; after, it holds flat at -20 LUFS](demo/loudness-over-time.svg)
 
-Across a whole library, the same thing per file — 8 files spread over ~19 LU, levelled to within a fraction of a LU of target:
+And the same again on synthetic clips, if you'd rather run it yourself than trust someone else's library — 8 files spread over ~19 LU:
 
 ![Integrated loudness before and after normalisation: eight files spread across roughly 19 LU converge onto the -20 LUFS target](demo/loudness-before-after.svg)
 
