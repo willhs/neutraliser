@@ -284,7 +284,7 @@ RSpec.describe Neutraliser::Processor do
       linear_processor.send(:normalize_file_with_paths, video_file, video_file, measured_data)
 
       expect(Neutraliser::FFmpegWrapper).to have_received(:apply_normalization)
-        .with(video_file, output_file, measured_data, hash_including(linear_only: true))
+        .with(video_file, output_file, measured_data, anything, hash_including(linear_only: true))
     end
   end
 

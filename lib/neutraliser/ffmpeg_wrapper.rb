@@ -163,7 +163,7 @@ module Neutraliser
       nil
     end
 
-    def self.apply_normalization(input_path, output_path, measured_data, target_i: -20.0, target_tp: -1.5, target_lra: 12.0, audio_tracks: nil, linear_only: false)
+    def self.apply_normalization(input_path, output_path, measured_data, profile, audio_tracks: nil, linear_only: false)
       audio_tracks ||= detect_audio_tracks(input_path)
       primary_track = audio_tracks.first || UNKNOWN_AUDIO_TRACK
 
@@ -171,7 +171,7 @@ module Neutraliser
       codec_args = build_codec_args(codec_decision)
 
       audio_filter, forced_normalization_type = build_audio_filter(
-        measured_data, target_i, target_tp, target_lra, primary_track[:sample_rate], linear_only: linear_only
+        measured_data, profile[:lufs], profile[:tp], profile[:lra], primary_track[:sample_rate], linear_only: linear_only
       )
 
       cmd = build_complete_ffmpeg_command(

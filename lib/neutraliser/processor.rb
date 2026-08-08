@@ -26,7 +26,7 @@ module Neutraliser
       @fast = fast
       @local_stage = local_stage
       @linear_only = linear_only
-      @stager = LocalStager.new if local_stage
+      @stager = LocalStager.new(enabled: local_stage)
     end
 
     def process(path)
@@ -208,36 +208,29 @@ module Neutraliser
       log "Processing: #{file_path}"
 
       begin
-        working_path = file_path
-        if @local_stage
-          working_path = @stager.stage_in(file_path)
+        @stager.with_working_copy(file_path) do |working_path|
+          movie = FFMPEG::Movie.new(working_path)
+
+          unless movie.audio_stream
+            log "  No audio track found, skipping"
+            next file_result(file_path, status: :skipped, reason: :no_audio_track)
+          end
+
+          result = if @fast
+                     process_file_fast(file_path, working_path)
+                   else
+                     process_file_two_pass(file_path, working_path, movie)
+                   end
+
+          if result[:status] == :done || result[:status] == :skipped
+            @skip_decider&.mark_processed(file_path, @profile)
+          end
+
+          result
         end
-
-        movie = FFMPEG::Movie.new(working_path)
-
-        unless movie.audio_stream
-          log "  No audio track found, skipping"
-          @stager&.cleanup(working_path) if @local_stage
-          return file_result(file_path, status: :skipped, reason: :no_audio_track)
-        end
-
-        if @fast
-          result = process_file_fast(file_path, working_path)
-        else
-          result = process_file_two_pass(file_path, working_path, movie)
-        end
-
-        @stager&.cleanup(working_path) if @local_stage
-
-        if result[:status] == :done || result[:status] == :skipped
-          @skip_decider&.mark_processed(file_path, @profile)
-        end
-
-        result
       rescue FFmpegTimeoutError => e
         # Retryable: the subprocess ran out of time, not evidence the file
         # (or the output already committed) is bad.
-        @stager&.cleanup(working_path) if @local_stage && working_path != file_path
         log "  Timed out processing file: #{e.message}"
         file_result(file_path, status: :failed, reason: :timeout, message: e.message)
       rescue OutputVerificationError => e
@@ -245,22 +238,18 @@ module Neutraliser
         # distinctly so the manifest doesn't read as "same as any other
         # failure" when the real story is "output looked corrupt, original
         # is untouched".
-        @stager&.cleanup(working_path) if @local_stage && working_path != file_path
         log "  Output verification failed: #{e.message}"
         file_result(file_path, status: :failed, reason: :output_verification_failed, message: e.message)
       rescue FFmpegError => e
         # Non-retryable ffmpeg/ffprobe failure (bad container, unsupported
         # codec, failed probe) - distinct from a timeout so the manifest
         # doesn't conflate "try again" with "this file is broken".
-        @stager&.cleanup(working_path) if @local_stage && working_path != file_path
         log "  FFmpeg error processing file: #{e.message}"
         file_result(file_path, status: :failed, reason: :ffmpeg_error, message: e.message)
       rescue FileManagerError => e
-        @stager&.cleanup(working_path) if @local_stage && working_path != file_path
         log "  File management error processing file: #{e.message}"
         file_result(file_path, status: :failed, reason: :file_manager_error, message: e.message)
       rescue => e
-        @stager&.cleanup(working_path) if @local_stage && working_path != file_path
         log "  Error processing file: #{e.message}"
         file_result(file_path, status: :failed, reason: :processing_error, message: e.message)
       end
@@ -289,35 +278,12 @@ module Neutraliser
         return file_result(original_path, status: :done, reason: :dry_run)
       end
 
-      output_path = if @replace
-                      FileManager.safe_temp_path(working_path)
-                    else
-                      generate_output_path(working_path)
-                    end
+      codec_decision = render_normalization(
+        original_path, working_path,
+        log_message: "  Fast mode: single-pass normalization to #{@profile[:lufs]} LUFS"
+      ) { |wp, out, tracks| FFmpegWrapper.apply_normalization_single_pass(wp, out, tracks, @profile) }
 
-      audio_tracks = FFmpegWrapper.detect_audio_tracks(working_path)
-      warn_if_audio_track_unknown(audio_tracks)
-      if audio_tracks.length > 1
-        log "  Found #{audio_tracks.length} audio tracks, normalizing primary track only"
-      end
-
-      log "  Fast mode: single-pass normalization to #{@profile[:lufs]} LUFS"
-
-      codec_decision = FFmpegWrapper.apply_normalization_single_pass(
-        working_path, output_path, audio_tracks, @profile
-      )
-
-      log_codec_decision(codec_decision)
-
-      unless FileManager.verify_file_integrity(output_path)
-        raise OutputVerificationError, "Output file verification failed - processing aborted"
-      end
-
-      commit_output(original_path, working_path, output_path)
       file_result(original_path, status: :done, reason: :normalized, normalization_type: codec_decision[:normalization_type])
-    rescue => e
-      FileUtils.rm_f(output_path) if output_path && File.exist?(output_path)
-      raise e
     end
 
     # detect_audio_tracks marks a track UNKNOWN_AUDIO_TRACK-shaped when ffprobe
@@ -339,15 +305,29 @@ module Neutraliser
     end
 
     def normalize_file_with_paths(original_path, working_path, measurement)
+      current_lufs = measurement.input_i
+      target_lufs = @profile[:lufs]
+      adjustment = target_lufs - current_lufs
+
+      render_normalization(
+        original_path, working_path,
+        log_message: "  Current: #{current_lufs.round(1)} LUFS, Target: #{target_lufs} LUFS (#{adjustment.round(1)} LU adjustment)"
+      ) do |wp, out, tracks|
+        FFmpegWrapper.apply_normalization(wp, out, measurement, @profile, audio_tracks: tracks, linear_only: @linear_only)
+      end
+    end
+
+    # Shared render step for both normalization strategies (fast single-pass
+    # and two-pass): pick the output path, detect audio tracks, apply the
+    # caller-supplied normalization (the only variation point), verify, and
+    # commit - with a single rescue->cleanup->re-raise for a partially
+    # written output_path.
+    def render_normalization(original_path, working_path, log_message:)
       output_path = if @replace
                       FileManager.safe_temp_path(working_path)
                     else
                       generate_output_path(working_path)
                     end
-
-      current_lufs = measurement.input_i
-      target_lufs = @profile[:lufs]
-      adjustment = target_lufs - current_lufs
 
       audio_tracks = FFmpegWrapper.detect_audio_tracks(working_path)
       warn_if_audio_track_unknown(audio_tracks)
@@ -355,44 +335,25 @@ module Neutraliser
         log "  Found #{audio_tracks.length} audio tracks, normalizing primary track only"
       end
 
-      log "  Current: #{current_lufs.round(1)} LUFS, Target: #{target_lufs} LUFS (#{adjustment.round(1)} LU adjustment)"
-
-      codec_decision = FFmpegWrapper.apply_normalization(
-        working_path, output_path, measurement,
-        target_i: @profile[:lufs], target_tp: @profile[:tp], target_lra: @profile[:lra],
-        audio_tracks: audio_tracks, linear_only: @linear_only
-      )
-
+      log log_message
+      codec_decision = yield(working_path, output_path, audio_tracks)
       log_codec_decision(codec_decision)
 
       unless FileManager.verify_file_integrity(output_path)
         raise OutputVerificationError, "Output file verification failed - processing aborted"
       end
 
-      commit_output(original_path, working_path, output_path)
+      commit_output(original_path, output_path)
       codec_decision
     rescue => e
       FileUtils.rm_f(output_path) if output_path && File.exist?(output_path)
       raise e
     end
 
-    def commit_output(original_path, working_path, output_path)
-      if @replace
-        if @local_stage
-          @stager.stage_out(output_path, original_path)
-          @stager.cleanup(output_path)
-        else
-          FileManager.atomic_replace(output_path, original_path)
-        end
-        log "  Replaced: #{original_path}"
-      else
-        dest = generate_output_path(original_path)
-        if @local_stage
-          @stager.stage_out(output_path, dest)
-          @stager.cleanup(output_path)
-        end
-        log "  Saved: #{dest}"
-      end
+    def commit_output(original_path, output_path)
+      destination = @replace ? original_path : generate_output_path(original_path)
+      @stager.commit(output_path, destination, replace: @replace)
+      log @replace ? "  Replaced: #{original_path}" : "  Saved: #{destination}"
     end
 
     def file_result(file_path, status:, reason:, message: nil, normalization_type: nil)

@@ -120,7 +120,7 @@ RSpec.describe Neutraliser::FFmpegWrapper do
       ]
       allow(described_class).to receive(:execute_with_timeout).and_return(['', 'Normalization Type:   Linear', ok_status])
 
-      result = described_class.apply_normalization('in.mkv', 'out.mkv', measured_data, target_i: profile[:lufs], target_tp: profile[:tp], target_lra: profile[:lra], audio_tracks: tracks)
+      result = described_class.apply_normalization('in.mkv', 'out.mkv', measured_data, profile, audio_tracks: tracks)
 
       expect(described_class).to have_received(:execute_with_timeout) do |cmd, *_rest|
         expect(cmd).to include('-c:a:0', 'ac3', '-b:a:0', '448k')
@@ -140,7 +140,7 @@ RSpec.describe Neutraliser::FFmpegWrapper do
       ]
       allow(described_class).to receive(:execute_with_timeout).and_return(['', 'Normalization Type:   Linear', ok_status])
 
-      described_class.apply_normalization('in.mkv', 'out.mkv', measured_data, target_i: profile[:lufs], target_tp: profile[:tp], target_lra: profile[:lra], audio_tracks: tracks)
+      described_class.apply_normalization('in.mkv', 'out.mkv', measured_data, profile, audio_tracks: tracks)
 
       expect(described_class).to have_received(:execute_with_timeout) do |cmd, *_rest|
         expect(cmd).to include('-map_metadata:s:a:0', '0:s:a:0')
@@ -154,7 +154,7 @@ RSpec.describe Neutraliser::FFmpegWrapper do
       ]
       allow(described_class).to receive(:execute_with_timeout).and_return(['', 'Normalization Type:   Linear', ok_status])
 
-      described_class.apply_normalization('in.mkv', 'out.mkv', measured_data, target_i: profile[:lufs], target_tp: profile[:tp], target_lra: profile[:lra], audio_tracks: tracks)
+      described_class.apply_normalization('in.mkv', 'out.mkv', measured_data, profile, audio_tracks: tracks)
 
       expect(described_class).to have_received(:execute_with_timeout) do |cmd, *_rest|
         expect(cmd).to include('-map_metadata:s:a:0', '0:s:a:2')
@@ -165,7 +165,7 @@ RSpec.describe Neutraliser::FFmpegWrapper do
       tracks = [{ index: 0, channels: 2, codec: 'aac', bit_rate: 128_000, sample_rate: 48_000 }]
       allow(described_class).to receive(:execute_with_timeout).and_return(['', 'Normalization Type:   Dynamic', ok_status])
 
-      result = described_class.apply_normalization('in.mp4', 'out.mp4', measured_data, target_i: profile[:lufs], target_tp: profile[:tp], target_lra: profile[:lra], audio_tracks: tracks)
+      result = described_class.apply_normalization('in.mp4', 'out.mp4', measured_data, profile, audio_tracks: tracks)
 
       expect(result[:normalization_type]).to eq('Dynamic')
     end
@@ -174,7 +174,7 @@ RSpec.describe Neutraliser::FFmpegWrapper do
       tracks = [{ index: 0, channels: 2, codec: 'aac', bit_rate: 128_000, sample_rate: 48_000 }]
       allow(described_class).to receive(:execute_with_timeout).and_return(['', 'Normalization Type:   Dynamic', ok_status])
 
-      result = described_class.apply_normalization('in.mp4', 'out.mp4', measured_data, target_i: profile[:lufs], target_tp: profile[:tp], target_lra: profile[:lra], audio_tracks: tracks, linear_only: true)
+      result = described_class.apply_normalization('in.mp4', 'out.mp4', measured_data, profile, audio_tracks: tracks, linear_only: true)
 
       expect(result[:normalization_type]).to eq('Linear')
       expect(described_class).to have_received(:execute_with_timeout) do |cmd, *_rest|
