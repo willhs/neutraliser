@@ -286,6 +286,55 @@ RSpec.describe Neutraliser::Processor do
       expect(Neutraliser::FFmpegWrapper).to have_received(:apply_normalization)
         .with(video_file, output_file, measured_data, hash_including(linear_only: true))
     end
+
+    it 'cleans up the temp output file even when interrupted (not just on StandardError)' do
+      allow(processor).to receive(:commit_output).and_raise(Interrupt)
+
+      expect { processor.send(:normalize_file_with_paths, video_file, video_file, measured_data) }
+        .to raise_error(Interrupt)
+
+      expect(File.exist?(output_file)).to be(false)
+    end
+
+    it 'does not delete the output file once commit_output has already succeeded' do
+      # Simulate the real artifact commit_output would produce/leave in place
+      # (in copy mode, output_path *is* the final deliverable - the ensure
+      # cleanup must not remove it just because it still exists on disk).
+      File.write(output_file, 'normalized content')
+      allow(processor).to receive(:commit_output)
+
+      processor.send(:normalize_file_with_paths, video_file, video_file, measured_data)
+
+      expect(File.exist?(output_file)).to be(true)
+    end
+  end
+
+  describe '#commit_output with local staging and replace' do
+    let(:processor) { described_class.new(replace: true, local_stage: true) }
+    let(:original_file) { File.join(temp_dir, 'movie.mp4') }
+    let(:staged_output) { File.join(temp_dir, 'staged_output.mp4') }
+
+    before do
+      File.write(original_file, 'original content')
+      File.write(staged_output, 'normalized content')
+    end
+
+    it 'replaces the original atomically via FileManager instead of copying straight over it' do
+      expect(Neutraliser::FileManager).to receive(:atomic_replace).and_call_original
+
+      processor.send(:commit_output, original_file, original_file, staged_output)
+
+      expect(File.read(original_file)).to eq('normalized content')
+    end
+
+    it 'leaves the original file untouched if the atomic replace step fails' do
+      allow(Neutraliser::FileManager).to receive(:atomic_replace).and_raise(Neutraliser::FileManagerError, 'boom')
+
+      expect { processor.send(:commit_output, original_file, original_file, staged_output) }
+        .to raise_error(Neutraliser::FileManagerError, /boom/)
+
+      expect(File.read(original_file)).to eq('original content')
+    end
   end
 
   describe '#process_file with fast mode' do

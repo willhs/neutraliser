@@ -111,9 +111,9 @@ module Neutraliser
     end
 
     def save
-      File.write(@path, JSON.pretty_generate(@entries))
+      FileManager.atomic_write(@path, JSON.pretty_generate(@entries))
     rescue StandardError => e
-      Neutraliser.logger.log "  Warning: Could not write tracker file: #{e.message}"
+      Neutraliser.logger.log "  Warning: Could not write tracker file (#{e.class}): #{e.message}"
     end
   end
 end

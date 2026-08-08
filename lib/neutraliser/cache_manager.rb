@@ -84,10 +84,10 @@ module Neutraliser
           }
         )
 
-        File.write(cache_file, JSON.pretty_generate(cache_data))
+        FileManager.atomic_write(cache_file, JSON.pretty_generate(cache_data))
       rescue StandardError => e
         # Don't fail processing if caching fails, just warn
-        Neutraliser.logger.log "  Warning: Could not save analysis cache: #{e.message}"
+        Neutraliser.logger.log "  Warning: Could not save analysis cache (#{e.class}): #{e.message}"
       end
     end
 

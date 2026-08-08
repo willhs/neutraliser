@@ -37,6 +37,71 @@ RSpec.describe Neutraliser::FileManager do
       expect { described_class.atomic_replace(File.join(temp_dir, 'missing.mp4'), target) }
         .to raise_error(Neutraliser::FileManagerError, /Source file does not exist/)
     end
+
+    it 'never leaves target_path missing partway through (single rename, no backup-swap window)' do
+      source = File.join(temp_dir, 'source.mp4')
+      target = File.join(temp_dir, 'target.mp4')
+      File.write(source, 'new')
+      File.write(target, 'old')
+
+      seen_missing = false
+      allow(File).to receive(:rename).and_wrap_original do |original, *args|
+        seen_missing = true unless File.exist?(target)
+        original.call(*args)
+      end
+
+      described_class.atomic_replace(source, target)
+
+      expect(seen_missing).to be(false)
+      expect(File.exist?(target)).to be(true)
+    end
+
+    it 'raises FileManagerError and leaves both files untouched on cross-filesystem rename (EXDEV)' do
+      source = File.join(temp_dir, 'source.mp4')
+      target = File.join(temp_dir, 'target.mp4')
+      File.write(source, 'new')
+      File.write(target, 'old')
+
+      allow(File).to receive(:rename).with(source, target).and_raise(Errno::EXDEV, 'cross-device link')
+
+      expect { described_class.atomic_replace(source, target) }
+        .to raise_error(Neutraliser::FileManagerError, /different filesystems/)
+
+      expect(File.read(target)).to eq('old')
+      expect(File.read(source)).to eq('new')
+    end
+  end
+
+  describe '.atomic_write' do
+    it 'writes content that is fully readable back (no partial/truncated state observable)' do
+      path = File.join(temp_dir, '.neutraliser')
+
+      described_class.atomic_write(path, '{"a":1}')
+
+      expect(File.read(path)).to eq('{"a":1}')
+    end
+
+    it 'never exposes the destination path missing or truncated mid-write' do
+      path = File.join(temp_dir, 'cache.json')
+      File.write(path, 'original content')
+
+      allow(File).to receive(:rename).and_wrap_original do |original, *args|
+        expect(File.read(path)).to eq('original content')
+        original.call(*args)
+      end
+
+      described_class.atomic_write(path, 'new content')
+
+      expect(File.read(path)).to eq('new content')
+    end
+
+    it 'cleans up the temp file and re-raises if the write fails' do
+      path = File.join(temp_dir, 'cache.json')
+      allow(File).to receive(:write).and_raise(Errno::ENOSPC, 'no space left on device')
+
+      expect { described_class.atomic_write(path, 'content') }.to raise_error(Errno::ENOSPC)
+      expect(Dir.glob(File.join(temp_dir, '*_neutraliser_*'))).to be_empty
+    end
   end
 
   describe '.safe_temp_path' do

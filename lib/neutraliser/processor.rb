@@ -174,7 +174,7 @@ module Neutraliser
 
       File.open(manifest_path, 'a') { |manifest| manifest.puts(JSON.generate(entry)) }
     rescue StandardError => e
-      log "Warning: Could not write run manifest entry: #{e.message}"
+      log "Warning: Could not write run manifest entry (#{e.class}): #{e.message}"
     end
 
     def summarize_results(found:, queued:, resumed:, manifest_path:, results:)
@@ -289,6 +289,7 @@ module Neutraliser
         return file_result(original_path, status: :done, reason: :dry_run)
       end
 
+      committed = false
       output_path = if @replace
                       FileManager.safe_temp_path(working_path)
                     else
@@ -314,10 +315,13 @@ module Neutraliser
       end
 
       commit_output(original_path, working_path, output_path)
+      committed = true
       file_result(original_path, status: :done, reason: :normalized, normalization_type: codec_decision[:normalization_type])
-    rescue => e
-      FileUtils.rm_f(output_path) if output_path && File.exist?(output_path)
-      raise e
+    ensure
+      # ensure (not rescue) so this also runs on Interrupt/SignalException,
+      # e.g. Ctrl-C mid-run - rescue => only catches StandardError and would
+      # silently leak this temp file on a signal.
+      FileUtils.rm_f(output_path) if output_path && !committed && File.exist?(output_path)
     end
 
     # detect_audio_tracks marks a track UNKNOWN_AUDIO_TRACK-shaped when ffprobe
@@ -339,6 +343,7 @@ module Neutraliser
     end
 
     def normalize_file_with_paths(original_path, working_path, measurement)
+      committed = false
       output_path = if @replace
                       FileManager.safe_temp_path(working_path)
                     else
@@ -370,16 +375,30 @@ module Neutraliser
       end
 
       commit_output(original_path, working_path, output_path)
+      committed = true
       codec_decision
-    rescue => e
-      FileUtils.rm_f(output_path) if output_path && File.exist?(output_path)
-      raise e
+    ensure
+      # ensure (not rescue) so this also runs on Interrupt/SignalException,
+      # e.g. Ctrl-C mid-run - rescue => only catches StandardError and would
+      # silently leak this temp file on a signal.
+      FileUtils.rm_f(output_path) if output_path && !committed && File.exist?(output_path)
     end
 
     def commit_output(original_path, working_path, output_path)
       if @replace
         if @local_stage
-          @stager.stage_out(output_path, original_path)
+          # Stage the local result into a temp path next to the original
+          # (same filesystem as original_path) so it can go through the
+          # same atomic_replace as the non-staged path, rather than
+          # FileUtils.cp'ing straight over the original with no backup
+          # and no atomicity.
+          staged_temp_path = FileManager.safe_temp_path(original_path)
+          @stager.stage_out(output_path, staged_temp_path)
+          begin
+            FileManager.atomic_replace(staged_temp_path, original_path)
+          ensure
+            FileUtils.rm_f(staged_temp_path)
+          end
           @stager.cleanup(output_path)
         else
           FileManager.atomic_replace(output_path, original_path)
