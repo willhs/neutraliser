@@ -91,10 +91,15 @@ module Neutraliser
     # duration, when given, caps how much of the input is read (-t) — useful
     # for a fast preview measurement of a remote stream rather than a full
     # pass.
-    def self.measure_loudness(input_path, target_i: -20.0, target_tp: -1.5, target_lra: 12.0, input_args: [], duration: nil)
-      cmd = [
-        "ffmpeg", "-hide_banner", "-nostats", *input_args, "-i", input_path
-      ]
+    # start_offset seeks before decoding (input-side -ss). Callers that measure
+    # only a slice of a long file should use it: a film's opening minute is
+    # logos and titles and reads several LU quieter than the film itself, so a
+    # slice taken from the start systematically under-reports loudness.
+    def self.measure_loudness(input_path, target_i: -20.0, target_tp: -1.5, target_lra: 12.0, input_args: [],
+                              duration: nil, start_offset: nil)
+      cmd = ["ffmpeg", "-hide_banner", "-nostats", *input_args]
+      cmd += ["-ss", start_offset.round.to_s] if start_offset&.positive?
+      cmd += ["-i", input_path]
       cmd += ["-t", duration.to_s] if duration
       cmd += [
         "-map", "a:0",

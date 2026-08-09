@@ -75,4 +75,36 @@ RSpec.describe Neutraliser::CLI do
       end
     end
   end
+
+  describe '.command_known?' do
+    # Regression: Thor stores `analyze-plex` under its method name,
+    # `analyze_plex`. .start runs before Thor's own hyphen resolution, so the
+    # hyphenated form looked unknown and got rewritten to
+    # `process analyze-plex` — the exact command the README documents failed
+    # with "was called with arguments [...]".
+    it 'recognises hyphenated command names' do
+      expect(described_class.command_known?('analyze-plex')).to be true
+    end
+
+    it 'still recognises underscored and plain command names' do
+      expect(described_class.command_known?('analyze_plex')).to be true
+      expect(described_class.command_known?('profiles')).to be true
+      expect(described_class.command_known?('cache')).to be true
+    end
+
+    it 'does not treat an arbitrary path as a command' do
+      expect(described_class.command_known?('/tmp/library')).to be false
+      expect(described_class.command_known?('movie.mkv')).to be false
+    end
+  end
+
+  describe 'hyphenated command routing' do
+    it 'routes analyze-plex to the analyze_plex command, not process' do
+      analyzer = instance_double(Neutraliser::PlexAnalyzer, analyze: nil)
+      allow(Neutraliser::PlexAnalyzer).to receive(:new).and_return(analyzer)
+      expect(Neutraliser::Processor).not_to receive(:new)
+
+      described_class.start(['analyze-plex', '--token', 'x', '--server-url', 'http://localhost:32400'])
+    end
+  end
 end

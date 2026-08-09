@@ -67,7 +67,7 @@ Neutraliser does the one job: make the library level, leave everything else alon
 - **Safe by default** — writes `*_normalized` copies; originals untouched unless you pass `--replace`
 - **Skips what's already fine** — a `.neutraliser` sidecar plus an optional 30-second sample check means a re-run over a processed library costs seconds, not hours
 - **Resumable** — interrupted a 500-file run? `--resume` picks up from the manifest
-- **Plex-aware** — `analyze-plex` audits loudness across your Plex libraries before you change a single file
+- **Plex-aware** — `analyze-plex` gives a quick loudness triage across your Plex libraries before you change a single file
 - **Big-batch friendly** — `--fast` (single-pass, ~30% quicker) and `--local-stage` for slow network mounts
 
 ## Requirements
@@ -126,11 +126,15 @@ neutraliser process --replace /media/movies
 
 ## Examples
 
-**Audit before you commit.** Find out how bad the spread actually is across a Plex library:
+**Audit before you commit.** Get a rough sense of the spread across a Plex library:
 
 ```bash
 neutraliser analyze-plex --library "Movies" --output-format table
 ```
+
+Treat the output as a rough triage tool, not a verdict — it judges each title from a
+60-second sample, which can sit several LU from the film's true integrated loudness.
+`process` measures files in full.
 
 **Dry-run a directory** to see which files would be touched and by how much:
 
@@ -230,7 +234,9 @@ Exits `1` if any file fails, so batch runners can detect partial failure.
 
 ### `analyze-plex`
 
-Audit loudness across your Plex libraries without modifying anything. Reads audio over Plex's own stream, so it doesn't need filesystem access to the media.
+Rough loudness triage across your Plex libraries, modifying nothing. Reads audio over Plex's own stream, so it doesn't need filesystem access to the media.
+
+**Accuracy caveat:** each title is judged from a 60-second sample taken from the middle of the runtime. That is a fast preview, not a measurement — on one verified title the sample read 3 LU away from the true integrated loudness, more than the tolerance the verdicts use. Use it to spot obvious outliers; let `process` decide what actually needs work.
 
 | Option | Default | Description |
 |---|---|---|
