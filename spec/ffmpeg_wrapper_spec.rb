@@ -597,3 +597,35 @@ RSpec.describe Neutraliser::FFmpegWrapper do
     end
   end
 end
+
+RSpec.describe 'Neutraliser::FFmpegWrapper timeouts' do
+  # Regression: analysis had 300s while normalization had 1800s, despite both
+  # decoding the whole audio stream. Files too big to measure in 5 minutes
+  # failed before ever reaching the half hour allowed to process them — 339
+  # such failures in one real 4,500-episode run over SMB.
+  it 'gives analysis at least as long as normalization' do
+    expect(Neutraliser::FFmpegWrapper::ANALYSIS_TIMEOUT)
+      .to be >= Neutraliser::FFmpegWrapper::NORMALIZATION_TIMEOUT
+  end
+
+  describe '.env_timeout' do
+    after { ENV.delete('NEUTRALISER_ANALYSIS_TIMEOUT') }
+
+    it 'uses the default when unset' do
+      ENV.delete('NEUTRALISER_ANALYSIS_TIMEOUT')
+      expect(Neutraliser::FFmpegWrapper.send(:env_timeout, 'ANALYSIS', 1800)).to eq(1800)
+    end
+
+    it 'honours an override' do
+      ENV['NEUTRALISER_ANALYSIS_TIMEOUT'] = '3600'
+      expect(Neutraliser::FFmpegWrapper.send(:env_timeout, 'ANALYSIS', 1800)).to eq(3600)
+    end
+
+    it 'falls back to the default for junk or non-positive values' do
+      ['0', '-5', 'abc', ''].each do |bad|
+        ENV['NEUTRALISER_ANALYSIS_TIMEOUT'] = bad
+        expect(Neutraliser::FFmpegWrapper.send(:env_timeout, 'ANALYSIS', 1800)).to eq(1800)
+      end
+    end
+  end
+end

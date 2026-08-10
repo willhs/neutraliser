@@ -232,6 +232,15 @@ Normalise a file or every video under a directory.
 
 Exits `1` if any file fails, so batch runners can detect partial failure.
 
+**Large files on slow mounts.** Measuring and normalising each decode the whole
+audio stream, and both are allowed 30 minutes by default. If you hit
+`timed out after 1800s` on very large files or a slow mount, raise the limits:
+
+```bash
+NEUTRALISER_ANALYSIS_TIMEOUT=3600 NEUTRALISER_NORMALIZATION_TIMEOUT=3600 \
+  neutraliser process /media/tv
+```
+
 ### `analyze-plex`
 
 Rough loudness triage across your Plex libraries, modifying nothing. Reads audio over Plex's own stream, so it doesn't need filesystem access to the media.
