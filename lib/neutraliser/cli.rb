@@ -191,8 +191,13 @@ module Neutraliser
       true
     end
 
+    # Thor registers commands under their method names, so `analyze-plex` is
+    # stored as `analyze_plex`. Thor resolves the hyphenated form itself, but
+    # .start runs before that and would otherwise treat `analyze-plex` as a
+    # path and rewrite it to `process analyze-plex`. Check both spellings.
     def self.command_known?(name)
-      all_commands.key?(name) || subcommands.include?(name)
+      candidates = [name, name.tr('-', '_')]
+      candidates.any? { |c| all_commands.key?(c) || subcommands.include?(c) }
     end
   end
 end

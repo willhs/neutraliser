@@ -197,7 +197,7 @@ module Neutraliser
 
       content_type = determine_content_type(item, library_type)
 
-      measurement = analyze_streaming_audio(streaming_url)
+      measurement = analyze_streaming_audio(streaming_url, start_offset: sample_offset_for(item))
       return nil unless measurement
 
       current_level = measurement.input_i
@@ -239,9 +239,22 @@ module Neutraliser
     # timeboxed, argv-form executor — no shell string, no temp file, no
     # sentinel-float fallback. A failed/timed-out measurement raises and is
     # handled by the caller (analyze_media_item), which skips the item.
-    def analyze_streaming_audio(streaming_url)
+    # Samples from the middle of the item, matching what
+    # SkipDecider/quick_loudness_sample does. Measuring from the start instead
+    # reads a film's logos and opening titles, which are several LU quieter
+    # than the film — Chariots of Fire measured -35.3 LUFS from its opening
+    # minute against a true integrated -20.0.
+    def sample_offset_for(item)
+      total_s = item['duration'].to_i / 1000.0
+      return nil if total_s <= STREAM_SAMPLE_DURATION_S * 2
+
+      (total_s - STREAM_SAMPLE_DURATION_S) / 2
+    end
+
+    def analyze_streaming_audio(streaming_url, start_offset: nil)
       FFmpegWrapper.measure_loudness(
         streaming_url,
+        start_offset: start_offset,
         target_i: @profile[:lufs],
         target_tp: @profile[:tp],
         target_lra: @profile[:lra],
@@ -298,6 +311,14 @@ module Neutraliser
 
       log "\n📊 SUMMARY STATISTICS"
       log "Target: #{@profile[:name]} (#{@profile[:lufs]} LUFS, ±#{@tolerance} LU tolerance)"
+      # Be loud about this: these figures come from a #{STREAM_SAMPLE_DURATION_S}s
+      # slice, and a slice cannot stand in for a film's integrated loudness. On
+      # one measured title the sampled figure was 3 LU off the true value — more
+      # than the tolerance the verdicts are judged against. `process` measures
+      # the whole file and is the number to trust.
+      log "⚠️  Estimates only: each title is judged from a #{STREAM_SAMPLE_DURATION_S}s sample, " \
+          "which can be several LU away from its true integrated loudness. " \
+          "Use this to spot rough outliers, not as a verdict — `process` measures in full."
       log "Total files analyzed: #{total_files}"
       log "Files needing adjustment: #{needs_adjustment} (#{(needs_adjustment.to_f / total_files * 100).round(1)}%)"
       log "Files within target range: #{total_files - needs_adjustment} (#{((total_files - needs_adjustment).to_f / total_files * 100).round(1)}%)"

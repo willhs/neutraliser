@@ -10,11 +10,24 @@ neutraliser process /media/movies --profile livingroom
 
 ## What it actually does
 
+Ten films from a real 800-film Plex library, before and after — **16.7 LU of spread reduced to 0.1 LU**:
+
+![Ten real films charted before and after normalisation. Before, they range from -30.4 to -13.6 LUFS; after, all ten sit at -20.0 or -20.1](demo/real-library.svg)
+
+Nothing here is staged. The "before" figures are what Neutraliser recorded in its own
+analysis sidecars when it first saw each file; the "after" is an independent `ebur128`
+measurement of those same files today. `demo/real_library.rb` builds this from any
+library Neutraliser has run over — [the method is documented](demo/README.md).
+
+Across that whole library, **716 of 804 films (89%) now sit within 1 LU of the target**.
+The remainder are files added since the last run — which is what `--resume` and the
+skip-already-normalised sidecars are for.
+
 Four files played back to back — the loud remaster after the quiet film is the moment you reach for the remote:
 
 ![Perceived loudness across four files played back to back. Before normalisation the level steps between -27 and -11 LUFS at each file boundary; after, it holds flat at -20 LUFS](demo/loudness-over-time.svg)
 
-Across a whole library, the same thing per file — 8 files spread over ~19 LU, levelled to within a fraction of a LU of target:
+And the same again on synthetic clips, if you'd rather run it yourself than trust someone else's library — 8 files spread over ~19 LU:
 
 ![Integrated loudness before and after normalisation: eight files spread across roughly 19 LU converge onto the -20 LUFS target](demo/loudness-before-after.svg)
 
@@ -54,7 +67,7 @@ Neutraliser does the one job: make the library level, leave everything else alon
 - **Safe by default** — writes `*_normalized` copies; originals untouched unless you pass `--replace`
 - **Skips what's already fine** — a `.neutraliser` sidecar plus an optional 30-second sample check means a re-run over a processed library costs seconds, not hours
 - **Resumable** — interrupted a 500-file run? `--resume` picks up from the manifest
-- **Plex-aware** — `analyze-plex` audits loudness across your Plex libraries before you change a single file
+- **Plex-aware** — `analyze-plex` gives a quick loudness triage across your Plex libraries before you change a single file
 - **Big-batch friendly** — `--fast` (single-pass, ~30% quicker) and `--local-stage` for slow network mounts
 
 ## Requirements
@@ -113,11 +126,15 @@ neutraliser process --replace /media/movies
 
 ## Examples
 
-**Audit before you commit.** Find out how bad the spread actually is across a Plex library:
+**Audit before you commit.** Get a rough sense of the spread across a Plex library:
 
 ```bash
 neutraliser analyze-plex --library "Movies" --output-format table
 ```
+
+Treat the output as a rough triage tool, not a verdict — it judges each title from a
+60-second sample, which can sit several LU from the film's true integrated loudness.
+`process` measures files in full.
 
 **Dry-run a directory** to see which files would be touched and by how much:
 
@@ -215,9 +232,20 @@ Normalise a file or every video under a directory.
 
 Exits `1` if any file fails, so batch runners can detect partial failure.
 
+**Large files on slow mounts.** Measuring and normalising each decode the whole
+audio stream, and both are allowed 30 minutes by default. If you hit
+`timed out after 1800s` on very large files or a slow mount, raise the limits:
+
+```bash
+NEUTRALISER_ANALYSIS_TIMEOUT=3600 NEUTRALISER_NORMALIZATION_TIMEOUT=3600 \
+  neutraliser process /media/tv
+```
+
 ### `analyze-plex`
 
-Audit loudness across your Plex libraries without modifying anything. Reads audio over Plex's own stream, so it doesn't need filesystem access to the media.
+Rough loudness triage across your Plex libraries, modifying nothing. Reads audio over Plex's own stream, so it doesn't need filesystem access to the media.
+
+**Accuracy caveat:** each title is judged from a 60-second sample taken from the middle of the runtime. That is a fast preview, not a measurement — on one verified title the sample read 3 LU away from the true integrated loudness, more than the tolerance the verdicts use. Use it to spot obvious outliers; let `process` decide what actually needs work.
 
 | Option | Default | Description |
 |---|---|---|

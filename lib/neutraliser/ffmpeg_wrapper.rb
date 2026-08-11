@@ -6,11 +6,31 @@ module Neutraliser
   class FFmpegTimeoutError < FFmpegError; end
 
   class FFmpegWrapper
-    # Timeout constants (in seconds)
-    ANALYSIS_TIMEOUT = 300    # 5 minutes for full analysis
-    QUICK_TIMEOUT = 120       # 2 minutes for quick operations
-    NORMALIZATION_TIMEOUT = 1800  # 30 minutes for normalization
-    PROBE_TIMEOUT = 30        # 30 seconds for ffprobe
+    # Timeout constants (in seconds).
+    #
+    # Analysis and normalization both decode the file's entire audio stream, so
+    # they get the same budget — analysis is if anything the cheaper of the two,
+    # since it doesn't encode. Analysis previously had 300s against
+    # normalization's 1800s, which meant any file too big to *measure* in five
+    # minutes failed before it ever got the half hour allowed to process it. On
+    # a NAS over SMB that is an ordinary HD episode, not a broken one: a 491MB
+    # file measured in 162s on a gigabit mount, so anything past roughly 900MB
+    # timed out.
+    #
+    # Override for slower mounts or larger files:
+    #   NEUTRALISER_ANALYSIS_TIMEOUT=3600 neutraliser process /media/tv
+    def self.env_timeout(name, default)
+      raw = ENV["NEUTRALISER_#{name}_TIMEOUT"]
+      value = raw.to_i
+      value.positive? ? value : default
+    end
+
+    private_class_method :env_timeout
+
+    ANALYSIS_TIMEOUT = env_timeout('ANALYSIS', 1800)
+    QUICK_TIMEOUT = env_timeout('QUICK', 120)
+    NORMALIZATION_TIMEOUT = env_timeout('NORMALIZATION', 1800)
+    PROBE_TIMEOUT = env_timeout('PROBE', 30)
 
     # Mapping from source codec to ffmpeg encoder name
     # Only codecs that ffmpeg can reliably encode
@@ -91,10 +111,15 @@ module Neutraliser
     # duration, when given, caps how much of the input is read (-t) — useful
     # for a fast preview measurement of a remote stream rather than a full
     # pass.
-    def self.measure_loudness(input_path, target_i: -20.0, target_tp: -1.5, target_lra: 12.0, input_args: [], duration: nil)
-      cmd = [
-        "ffmpeg", "-hide_banner", "-nostats", *input_args, "-i", input_path
-      ]
+    # start_offset seeks before decoding (input-side -ss). Callers that measure
+    # only a slice of a long file should use it: a film's opening minute is
+    # logos and titles and reads several LU quieter than the film itself, so a
+    # slice taken from the start systematically under-reports loudness.
+    def self.measure_loudness(input_path, target_i: -20.0, target_tp: -1.5, target_lra: 12.0, input_args: [],
+                              duration: nil, start_offset: nil)
+      cmd = ["ffmpeg", "-hide_banner", "-nostats", *input_args]
+      cmd += ["-ss", start_offset.round.to_s] if start_offset&.positive?
+      cmd += ["-i", input_path]
       cmd += ["-t", duration.to_s] if duration
       cmd += [
         "-map", "a:0",
@@ -314,7 +339,14 @@ module Neutraliser
             Process.kill('TERM', wait_thr.pid) rescue nil
             sleep(1)
             Process.kill('KILL', wait_thr.pid) rescue nil
-            raise FFmpegTimeoutError, "#{operation_name} timed out after #{timeout_seconds}s - file may be corrupted or have unsupported codec"
+            # Don't guess at corruption. The overwhelmingly common cause is a
+            # large file on a slow or contended mount, and telling someone
+            # their media is broken when it isn't sends them chasing ghosts.
+            raise FFmpegTimeoutError,
+                  "#{operation_name} timed out after #{timeout_seconds}s. Large files on network mounts " \
+                  "(or several jobs running at once) can legitimately need longer — raise the limit with " \
+                  "NEUTRALISER_ANALYSIS_TIMEOUT=<seconds>. If it times out with a generous limit and the " \
+                  "file plays elsewhere, then suspect the file itself."
           end
 
           # Check which streams have data available (with 1 second timeout per iteration)

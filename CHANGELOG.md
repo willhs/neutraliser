@@ -6,7 +6,18 @@ All notable changes to this project are documented here. The format follows
 
 ## [Unreleased]
 
-Nothing yet.
+### Fixed
+
+- Analysis no longer times out on large files. `ANALYSIS_TIMEOUT` was 300s while
+  normalisation had 1800s, despite both decoding the whole audio stream — so any
+  file too big to *measure* in five minutes failed before reaching the half hour
+  allowed to *process* it. On a NAS over SMB that is an ordinary HD episode: a
+  491MB file measures in 162s, so anything past roughly 900MB failed. Observed as
+  339 spurious failures in a 4,500-episode run. Both budgets are now 1800s and
+  every timeout is overridable via `NEUTRALISER_<PHASE>_TIMEOUT`.
+- The timeout message no longer claims the file "may be corrupted or have
+  unsupported codec". The usual cause is a large file on a slow mount, and the old
+  wording sent people hunting for damage that wasn't there.
 
 ## [0.1.0] — 2026-08-08
 

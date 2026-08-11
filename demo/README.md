@@ -1,11 +1,12 @@
 # Demo
 
-Two scripts, both regenerating charts used in the main README.
+Three scripts, all regenerating charts used in the main README.
 
 | Script | Output | Answers |
 |---|---|---|
 | `demo/ab.rb` | `loudness-over-time.svg` | "What does a sitting sound like?" — four files back to back, perceived loudness before vs after |
 | `demo/run.rb` | `loudness-before-after.svg` | "What happens across a library?" — per-file integrated loudness before vs after |
+| `demo/real_library.rb` | `real-library.svg` | "Does this hold on real films?" — before/after from a production library's own sidecars |
 
 ## A/B test — `demo/ab.rb`
 
@@ -65,6 +66,59 @@ ruby demo/ab.rb  --source ~/media/movies
 
 Files are **copied** into the scratch work dir first and normalised there — your
 originals are never touched.
+
+## Charting a real library — `demo/real_library.rb`
+
+The synthetic charts prove the mechanism. This one uses data Neutraliser already
+left behind in a real library, so nothing is staged.
+
+Every analysis writes a `.loudnorm_<profile>.json` sidecar recording the file's
+loudness at that moment. When the file is later normalised in place, the sidecar
+keeps the **pre-normalisation** number while the file on disk holds the
+**result** — a genuine before/after pair for the same film.
+
+Find the pairs (sidecar whose recorded `video_size` no longer matches the file):
+
+```bash
+find /path/to/library -name '*.loudnorm_*.json' | while read p; do
+  d=$(dirname "$p")
+  vf=$(grep -o '"video_file": "[^"]*"' "$p" | sed 's/.*: "//;s/"$//')
+  ii=$(grep -o '"input_i": "[^"]*"' "$p" | sed 's/.*: "//;s/"$//')
+  vs=$(grep -o '"video_size": [0-9]*' "$p" | grep -o '[0-9]*$')
+  cur=$(stat -Lc %s "$d/$vf" 2>/dev/null || echo -1)   # -L: follow symlinks
+  [ "$vs" != "$cur" ] && echo "$ii|$d/$vf"
+done
+```
+
+Note the `-L` on `stat`. Libraries that symlink across volumes will otherwise
+report the *link* size (a hundred-odd bytes) for every linked file, and every one
+of them looks stale.
+
+Re-measure those files to get the "after" side, build a
+`before<TAB>after<TAB>label` TSV, then:
+
+```bash
+ruby demo/real_library.rb --pairs pairs.tsv
+```
+
+The data behind the README's chart is committed as `demo/real-library-pairs.tsv`,
+so the chart can be regenerated without access to the library it came from.
+
+Measuring runs wherever the library lives (a NAS is usually far slower than a
+laptop — budget minutes per film), which is why this step is a separate script
+rather than folded into `run.rb`. A loop over the pairs looks like:
+
+```bash
+while IFS= read -r f; do
+  ffmpeg -nostdin -hide_banner -nostats -i "$f" -map a:0 \
+         -af ebur128=framelog=quiet -f null - 2>&1 |
+    grep -A2 'Integrated loudness' | grep 'I:'
+done < paths.txt
+```
+
+`-nostdin` is not optional here. Without it ffmpeg consumes the very list being
+fed to the `read` loop, and every iteration after the first gets a truncated
+path.
 
 ## Verified on real film audio
 
