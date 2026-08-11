@@ -51,7 +51,9 @@ module DemoSupport
       'ffmpeg', '-hide_banner', '-nostats', '-i', path,
       '-map', 'a:0', '-af', 'ebur128=framelog=quiet', '-f', 'null', '-'
     )
-    raise "Could not measure loudness of #{path}\n#{out}" unless out[/Integrated loudness:.*?I:\s*(-?\d+\.?\d*)\s*LUFS/m]
+    unless out[/Integrated loudness:.*?I:\s*(-?\d+\.?\d*)\s*LUFS/m]
+      raise "Could not measure loudness of #{path}\n#{out}"
+    end
 
     Regexp.last_match(1).to_f
   end

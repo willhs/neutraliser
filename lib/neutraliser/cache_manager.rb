@@ -34,7 +34,7 @@ module Neutraliser
         end
 
         # Profile compatibility check
-        if !profiles_compatible?(cached_data['profile'], profile)
+        unless profiles_compatible?(cached_data['profile'], profile)
           discard_cache(cache_file)
           return nil
         end
@@ -55,7 +55,6 @@ module Neutraliser
         end
 
         measurement
-
       rescue StandardError => e
         # Cache I/O is always best-effort. A read-only or temporarily
         # unavailable network filesystem must not block media processing.
@@ -103,25 +102,23 @@ module Neutraliser
       cache_pattern = File.join(dir, "#{basename}.loudnorm_*.json")
 
       Dir.glob(cache_pattern).each do |cache_file|
-        begin
-          if File.exist?(cache_file)
-            age_days = (Time.now - File.mtime(cache_file)) / (24 * 60 * 60)
+        if File.exist?(cache_file)
+          age_days = (Time.now - File.mtime(cache_file)) / (24 * 60 * 60)
 
-            if age_days > max_age_days
-              File.delete(cache_file)
-              Neutraliser.logger.log "  Cleaned up stale cache: #{File.basename(cache_file)}"
-            end
+          if age_days > max_age_days
+            File.delete(cache_file)
+            Neutraliser.logger.log "  Cleaned up stale cache: #{File.basename(cache_file)}"
           end
-        rescue StandardError => e
-          Neutraliser.logger.log "  Warning: Could not clean up cache file #{cache_file}: #{e.message}"
         end
+      rescue StandardError => e
+        Neutraliser.logger.log "  Warning: Could not clean up cache file #{cache_file}: #{e.message}"
       end
     end
 
     def cache_stats(directory)
       return { enabled: false } unless @enabled
 
-      cache_files = Dir.glob(File.join(directory, "*.loudnorm_*.json"))
+      cache_files = Dir.glob(File.join(directory, '*.loudnorm_*.json'))
 
       total_size = cache_files.sum { |file| File.size(file) }
       oldest_cache = cache_files.map { |file| File.mtime(file) }.min

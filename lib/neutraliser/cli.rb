@@ -17,7 +17,7 @@ module Neutraliser
         puts "  Oldest cache: #{stats[:oldest_cache]}" if stats[:oldest_cache]
         puts "  Newest cache: #{stats[:newest_cache]}" if stats[:newest_cache]
       else
-        puts "Cache is disabled"
+        puts 'Cache is disabled'
       end
     end
 
@@ -38,20 +38,18 @@ module Neutraliser
 
       cleaned_count = 0
       video_files.each do |video_file|
-        begin
-          cache_manager.cleanup_stale_cache(video_file, max_age_days: options[:max_age])
-          cleaned_count += 1
-        rescue => e
-          puts "Warning: Could not clean cache for #{video_file}: #{e.message}"
-        end
+        cache_manager.cleanup_stale_cache(video_file, max_age_days: options[:max_age])
+        cleaned_count += 1
+      rescue StandardError => e
+        puts "Warning: Could not clean cache for #{video_file}: #{e.message}"
       end
 
       puts "Cleaned cache files for #{cleaned_count} video files"
 
       legacy_marker_count = clean_legacy_markers(path)
-      if legacy_marker_count.positive?
-        puts "Removed #{legacy_marker_count} legacy '.neutralised_<profile>' marker file(s)"
-      end
+      return unless legacy_marker_count.positive?
+
+      puts "Removed #{legacy_marker_count} legacy '.neutralised_<profile>' marker file(s)"
     end
 
     private
@@ -86,7 +84,8 @@ module Neutraliser
     option :resume, type: :boolean, default: false, desc: 'Resume from previous run manifest and skip completed files'
     option :fast, type: :boolean, default: false, desc: 'Single-pass normalization (faster, slightly less accurate)'
     option :local_stage, type: :boolean, default: false, desc: 'Copy files to local disk before processing'
-    option :linear_only, type: :boolean, default: false, desc: 'Use constant-gain normalization only — never falls back to dynamic compression (quiet-but-peaky files may land shy of target)'
+    option :linear_only, type: :boolean, default: false,
+                         desc: 'Use constant-gain normalization only — never falls back to dynamic compression (quiet-but-peaky files may land shy of target)'
     def process(path)
       processor = Processor.new(
         replace: options[:replace],
@@ -104,12 +103,12 @@ module Neutraliser
 
       summary = processor.process(path)
 
-      if summary.is_a?(Hash)
-        puts "Summary: found=#{summary[:found]}, queued=#{summary[:queued]}, resumed=#{summary[:resumed]}, " \
-             "done=#{summary[:done]}, skipped=#{summary[:skipped]}, failed=#{summary[:failed]}"
-        puts "Manifest: #{summary[:manifest_path]}" if summary[:manifest_path]
-        exit 1 if summary[:failed].to_i.positive?
-      end
+      return unless summary.is_a?(Hash)
+
+      puts "Summary: found=#{summary[:found]}, queued=#{summary[:queued]}, resumed=#{summary[:resumed]}, " \
+           "done=#{summary[:done]}, skipped=#{summary[:skipped]}, failed=#{summary[:failed]}"
+      puts "Manifest: #{summary[:manifest_path]}" if summary[:manifest_path]
+      exit 1 if summary[:failed].to_i.positive?
     end
 
     desc 'analyze-plex', 'Analyze Plex library audio levels'
@@ -119,7 +118,8 @@ module Neutraliser
     option :output_format, type: :string, default: 'table', desc: 'Report format: table, csv, json'
     option :sample_percent, type: :numeric, default: 100, desc: 'Analyze only N% of files for large libraries'
     option :profile, type: :string, default: 'livingroom', desc: 'Normalization profile: reference, livingroom, night'
-    option :tolerance, type: :numeric, default: 1.0, desc: 'Flag files within this many LU of target as OK (matches `process --tolerance`)'
+    option :tolerance, type: :numeric, default: 1.0,
+                       desc: 'Flag files within this many LU of target as OK (matches `process --tolerance`)'
     def analyze_plex
       analyzer = PlexAnalyzer.new(
         server_url: options[:server_url],
@@ -132,7 +132,7 @@ module Neutraliser
       )
 
       analyzer.analyze
-    rescue => e
+    rescue StandardError => e
       Neutraliser.logger.log "❌ Analysis failed: #{e.message}"
       exit 1
     end
@@ -140,7 +140,7 @@ module Neutraliser
     desc 'profiles', 'List available normalization profiles'
     option :verbose, type: :boolean, aliases: ['-v'], default: false, desc: 'Show detailed profile descriptions'
     def profiles
-      puts "Available normalization profiles:"
+      puts 'Available normalization profiles:'
       puts
 
       Profiles.list_profiles.each do |name|
@@ -157,7 +157,7 @@ module Neutraliser
 
       unless options[:verbose]
         puts
-        puts "Use --verbose for detailed descriptions"
+        puts 'Use --verbose for detailed descriptions'
       end
 
       puts
@@ -179,9 +179,7 @@ module Neutraliser
 
       if args.any?
         first = args.first
-        unless first.start_with?('-') || command_known?(first)
-          args = ['process', *args]
-        end
+        args = ['process', *args] unless first.start_with?('-') || command_known?(first)
       end
 
       super(args, config)

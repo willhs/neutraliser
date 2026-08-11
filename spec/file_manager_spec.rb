@@ -191,14 +191,14 @@ RSpec.describe Neutraliser::FileManager do
 
     it 'returns false when the probe times out (treated as unverifiable output, not an environment problem)' do
       allow(Neutraliser::FFmpegWrapper).to receive(:probe_duration).with(video)
-        .and_raise(Neutraliser::FFmpegTimeoutError, 'timed out')
+                                                                   .and_raise(Neutraliser::FFmpegTimeoutError, 'timed out')
 
       expect(described_class.verify_file_integrity(video)).to be(false)
     end
 
     it 'raises FileManagerError, distinct from a corrupt-output false, when ffprobe is missing' do
       allow(Neutraliser::FFmpegWrapper).to receive(:probe_duration).with(video)
-        .and_raise(Errno::ENOENT, 'ffprobe')
+                                                                   .and_raise(Errno::ENOENT, 'ffprobe')
 
       expect { described_class.verify_file_integrity(video) }
         .to raise_error(Neutraliser::FileManagerError, /ffprobe not found/)

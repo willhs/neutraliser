@@ -264,9 +264,9 @@ RSpec.describe Neutraliser::FFmpegWrapper do
         array_including('-of', 'json'), described_class::PROBE_TIMEOUT, 'Audio track detection'
       )
       expect(result).to eq([
-        { index: 0, stream_index: 1, channels: 6, codec: 'ac3', bit_rate: 640000, sample_rate: 48000 },
-        { index: 1, stream_index: 2, channels: 2, codec: 'aac', bit_rate: 256000, sample_rate: 44100 }
-      ])
+                             { index: 0, stream_index: 1, channels: 6, codec: 'ac3', bit_rate: 640_000, sample_rate: 48_000 },
+                             { index: 1, stream_index: 2, channels: 2, codec: 'aac', bit_rate: 256_000, sample_rate: 44_100 }
+                           ])
     end
 
     it 'raises FFmpegError when ffprobe fails, instead of fabricating a track' do
@@ -292,7 +292,7 @@ RSpec.describe Neutraliser::FFmpegWrapper do
       expect(result.first[:codec]).to eq('flac')
       expect(result.first[:channels]).to eq(6)
       expect(result.first[:bit_rate]).to be_nil
-      expect(result.first[:sample_rate]).to eq(48000)
+      expect(result.first[:sample_rate]).to eq(48_000)
     end
 
     it 'returns an explicitly-marked unknown track when ffprobe emits unparseable json' do
@@ -545,7 +545,9 @@ RSpec.describe Neutraliser::FFmpegWrapper do
     end
 
     before do
-      skip 'ffmpeg/ffprobe not available on PATH' unless system('which ffmpeg > /dev/null 2>&1') && system('which ffprobe > /dev/null 2>&1')
+      unless system('which ffmpeg > /dev/null 2>&1') && system('which ffprobe > /dev/null 2>&1')
+        skip 'ffmpeg/ffprobe not available on PATH'
+      end
     end
 
     it 'keeps language/title tags on the normalised primary track and copied secondary track, and avoids the bitrate floor for an MKV source with no reported bit_rate' do
@@ -573,7 +575,11 @@ RSpec.describe Neutraliser::FFmpegWrapper do
           input
         ]
         srt_fixture = "1\n00:00:00,000 --> 00:00:01,000\nBonjour\n"
-        Open3.popen2(*fixture_cmd) { |stdin, _stdout, wait_thr| stdin.write(srt_fixture); stdin.close; wait_thr.value }
+        Open3.popen2(*fixture_cmd) do |stdin, _stdout, wait_thr|
+          stdin.write(srt_fixture)
+          stdin.close
+          wait_thr.value
+        end
         raise 'fixture generation failed' unless File.exist?(input)
 
         audio_tracks = described_class.detect_audio_tracks(input)

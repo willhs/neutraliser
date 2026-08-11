@@ -45,7 +45,7 @@ end.sort_by { |r| r[:before] }
 
 abort 'No usable rows' if rows.empty?
 
-def svg(rows, target, profile)
+def svg(rows, target, _profile)
   width  = 840
   row_h  = 26
   pad_top = 116
@@ -70,13 +70,13 @@ def svg(rows, target, profile)
     next unless lufs.between?(lo, hi)
 
     sx = xl.call(lufs, 300, width - 90).round(1)
-    parts << %(<line x1="#{sx}" y1="#{scale_y + 6}" x2="#{sx}" y2="#{pad_top + (rows.size * row_h) - 6}" ) +
-             %(stroke="#{DemoSupport::GRID}" stroke-width="1"/>)
+    parts << (%(<line x1="#{sx}" y1="#{scale_y + 6}" x2="#{sx}" y2="#{pad_top + (rows.size * row_h) - 6}" ) +
+             %(stroke="#{DemoSupport::GRID}" stroke-width="1"/>))
     parts << %(<text x="#{sx}" y="#{scale_y}" font-size="11" fill="#{DemoSupport::MUTED}" text-anchor="middle">#{lufs}</text>)
   end
   tx = xl.call(target, 300, width - 90).round(1)
-  parts << %(<line x1="#{tx}" y1="#{scale_y + 6}" x2="#{tx}" y2="#{pad_top + (rows.size * row_h) - 6}" ) +
-           %(stroke="#{DemoSupport::GREEN}" stroke-width="1.5" stroke-dasharray="4 3" opacity="0.7"/>)
+  parts << (%(<line x1="#{tx}" y1="#{scale_y + 6}" x2="#{tx}" y2="#{pad_top + (rows.size * row_h) - 6}" ) +
+           %(stroke="#{DemoSupport::GREEN}" stroke-width="1.5" stroke-dasharray="4 3" opacity="0.7"/>))
   parts << %(<text x="40" y="#{scale_y}" font-size="11" fill="#{DemoSupport::MUTED}">LUFS</text>)
 
   rows.each_with_index do |r, i|
@@ -98,9 +98,11 @@ def svg(rows, target, profile)
 
   sb = rows.map { |r| r[:before] }
   sa = rows.map { |r| r[:after] }
-  parts << %(<text x="40" y="#{height - 22}" font-size="12.5" fill="#{DemoSupport::INK}">Spread: ) +
-           %(<tspan fill="#{DemoSupport::RED}" font-weight="600">#{format('%.1f', sb.max - sb.min)} LU</tspan> &#8594; ) +
-           %(<tspan fill="#{DemoSupport::GREEN}" font-weight="600">#{format('%.1f', sa.max - sa.min)} LU</tspan></text>)
+  parts << (%(<text x="40" y="#{height - 22}" font-size="12.5" fill="#{DemoSupport::INK}">Spread: ) +
+           %(<tspan fill="#{DemoSupport::RED}" font-weight="600">#{format('%.1f',
+                                                                          sb.max - sb.min)} LU</tspan> &#8594; ) +
+           %(<tspan fill="#{DemoSupport::GREEN}" font-weight="600">#{format('%.1f',
+                                                                            sa.max - sa.min)} LU</tspan></text>))
   parts << '</svg>'
   parts.join("\n")
 end

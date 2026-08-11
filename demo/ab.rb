@@ -42,7 +42,7 @@ target = DemoSupport.target_for(options[:profile])
 # Deliberately jarring running order: a quiet film, then a loud one, then a
 # quiet one again — the sequence that has people reaching for the remote.
 PLAYLIST = [
-  { label: 'quiet film',   offset: -29.0 },
+  { label: 'quiet film', offset: -29.0 },
   { label: 'loud remaster', offset: -13.5 },
   { label: 'quiet doco',   offset: -25.5 },
   { label: 'TV episode',   offset: -17.5 }
@@ -110,9 +110,11 @@ def svg(before_series, after_series, boundaries, target, profile, labels)
   parts << %(<text x="#{pad_l + 98}" y="#{pad_top - 22}" font-size="12.5" fill="#{DemoSupport::INK}">after</text>)
 
   swing = ->(s) { s.map { |(_, l)| l }.then { |v| v.max - v.min } }
-  parts << %(<text x="32" y="#{height - 18}" font-size="12.5" fill="#{DemoSupport::INK}">Loudest-to-quietest swing across the sitting: ) +
-           %(<tspan fill="#{DemoSupport::RED}" font-weight="600">#{format('%.1f', swing.call(before_series))} LU</tspan> &#8594; ) +
-           %(<tspan fill="#{DemoSupport::GREEN}" font-weight="600">#{format('%.1f', swing.call(after_series))} LU</tspan></text>)
+  parts << (%(<text x="32" y="#{height - 18}" font-size="12.5" fill="#{DemoSupport::INK}">Loudest-to-quietest swing across the sitting: ) +
+           %(<tspan fill="#{DemoSupport::RED}" font-weight="600">#{format('%.1f',
+                                                                          swing.call(before_series))} LU</tspan> &#8594; ) +
+           %(<tspan fill="#{DemoSupport::GREEN}" font-weight="600">#{format('%.1f',
+                                                                            swing.call(after_series))} LU</tspan></text>))
   parts << '</svg>'
   parts.join("\n")
 end
@@ -158,7 +160,7 @@ durations = sources.map do |f|
                          '-of', 'csv=p=0', f)
   out.strip.to_f
 end
-boundaries = durations.each_with_object([0.0]) { |d, acc| acc << acc.last + d }[0...-1]
+boundaries = durations.each_with_object([0.0]) { |d, acc| acc << (acc.last + d) }[0...-1]
 
 puts 'Building "before" playlist...'
 before_file = DemoSupport.concat(sources, File.join(work, 'before.mkv'))

@@ -42,9 +42,9 @@ RSpec.describe Neutraliser::CLI do
         processor
       end
 
-      expect {
+      expect do
         described_class.start(['process', '--resume', '/tmp/library'])
-      }.to output(/Summary: found=2, queued=1, resumed=1, done=1, skipped=0, failed=0/).to_stdout
+      end.to output(/Summary: found=2, queued=1, resumed=1, done=1, skipped=0, failed=0/).to_stdout
     end
 
     it 'passes --linear-only to Processor initialization' do
@@ -68,9 +68,9 @@ RSpec.describe Neutraliser::CLI do
       )
       allow(Neutraliser::Processor).to receive(:new).and_return(processor)
 
-      expect {
+      expect do
         described_class.start(['process', '/tmp/library'])
-      }.to raise_error(SystemExit) do |error|
+      end.to raise_error(SystemExit) do |error|
         expect(error.status).to eq(1)
       end
     end

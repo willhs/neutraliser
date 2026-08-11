@@ -58,7 +58,7 @@ module Neutraliser
       return false unless @fast_verification
 
       if quick_sample_verified?(file_path, profile, tolerance: tolerance)
-        Neutraliser.logger.log "  Quick sample: file likely within tolerance"
+        Neutraliser.logger.log '  Quick sample: file likely within tolerance'
         mark_processed(file_path, profile)
         true
       else

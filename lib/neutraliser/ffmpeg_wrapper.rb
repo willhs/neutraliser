@@ -20,7 +20,7 @@ module Neutraliser
     # Override for slower mounts or larger files:
     #   NEUTRALISER_ANALYSIS_TIMEOUT=3600 neutraliser process /media/tv
     def self.env_timeout(name, default)
-      raw = ENV["NEUTRALISER_#{name}_TIMEOUT"]
+      raw = ENV.fetch("NEUTRALISER_#{name}_TIMEOUT", nil)
       value = raw.to_i
       value.positive? ? value : default
     end
@@ -35,18 +35,18 @@ module Neutraliser
     # Mapping from source codec to ffmpeg encoder name
     # Only codecs that ffmpeg can reliably encode
     ENCODABLE_CODECS = {
-      'aac'       => 'aac',
-      'ac3'       => 'ac3',
-      'eac3'      => 'eac3',
-      'mp3'       => 'libmp3lame',
-      'mp2'       => 'libtwolame',
-      'opus'      => 'libopus',
-      'vorbis'    => 'libvorbis',
-      'flac'      => 'flac',
+      'aac' => 'aac',
+      'ac3' => 'ac3',
+      'eac3' => 'eac3',
+      'mp3' => 'libmp3lame',
+      'mp2' => 'libtwolame',
+      'opus' => 'libopus',
+      'vorbis' => 'libvorbis',
+      'flac' => 'flac',
       'pcm_s16le' => 'pcm_s16le',
       'pcm_s16be' => 'pcm_s16be',
       'pcm_s24le' => 'pcm_s24le',
-      'pcm_f32le' => 'pcm_f32le',
+      'pcm_f32le' => 'pcm_f32le'
     }.freeze
 
     # Codecs considered lossless
@@ -57,52 +57,53 @@ module Neutraliser
     # don't know this file's audio format" apart from a real stereo/unknown
     # track and react deliberately (e.g. warn before letting it drive
     # encoder/bitrate selection) instead of silently trusting fabricated data.
-    UNKNOWN_AUDIO_TRACK = { index: 0, channels: 2, codec: 'unknown', bit_rate: nil, sample_rate: nil, unknown: true }.freeze
+    UNKNOWN_AUDIO_TRACK = { index: 0, channels: 2, codec: 'unknown', bit_rate: nil, sample_rate: nil,
+                            unknown: true }.freeze
 
     # Minimum quality floor bitrates per encoder (in bps)
     QUALITY_FLOORS = {
-      'aac'        => { 2 => 128_000, 6 => 256_000 },
-      'ac3'        => { 2 => 192_000, 6 => 384_000 },
-      'eac3'       => { 2 => 128_000, 6 => 256_000 },
+      'aac' => { 2 => 128_000, 6 => 256_000 },
+      'ac3' => { 2 => 192_000, 6 => 384_000 },
+      'eac3' => { 2 => 128_000, 6 => 256_000 },
       'libmp3lame' => { 2 => 192_000 },
       'libtwolame' => { 2 => 192_000 },
-      'libopus'    => { 2 => 128_000, 6 => 256_000 },
-      'libvorbis'  => { 2 => 128_000, 6 => 256_000 },
+      'libopus' => { 2 => 128_000, 6 => 256_000 },
+      'libvorbis' => { 2 => 128_000, 6 => 256_000 }
     }.freeze
 
     # Maximum useful bitrates per encoder (in bps)
     QUALITY_CAPS = {
-      'aac'        => { 2 => 320_000, 6 => 512_000 },
-      'ac3'        => { 2 => 640_000, 6 => 640_000 },
-      'eac3'       => { 2 => 640_000, 6 => 1_536_000 },
+      'aac' => { 2 => 320_000, 6 => 512_000 },
+      'ac3' => { 2 => 640_000, 6 => 640_000 },
+      'eac3' => { 2 => 640_000, 6 => 1_536_000 },
       'libmp3lame' => { 2 => 320_000 },
       'libtwolame' => { 2 => 384_000 },
-      'libopus'    => { 2 => 256_000, 6 => 510_000 },
-      'libvorbis'  => { 2 => 256_000, 6 => 500_000 },
+      'libopus' => { 2 => 256_000, 6 => 510_000 },
+      'libvorbis' => { 2 => 256_000, 6 => 500_000 }
     }.freeze
 
     # Container compatibility — which encoders work in which containers
     CONTAINER_CODECS = {
-      '.mp4'  => %w[aac ac3 eac3 libmp3lame libopus],
-      '.m4v'  => %w[aac ac3 eac3 libmp3lame libopus],
-      '.mov'  => %w[aac ac3 eac3 libmp3lame pcm_s16le pcm_s24le],
-      '.mkv'  => %w[aac ac3 eac3 libmp3lame libtwolame libopus libvorbis flac pcm_s16le pcm_s24le pcm_f32le],
+      '.mp4' => %w[aac ac3 eac3 libmp3lame libopus],
+      '.m4v' => %w[aac ac3 eac3 libmp3lame libopus],
+      '.mov' => %w[aac ac3 eac3 libmp3lame pcm_s16le pcm_s24le],
+      '.mkv' => %w[aac ac3 eac3 libmp3lame libtwolame libopus libvorbis flac pcm_s16le pcm_s24le pcm_f32le],
       '.webm' => %w[libopus libvorbis],
-      '.avi'  => %w[aac ac3 libmp3lame pcm_s16le],
-      '.wmv'  => %w[aac ac3 libmp3lame],
-      '.flv'  => %w[aac libmp3lame],
+      '.avi' => %w[aac ac3 libmp3lame pcm_s16le],
+      '.wmv' => %w[aac ac3 libmp3lame],
+      '.flv' => %w[aac libmp3lame]
     }.freeze
 
     # Preferred fallback codec per container when source codec can't be matched
     CONTAINER_FALLBACKS = {
-      '.mkv'  => 'flac',
-      '.mp4'  => 'aac',
-      '.m4v'  => 'aac',
-      '.mov'  => 'aac',
+      '.mkv' => 'flac',
+      '.mp4' => 'aac',
+      '.m4v' => 'aac',
+      '.mov' => 'aac',
       '.webm' => 'libopus',
-      '.avi'  => 'aac',
-      '.wmv'  => 'aac',
-      '.flv'  => 'aac',
+      '.avi' => 'aac',
+      '.wmv' => 'aac',
+      '.flv' => 'aac'
     }.freeze
 
     # input_args are inserted before -i (e.g. ["-headers", "X-Plex-Token: ...\r\n"]
@@ -117,19 +118,19 @@ module Neutraliser
     # slice taken from the start systematically under-reports loudness.
     def self.measure_loudness(input_path, target_i: -20.0, target_tp: -1.5, target_lra: 12.0, input_args: [],
                               duration: nil, start_offset: nil)
-      cmd = ["ffmpeg", "-hide_banner", "-nostats", *input_args]
-      cmd += ["-ss", start_offset.round.to_s] if start_offset&.positive?
-      cmd += ["-i", input_path]
-      cmd += ["-t", duration.to_s] if duration
+      cmd = ['ffmpeg', '-hide_banner', '-nostats', *input_args]
+      cmd += ['-ss', start_offset.round.to_s] if start_offset&.positive?
+      cmd += ['-i', input_path]
+      cmd += ['-t', duration.to_s] if duration
       cmd += [
-        "-map", "a:0",
-        "-af", "loudnorm=I=#{target_i}:TP=#{target_tp}:LRA=#{target_lra}:print_format=json",
-        "-f", "null", "-"
+        '-map', 'a:0',
+        '-af', "loudnorm=I=#{target_i}:TP=#{target_tp}:LRA=#{target_lra}:print_format=json",
+        '-f', 'null', '-'
       ]
 
-      stdout, stderr, status = execute_with_timeout(cmd, ANALYSIS_TIMEOUT, "Loudness measurement")
+      _, stderr, status = execute_with_timeout(cmd, ANALYSIS_TIMEOUT, 'Loudness measurement')
       unless status.success?
-        exit_status = status.respond_to?(:exitstatus) ? status.exitstatus : "unknown"
+        exit_status = status.respond_to?(:exitstatus) ? status.exitstatus : 'unknown'
         raise FFmpegError, "Measurement failed (exit #{exit_status}): #{stderr}"
       end
 
@@ -144,11 +145,11 @@ module Neutraliser
     # bad", so callers (e.g. FileManager) can tell the difference.
     def self.probe_duration(input_path)
       cmd = [
-        "ffprobe", "-v", "error", "-show_entries", "format=duration",
-        "-of", "default=nw=1:nk=1", input_path
+        'ffprobe', '-v', 'error', '-show_entries', 'format=duration',
+        '-of', 'default=nw=1:nk=1', input_path
       ]
 
-      stdout, _stderr, status = execute_with_timeout(cmd, PROBE_TIMEOUT, "Duration probe")
+      stdout, _stderr, status = execute_with_timeout(cmd, PROBE_TIMEOUT, 'Duration probe')
       return nil unless status.success?
 
       duration = stdout.to_f
@@ -167,15 +168,15 @@ module Neutraliser
       start_time = (total_duration - duration) / 2
 
       cmd = [
-        "ffmpeg", "-hide_banner", "-nostats",
-        "-ss", start_time.to_s, "-i", input_path,
-        "-t", duration.to_s,
-        "-map", "a:0",
-        "-af", "loudnorm=I=#{target_i}:print_format=json",
-        "-f", "null", "-"
+        'ffmpeg', '-hide_banner', '-nostats',
+        '-ss', start_time.to_s, '-i', input_path,
+        '-t', duration.to_s,
+        '-map', 'a:0',
+        '-af', "loudnorm=I=#{target_i}:print_format=json",
+        '-f', 'null', '-'
       ]
 
-      stdout, stderr, status = execute_with_timeout(cmd, QUICK_TIMEOUT, "Quick loudness sample")
+      _, stderr, status = execute_with_timeout(cmd, QUICK_TIMEOUT, 'Quick loudness sample')
       return nil unless status.success?
 
       Measurement.from_loudnorm_json(parse_loudnorm_json(stderr))
@@ -245,17 +246,17 @@ module Neutraliser
     # mappings are added, not a hard failure of the normalization itself.
     def self.stream_counts(input_path)
       cmd = [
-        "ffprobe", "-v", "error", "-select_streams", "v",
-        "-show_entries", "stream=index", "-of", "csv=p=0", input_path
+        'ffprobe', '-v', 'error', '-select_streams', 'v',
+        '-show_entries', 'stream=index', '-of', 'csv=p=0', input_path
       ]
-      video_stdout, _stderr, status = execute_with_timeout(cmd, PROBE_TIMEOUT, "Video stream count")
+      video_stdout, _stderr, status = execute_with_timeout(cmd, PROBE_TIMEOUT, 'Video stream count')
       video_count = status.success? ? video_stdout.each_line.count { |l| !l.strip.empty? } : 0
 
       cmd = [
-        "ffprobe", "-v", "error", "-select_streams", "s",
-        "-show_entries", "stream=index", "-of", "csv=p=0", input_path
+        'ffprobe', '-v', 'error', '-select_streams', 's',
+        '-show_entries', 'stream=index', '-of', 'csv=p=0', input_path
       ]
-      subtitle_stdout, _stderr, status = execute_with_timeout(cmd, PROBE_TIMEOUT, "Subtitle stream count")
+      subtitle_stdout, _stderr, status = execute_with_timeout(cmd, PROBE_TIMEOUT, 'Subtitle stream count')
       subtitle_count = status.success? ? subtitle_stdout.each_line.count { |l| !l.strip.empty? } : 0
 
       { video: video_count, subtitle: subtitle_count }
@@ -265,12 +266,12 @@ module Neutraliser
 
     def self.detect_audio_tracks(input_path)
       cmd = [
-        "ffprobe", "-v", "error", "-select_streams", "a",
-        "-show_entries", "stream=index,codec_name,sample_rate,channels,bit_rate",
-        "-of", "json", input_path
+        'ffprobe', '-v', 'error', '-select_streams', 'a',
+        '-show_entries', 'stream=index,codec_name,sample_rate,channels,bit_rate',
+        '-of', 'json', input_path
       ]
 
-      stdout, stderr, status = execute_with_timeout(cmd, PROBE_TIMEOUT, "Audio track detection")
+      stdout, stderr, status = execute_with_timeout(cmd, PROBE_TIMEOUT, 'Audio track detection')
       unless status.success?
         # A genuinely failed probe is a hard error, not "assume stereo" —
         # letting it silently pass a fabricated track downstream would have
@@ -320,8 +321,8 @@ module Neutraliser
 
     def self.execute_with_timeout(cmd, timeout_seconds, operation_name)
       # Use Open3.popen3 with manual timeout to avoid thread corruption from Timeout.timeout
-      stdout_str = ""
-      stderr_str = ""
+      stdout_str = ''
+      stderr_str = ''
       status = nil
 
       Open3.popen3(*cmd) do |stdin, stdout, stderr, wait_thr|
@@ -336,17 +337,25 @@ module Neutraliser
           elapsed = Time.now - start_time
           if elapsed > timeout_seconds
             # Timeout - kill the process
-            Process.kill('TERM', wait_thr.pid) rescue nil
+            begin
+              Process.kill('TERM', wait_thr.pid)
+            rescue StandardError
+              nil
+            end
             sleep(1)
-            Process.kill('KILL', wait_thr.pid) rescue nil
+            begin
+              Process.kill('KILL', wait_thr.pid)
+            rescue StandardError
+              nil
+            end
             # Don't guess at corruption. The overwhelmingly common cause is a
             # large file on a slow or contended mount, and telling someone
             # their media is broken when it isn't sends them chasing ghosts.
             raise FFmpegTimeoutError,
                   "#{operation_name} timed out after #{timeout_seconds}s. Large files on network mounts " \
-                  "(or several jobs running at once) can legitimately need longer — raise the limit with " \
-                  "NEUTRALISER_ANALYSIS_TIMEOUT=<seconds>. If it times out with a generous limit and the " \
-                  "file plays elsewhere, then suspect the file itself."
+                  '(or several jobs running at once) can legitimately need longer — raise the limit with ' \
+                  'NEUTRALISER_ANALYSIS_TIMEOUT=<seconds>. If it times out with a generous limit and the ' \
+                  'file plays elsewhere, then suspect the file itself.'
           end
 
           # Check which streams have data available (with 1 second timeout per iteration)
@@ -354,20 +363,18 @@ module Neutraliser
           next unless ready
 
           ready[0].each do |io|
-            begin
-              if io == stdout
-                data = io.read_nonblock(4096)
-                stdout_str << data
-              elsif io == stderr
-                data = io.read_nonblock(4096)
-                stderr_str << data
-              end
-            rescue IO::WaitReadable
-              # Nothing to read right now
-            rescue EOFError
-              stdout_eof = true if io == stdout
-              stderr_eof = true if io == stderr
+            if io == stdout
+              data = io.read_nonblock(4096)
+              stdout_str << data
+            elsif io == stderr
+              data = io.read_nonblock(4096)
+              stderr_str << data
             end
+          rescue IO::WaitReadable
+            # Nothing to read right now
+          rescue EOFError
+            stdout_eof = true if io == stdout
+            stderr_eof = true if io == stderr
           end
         end
 
@@ -379,7 +386,7 @@ module Neutraliser
 
     def self.parse_loudnorm_json(stderr_output)
       json_text = stderr_output[/\{\s*"input_i".*?\}/m]
-      raise FFmpegError, "loudnorm JSON not found in output" unless json_text
+      raise FFmpegError, 'loudnorm JSON not found in output' unless json_text
 
       JSON.parse(json_text)
     rescue JSON::ParserError => e
@@ -466,12 +473,12 @@ module Neutraliser
 
     def self.estimate_bitrate_from_tag(input_path, stream_spec)
       cmd = [
-        "ffprobe", "-v", "error", "-select_streams", stream_spec,
-        "-show_entries", "stream_tags=BPS",
-        "-of", "default=nw=1:nk=1", input_path
+        'ffprobe', '-v', 'error', '-select_streams', stream_spec,
+        '-show_entries', 'stream_tags=BPS',
+        '-of', 'default=nw=1:nk=1', input_path
       ]
 
-      stdout, _stderr, status = execute_with_timeout(cmd, PROBE_TIMEOUT, "BPS tag probe")
+      stdout, _stderr, status = execute_with_timeout(cmd, PROBE_TIMEOUT, 'BPS tag probe')
       return nil unless status.success?
 
       value = stdout.strip
@@ -484,13 +491,13 @@ module Neutraliser
 
     def self.estimate_bitrate_from_packets(input_path, stream_spec, sample_seconds: 10)
       cmd = [
-        "ffprobe", "-v", "error", "-select_streams", stream_spec,
-        "-show_entries", "packet=size",
-        "-read_intervals", "%+#{sample_seconds}",
-        "-of", "csv=p=0", input_path
+        'ffprobe', '-v', 'error', '-select_streams', stream_spec,
+        '-show_entries', 'packet=size',
+        '-read_intervals', "%+#{sample_seconds}",
+        '-of', 'csv=p=0', input_path
       ]
 
-      stdout, _stderr, status = execute_with_timeout(cmd, PROBE_TIMEOUT, "Packet bitrate sampling")
+      stdout, _stderr, status = execute_with_timeout(cmd, PROBE_TIMEOUT, 'Packet bitrate sampling')
       return nil unless status.success?
 
       sizes = stdout.each_line.map(&:strip).reject(&:empty?).map(&:to_i)
@@ -507,21 +514,19 @@ module Neutraliser
     end
 
     def self.build_codec_args(codec_decision)
-      args = ["-c:a:0", codec_decision[:encoder]]
-      if codec_decision[:bitrate]
-        args += ["-b:a:0", "#{codec_decision[:bitrate] / 1000}k"]
-      end
+      args = ['-c:a:0', codec_decision[:encoder]]
+      args += ['-b:a:0', "#{codec_decision[:bitrate] / 1000}k"] if codec_decision[:bitrate]
       args
     end
 
     def self.build_loudnorm_filter(measured, target_i, target_tp, target_lra)
       "loudnorm=I=#{target_i}:TP=#{target_tp}:LRA=#{target_lra}" \
-      ":measured_I=#{measured.input_i}" \
-      ":measured_TP=#{measured.input_tp}" \
-      ":measured_LRA=#{measured.input_lra}" \
-      ":measured_thresh=#{measured.input_thresh}" \
-      ":offset=#{measured.target_offset}" \
-      ":linear=true:print_format=summary"
+        ":measured_I=#{measured.input_i}" \
+        ":measured_TP=#{measured.input_tp}" \
+        ":measured_LRA=#{measured.input_lra}" \
+        ":measured_thresh=#{measured.input_thresh}" \
+        ":offset=#{measured.target_offset}" \
+        ':linear=true:print_format=summary'
     end
 
     # Builds the audio filter chain to apply during the normalization pass.
@@ -568,24 +573,25 @@ module Neutraliser
       match && match[1].capitalize
     end
 
-    def self.build_complete_ffmpeg_command(input_path, output_path, loudnorm_filter, primary_codec, audio_tracks, stream_counts = { video: 0, subtitle: 0 })
+    def self.build_complete_ffmpeg_command(input_path, output_path, loudnorm_filter, primary_codec, audio_tracks,
+                                           stream_counts = { video: 0, subtitle: 0 })
       cmd = [
-        "ffmpeg", "-hide_banner", "-y", "-i", input_path,
+        'ffmpeg', '-hide_banner', '-y', '-i', input_path,
         # Video stream - always copy
-        "-map", "0:v", "-c:v", "copy"
+        '-map', '0:v', '-c:v', 'copy'
       ]
 
       # Primary audio stream - normalize using filter_complex
       cmd += [
-        "-filter_complex", "[0:a:0]#{loudnorm_filter}[norm]",
-        "-map", "[norm]"
+        '-filter_complex', "[0:a:0]#{loudnorm_filter}[norm]",
+        '-map', '[norm]'
       ] + primary_codec
 
       # Additional audio streams - copy as-is with explicit indexing
       if audio_tracks.length > 1
         audio_tracks[1..-1].each_with_index do |track, idx|
           output_index = idx + 1
-          cmd += ["-map", "0:a:#{track[:index]}", "-c:a:#{output_index}", "copy"]
+          cmd += ['-map', "0:a:#{track[:index]}", "-c:a:#{output_index}", 'copy']
         end
       end
 
@@ -600,7 +606,7 @@ module Neutraliser
       # primary audio one) needs its own explicit mapping, or streams that
       # are otherwise a plain stream-copy would go from implicitly-correct
       # to silently stripped of language/title tags.
-      cmd += ["-map_chapters", "0", "-map_metadata", "0"]
+      cmd += ['-map_chapters', '0', '-map_metadata', '0']
       audio_tracks.each_with_index do |track, output_index|
         cmd += ["-map_metadata:s:a:#{output_index}", "0:s:a:#{track[:index]}"]
       end
@@ -611,7 +617,7 @@ module Neutraliser
         cmd += ["-map_metadata:s:s:#{i}", "0:s:s:#{i}"]
       end
       cmd += [
-        "-map", "0:s?", "-c:s", "copy",
+        '-map', '0:s?', '-c:s', 'copy',
         output_path
       ]
 
@@ -619,10 +625,8 @@ module Neutraliser
     end
 
     def self.execute_with_progress(cmd)
-      stdout, stderr, status = execute_with_timeout(cmd, NORMALIZATION_TIMEOUT, "Normalization")
-      unless status.success?
-        raise FFmpegError, "FFmpeg normalization failed: #{stderr}"
-      end
+      _, stderr, status = execute_with_timeout(cmd, NORMALIZATION_TIMEOUT, 'Normalization')
+      raise FFmpegError, "FFmpeg normalization failed: #{stderr}" unless status.success?
 
       # ffmpeg writes the loudnorm summary (including "Normalization Type") to stderr
       stderr
@@ -635,23 +639,23 @@ module Neutraliser
     # above `execute_with_timeout` on why the old `private` keyword didn't
     # do this).
     private_class_method :execute_with_timeout,
-                          :parse_loudnorm_json,
-                          :parse_audio_tracks_json,
-                          :parse_bit_rate,
-                          :select_output_codec,
-                          :resolve_encoder,
-                          :resolve_bitrate,
-                          :estimate_source_bitrate,
-                          :estimate_bitrate_from_tag,
-                          :estimate_bitrate_from_packets,
-                          :lossless_encoder?,
-                          :build_codec_args,
-                          :build_loudnorm_filter,
-                          :build_audio_filter,
-                          :build_volume_gain_filter,
-                          :capped_linear_gain,
-                          :parse_normalization_type,
-                          :build_complete_ffmpeg_command,
-                          :execute_with_progress
+                         :parse_loudnorm_json,
+                         :parse_audio_tracks_json,
+                         :parse_bit_rate,
+                         :select_output_codec,
+                         :resolve_encoder,
+                         :resolve_bitrate,
+                         :estimate_source_bitrate,
+                         :estimate_bitrate_from_tag,
+                         :estimate_bitrate_from_packets,
+                         :lossless_encoder?,
+                         :build_codec_args,
+                         :build_loudnorm_filter,
+                         :build_audio_filter,
+                         :build_volume_gain_filter,
+                         :capped_linear_gain,
+                         :parse_normalization_type,
+                         :build_complete_ffmpeg_command,
+                         :execute_with_progress
   end
 end

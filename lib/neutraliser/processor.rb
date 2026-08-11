@@ -9,7 +9,8 @@ module Neutraliser
     MANIFEST_FILENAME = '.neutraliser-run-manifest.jsonl'.freeze
     TERMINAL_RESUME_STATES = %w[done skipped].freeze
 
-    def initialize(replace: false, target_level: nil, profile: 'livingroom', tolerance: 1.0, cache: true, dry_run: false, fast_verify: true, resume: false, fast: false, local_stage: false, linear_only: false)
+    def initialize(replace: false, target_level: nil, profile: 'livingroom', tolerance: 1.0, cache: true,
+                   dry_run: false, fast_verify: true, resume: false, fast: false, local_stage: false, linear_only: false)
       @replace = replace
       @profile = if target_level
                    Profiles.custom_profile(target_level.to_f)
@@ -77,7 +78,7 @@ module Neutraliser
       files_to_process, resumed_count = files_for_run(video_files, manifest_path)
 
       if files_to_process.empty?
-        log "Resume mode: no remaining files to process"
+        log 'Resume mode: no remaining files to process'
         return summarize_results(
           found: video_files.length,
           queued: 0,
@@ -201,7 +202,7 @@ module Neutraliser
       end
 
       if @skip_decider&.already_processed?(file_path, @profile)
-        log "  Already processed, skipping"
+        log '  Already processed, skipping'
         return file_result(file_path, status: :skipped, reason: :already_processed)
       end
 
@@ -212,7 +213,7 @@ module Neutraliser
           movie = FFMPEG::Movie.new(working_path)
 
           unless movie.audio_stream
-            log "  No audio track found, skipping"
+            log '  No audio track found, skipping'
             next file_result(file_path, status: :skipped, reason: :no_audio_track)
           end
 
@@ -226,9 +227,7 @@ module Neutraliser
           # status :done ("we handled this file"), but nothing was written —
           # marking it processed would make the real run that follows skip
           # the file as already normalised, silently leaving it untouched.
-          if !@dry_run && (result[:status] == :done || result[:status] == :skipped)
-            @skip_decider&.mark_processed(file_path, @profile)
-          end
+          @skip_decider&.mark_processed(file_path, @profile) if !@dry_run && %i[done skipped].include?(result[:status])
 
           result
         end
@@ -253,13 +252,13 @@ module Neutraliser
       rescue FileManagerError => e
         log "  File management error processing file: #{e.message}"
         file_result(file_path, status: :failed, reason: :file_manager_error, message: e.message)
-      rescue => e
+      rescue StandardError => e
         log "  Error processing file: #{e.message}"
         file_result(file_path, status: :failed, reason: :processing_error, message: e.message)
       end
     end
 
-    def process_file_two_pass(original_path, working_path, movie)
+    def process_file_two_pass(original_path, working_path, _movie)
       measurement = analyze_loudness_for_path(working_path, original_path)
 
       if measurement.needs_normalization?(@profile, tolerance: @tolerance)
@@ -268,10 +267,11 @@ module Neutraliser
           file_result(original_path, status: :done, reason: :dry_run)
         else
           codec_decision = normalize_file_with_paths(original_path, working_path, measurement)
-          file_result(original_path, status: :done, reason: :normalized, normalization_type: codec_decision[:normalization_type])
+          file_result(original_path, status: :done, reason: :normalized,
+                                     normalization_type: codec_decision[:normalization_type])
         end
       else
-        log "  Already at target level, skipping"
+        log '  Already at target level, skipping'
         file_result(original_path, status: :skipped, reason: :within_tolerance)
       end
     end
@@ -287,7 +287,8 @@ module Neutraliser
         log_message: "  Fast mode: single-pass normalization to #{@profile[:lufs]} LUFS"
       ) { |wp, out, tracks| FFmpegWrapper.apply_normalization_single_pass(wp, out, tracks, @profile) }
 
-      file_result(original_path, status: :done, reason: :normalized, normalization_type: codec_decision[:normalization_type])
+      file_result(original_path, status: :done, reason: :normalized,
+                                 normalization_type: codec_decision[:normalization_type])
     end
 
     # detect_audio_tracks marks a track UNKNOWN_AUDIO_TRACK-shaped when ffprobe
@@ -298,7 +299,7 @@ module Neutraliser
     def warn_if_audio_track_unknown(audio_tracks)
       return unless audio_tracks.first && audio_tracks.first[:unknown]
 
-      log "  Warning: could not determine audio track format, using conservative defaults"
+      log '  Warning: could not determine audio track format, using conservative defaults'
     end
 
     def analyze_loudness_for_path(working_path, original_path)
@@ -317,7 +318,8 @@ module Neutraliser
         original_path, working_path,
         log_message: "  Current: #{current_lufs.round(1)} LUFS, Target: #{target_lufs} LUFS (#{adjustment.round(1)} LU adjustment)"
       ) do |wp, out, tracks|
-        FFmpegWrapper.apply_normalization(wp, out, measurement, @profile, audio_tracks: tracks, linear_only: @linear_only)
+        FFmpegWrapper.apply_normalization(wp, out, measurement, @profile, audio_tracks: tracks,
+                                                                          linear_only: @linear_only)
       end
     end
 
@@ -336,16 +338,14 @@ module Neutraliser
 
       audio_tracks = FFmpegWrapper.detect_audio_tracks(working_path)
       warn_if_audio_track_unknown(audio_tracks)
-      if audio_tracks.length > 1
-        log "  Found #{audio_tracks.length} audio tracks, normalizing primary track only"
-      end
+      log "  Found #{audio_tracks.length} audio tracks, normalizing primary track only" if audio_tracks.length > 1
 
       log log_message
       codec_decision = yield(working_path, output_path, audio_tracks)
       log_codec_decision(codec_decision)
 
       unless FileManager.verify_file_integrity(output_path)
-        raise OutputVerificationError, "Output file verification failed - processing aborted"
+        raise OutputVerificationError, 'Output file verification failed - processing aborted'
       end
 
       commit_output(original_path, output_path)
@@ -416,6 +416,5 @@ module Neutraliser
 
       File.join(dir, "#{basename}_normalized#{ext}")
     end
-
   end
 end

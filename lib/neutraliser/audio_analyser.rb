@@ -27,13 +27,13 @@ module Neutraliser
       if @cache_enabled
         cached = @cache_manager.load_cached_analysis(cached_as, profile)
         if cached
-          Neutraliser.logger.log "  Using cached analysis data"
+          Neutraliser.logger.log '  Using cached analysis data'
           return cached
         end
       end
 
       if skip_decider_for(cached_as).skip?(cached_as, profile, tolerance: tolerance)
-        Neutraliser.logger.log "  Skip decision: file already at target level"
+        Neutraliser.logger.log '  Skip decision: file already at target level'
         return Measurement.already_at_target(profile)
       end
 

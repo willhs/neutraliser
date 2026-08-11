@@ -101,7 +101,9 @@ def svg(rows, target, profile)
   # Target line
   ty = y.call(target).round(1)
   parts << %(<line x1="170" y1="#{ty}" x2="#{width - 32}" y2="#{ty}" stroke="#{grid}" stroke-width="1.5" stroke-dasharray="5 4"/>)
-  parts << %(<text x="#{width - 32}" y="#{ty - 30}" font-size="11.5" fill="#{muted}" text-anchor="end">target #{format('%.1f', target)} LUFS</text>)
+  parts << %(<text x="#{width - 32}" y="#{ty - 30}" font-size="11.5" fill="#{muted}" text-anchor="end">target #{format(
+    '%.1f', target
+  )} LUFS</text>)
 
   # Column headers
   parts << %(<text x="#{x_before}" y="#{pad_top - 26}" font-size="12.5" font-weight="600" fill="#{before}" text-anchor="middle">BEFORE</text>)
@@ -113,7 +115,9 @@ def svg(rows, target, profile)
     parts << %(<line x1="#{x_before}" y1="#{yb}" x2="#{x_after}" y2="#{ya}" stroke="#{muted}" stroke-width="1.1" opacity="0.45"/>)
     parts << %(<circle cx="#{x_before}" cy="#{yb}" r="5" fill="#{before}"/>)
     parts << %(<circle cx="#{x_after}" cy="#{ya}" r="5" fill="#{after}"/>)
-    parts << %(<text x="#{x_before - 14}" y="#{yb + 4}" font-size="11.5" fill="#{ink}" text-anchor="end">#{format('%.1f', r[:before])}</text>)
+    parts << %(<text x="#{x_before - 14}" y="#{yb + 4}" font-size="11.5" fill="#{ink}" text-anchor="end">#{format(
+      '%.1f', r[:before]
+    )}</text>)
   end
 
   # The "after" values land on top of each other — that IS the result, so
@@ -130,7 +134,10 @@ def svg(rows, target, profile)
 
   spread_before = (rows.map { |r| r[:before] }.max - rows.map { |r| r[:before] }.min)
   spread_after  = (rows.map { |r| r[:after] }.max - rows.map { |r| r[:after] }.min)
-  parts << %(<text x="32" y="#{height - 20}" font-size="12.5" fill="#{ink}">Spread across the set: <tspan fill="#{before}" font-weight="600">#{format('%.1f', spread_before)} LU</tspan> &#8594; <tspan fill="#{after}" font-weight="600">#{format('%.1f', spread_after)} LU</tspan></text>)
+  parts << %(<text x="32" y="#{height - 20}" font-size="12.5" fill="#{ink}">Spread across the set: <tspan fill="#{before}" font-weight="600">#{format(
+    '%.1f', spread_before
+  )} LU</tspan> &#8594; <tspan fill="#{after}" font-weight="600">#{format('%.1f',
+                                                                          spread_after)} LU</tspan></text>)
   parts << '</svg>'
   parts.join("\n")
 end

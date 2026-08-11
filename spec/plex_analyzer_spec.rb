@@ -92,8 +92,8 @@ RSpec.describe Neutraliser::PlexAnalyzer do
   describe '#connect_to_plex (private)' do
     it 'raises PlexAnalyzerError instead of exiting when no token is configured' do
       no_token_analyzer = described_class.new(server_url: server_url, token: nil, profile: profile)
-      allow(ENV).to receive(:[]).and_call_original
-      allow(ENV).to receive(:[]).with('PLEX_TOKEN').and_return(nil)
+      allow(ENV).to receive(:fetch).and_call_original
+      allow(ENV).to receive(:fetch).with('PLEX_TOKEN', nil).and_return(nil)
 
       expect { no_token_analyzer.send(:connect_to_plex) }
         .to raise_error(Neutraliser::PlexAnalyzerError, /No Plex token found/)

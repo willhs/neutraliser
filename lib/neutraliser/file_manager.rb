@@ -23,13 +23,9 @@ module Neutraliser
     # source_path (see FileManager.verify_file_integrity) before calling
     # this, so no backup-for-rollback is needed here.
     def self.atomic_replace(source_path, target_path)
-      unless File.exist?(target_path)
-        raise FileManagerError, "Target file does not exist: #{target_path}"
-      end
+      raise FileManagerError, "Target file does not exist: #{target_path}" unless File.exist?(target_path)
 
-      unless File.exist?(source_path)
-        raise FileManagerError, "Source file does not exist: #{source_path}"
-      end
+      raise FileManagerError, "Source file does not exist: #{source_path}" unless File.exist?(source_path)
 
       begin
         # A rename replaces the directory entry, so the source file's mode
@@ -45,9 +41,9 @@ module Neutraliser
         # (as FileUtils.mv would) means a crash mid-copy corrupts target_path
         # with nothing to recover from. Fail loudly instead of pretending.
         raise FileManagerError,
-              "Atomic replacement failed: source and target are on different " \
+              'Atomic replacement failed: source and target are on different ' \
               "filesystems (#{e.message}) - refusing a non-atomic cross-filesystem replace"
-      rescue => e
+      rescue StandardError => e
         raise FileManagerError, "Atomic replacement failed: #{e.message}"
       end
     end

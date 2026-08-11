@@ -62,10 +62,10 @@ RSpec.describe Neutraliser::Processor do
       manifest_path = File.join(temp_dir, '.neutraliser-run-manifest.jsonl')
       File.open(manifest_path, 'w') do |manifest|
         manifest.puts(JSON.generate({
-          timestamp: Time.now.utc.iso8601,
-          file: File.expand_path(completed),
-          status: 'done'
-        }))
+                                      timestamp: Time.now.utc.iso8601,
+                                      file: File.expand_path(completed),
+                                      status: 'done'
+                                    }))
       end
 
       expect(processor).to receive(:process_one).with(pending).and_return(
@@ -268,7 +268,7 @@ RSpec.describe Neutraliser::Processor do
 
     before do
       File.write(video_file, 'x')
-      allow(Neutraliser::FFmpegWrapper).to receive(:detect_audio_tracks).and_return([{ index: 0, codec: 'aac', channels: 2, bit_rate: 256000, sample_rate: 48000 }])
+      allow(Neutraliser::FFmpegWrapper).to receive(:detect_audio_tracks).and_return([{ index: 0, codec: 'aac', channels: 2, bit_rate: 256_000, sample_rate: 48_000 }])
       allow(Neutraliser::FFmpegWrapper).to receive(:apply_normalization).and_return(
         { encoder: 'aac', bitrate: 256_000, source_codec: 'aac', source_bitrate: 256_000, lossless_output: false }
       )
@@ -305,7 +305,7 @@ RSpec.describe Neutraliser::Processor do
     it 'passes linear_only through to FFmpegWrapper' do
       linear_processor = described_class.new(replace: false, linear_only: true)
       File.write(video_file, 'x')
-      allow(Neutraliser::FFmpegWrapper).to receive(:detect_audio_tracks).and_return([{ index: 0, codec: 'aac', channels: 2, bit_rate: 256000, sample_rate: 48000 }])
+      allow(Neutraliser::FFmpegWrapper).to receive(:detect_audio_tracks).and_return([{ index: 0, codec: 'aac', channels: 2, bit_rate: 256_000, sample_rate: 48_000 }])
       allow(Neutraliser::FileManager).to receive(:verify_file_integrity).and_return(true)
 
       linear_processor.send(:normalize_file_with_paths, video_file, video_file, measured_data)

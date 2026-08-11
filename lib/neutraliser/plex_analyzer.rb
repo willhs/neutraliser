@@ -25,13 +25,13 @@ module Neutraliser
     end
 
     def analyze
-      log "🎵 Starting Plex library audio analysis..."
+      log '🎵 Starting Plex library audio analysis...'
 
       connect_to_plex
       libraries = discover_video_libraries
 
       if libraries.empty?
-        log "❌ No video libraries found on Plex server"
+        log '❌ No video libraries found on Plex server'
         return
       end
 
@@ -51,11 +51,11 @@ module Neutraliser
 
       @auth_token = resolve_token
       unless @auth_token
-        raise PlexAnalyzerError, "No Plex token found! Create a .env file with PLEX_TOKEN=your_token_here, " \
-                                  "or get your token from #{@server_url}/web/index.html#!/settings/account"
+        raise PlexAnalyzerError, 'No Plex token found! Create a .env file with PLEX_TOKEN=your_token_here, ' \
+                                 "or get your token from #{@server_url}/web/index.html#!/settings/account"
       end
 
-      log "🔍 Testing connection..."
+      log '🔍 Testing connection...'
       response = make_plex_request('/library/sections')
 
       unless response.code == '200'
@@ -64,7 +64,7 @@ module Neutraliser
 
       sections_data = JSON.parse(response.body)
       section_count = sections_data.dig('MediaContainer', 'size') || 0
-      log "✅ Connected to Plex server successfully"
+      log '✅ Connected to Plex server successfully'
       log "📚 Found #{section_count} library sections"
       @connected = true
     end
@@ -86,9 +86,9 @@ module Neutraliser
       # Priority: CLI option > .env file > default
       return server_url if server_url != 'http://localhost:32400'
 
-      env_url = ENV['PLEX_SERVER_URL']
+      env_url = ENV.fetch('PLEX_SERVER_URL', nil)
       if env_url && !env_url.strip.empty?
-        log "🌐 Using server URL from .env file"
+        log '🌐 Using server URL from .env file'
         return env_url.strip
       end
 
@@ -99,9 +99,9 @@ module Neutraliser
       # Priority: explicit token parameter > .env file
       return token if token
 
-      env_token = ENV['PLEX_TOKEN']
+      env_token = ENV.fetch('PLEX_TOKEN', nil)
       if env_token && !env_token.strip.empty?
-        log "🔑 Using token from .env file"
+        log '🔑 Using token from .env file'
         return env_token.strip
       end
 
@@ -109,18 +109,16 @@ module Neutraliser
     end
 
     def discover_video_libraries
-      log "📚 Discovering video libraries..."
+      log '📚 Discovering video libraries...'
 
       response = make_plex_request('/library/sections')
-      unless response.code == '200'
-        raise PlexAnalyzerError, "Failed to get libraries: HTTP #{response.code}"
-      end
+      raise PlexAnalyzerError, "Failed to get libraries: HTTP #{response.code}" unless response.code == '200'
 
       data = JSON.parse(response.body)
       all_libraries = data.dig('MediaContainer', 'Directory') || []
 
       # Filter to video libraries (movie and show types)
-      video_libraries = all_libraries.select { |lib| lib['type'] == 'movie' || lib['type'] == 'show' }
+      video_libraries = all_libraries.select { |lib| %w[movie show].include?(lib['type']) }
 
       if library_name
         selected_library = video_libraries.find { |lib| lib['title'].downcase == library_name.downcase }
@@ -174,15 +172,13 @@ module Neutraliser
       processed = 0
 
       all_items.each do |item|
-        begin
-          result = analyze_media_item(item, library['type'])
-          results << result if result
-          processed += 1
+        result = analyze_media_item(item, library['type'])
+        results << result if result
+        processed += 1
 
-          log "   ⏳ Processed #{processed}/#{all_items.size} items..." if processed % 25 == 0
-        rescue => e
-          log "   ❌ Error analyzing #{item['title']}: #{e.message}"
-        end
+        log "   ⏳ Processed #{processed}/#{all_items.size} items..." if processed % 25 == 0
+      rescue StandardError => e
+        log "   ❌ Error analyzing #{item['title']}: #{e.message}"
       end
 
       log "✅ Completed analysis of #{library['title']}: #{results.size} valid results"
@@ -214,7 +210,7 @@ module Neutraliser
         needs_adjustment: needs_adjustment,
         adjustment_type: adjustment_type(current_level, needs_adjustment)
       }
-    rescue => e
+    rescue StandardError => e
       log "   ❌ Error analyzing #{title}: #{e.message}"
       nil
     end
@@ -263,7 +259,7 @@ module Neutraliser
       )
     end
 
-    def determine_content_type(item, library_type)
+    def determine_content_type(_item, library_type)
       case library_type
       when 'movie'
         :movie
@@ -281,12 +277,12 @@ module Neutraliser
     end
 
     def generate_report(results)
-      log "\n" + "="*80
-      log "🎵 PLEX LIBRARY AUDIO ANALYSIS REPORT"
-      log "="*80
+      log "\n" + ('=' * 80)
+      log '🎵 PLEX LIBRARY AUDIO ANALYSIS REPORT'
+      log '=' * 80
 
       if results.empty?
-        log "❌ No valid audio analysis results found"
+        log '❌ No valid audio analysis results found'
         return
       end
 
@@ -317,8 +313,8 @@ module Neutraliser
       # than the tolerance the verdicts are judged against. `process` measures
       # the whole file and is the number to trust.
       log "⚠️  Estimates only: each title is judged from a #{STREAM_SAMPLE_DURATION_S}s sample, " \
-          "which can be several LU away from its true integrated loudness. " \
-          "Use this to spot rough outliers, not as a verdict — `process` measures in full."
+          'which can be several LU away from its true integrated loudness. ' \
+          'Use this to spot rough outliers, not as a verdict — `process` measures in full.'
       log "Total files analyzed: #{total_files}"
       log "Files needing adjustment: #{needs_adjustment} (#{(needs_adjustment.to_f / total_files * 100).round(1)}%)"
       log "Files within target range: #{total_files - needs_adjustment} (#{((total_files - needs_adjustment).to_f / total_files * 100).round(1)}%)"
@@ -334,19 +330,19 @@ module Neutraliser
       problematic_files = results.select { |r| r[:needs_adjustment] }
 
       if problematic_files.empty?
-        log "🎉 All files are within acceptable volume ranges!"
+        log '🎉 All files are within acceptable volume ranges!'
         return
       end
 
       table = Terminal::Table.new do |t|
-        t.headings = ['Title', 'Type', 'Current', 'Target', 'Diff', 'Status']
+        t.headings = %w[Title Type Current Target Diff Status]
         problematic_files.each do |result|
           t.add_row [
             result[:title].length > 30 ? result[:title][0..27] + '...' : result[:title],
             result[:content_type].to_s.capitalize,
             "#{result[:current_level].round(1)} LUFS",
             "#{result[:target_level].round(1)} LUFS",
-            "#{result[:level_difference] > 0 ? '+' : ''}#{result[:level_difference].round(1)} dB",
+            "#{'+' if result[:level_difference] > 0}#{result[:level_difference].round(1)} dB",
             result[:adjustment_type]
           ]
         end
@@ -362,10 +358,10 @@ module Neutraliser
       log "Files too loud: #{too_loud} (will be reduced in volume)"
       log "Files too quiet: #{too_quiet} (will be increased in volume)"
 
-      if needs_adjustment > 0
-        log "\nTo normalize these files, run:"
-        log "neutraliser process [PATH_TO_PLEX_LIBRARY] --profile #{@profile[:name]} --tolerance #{@tolerance}"
-      end
+      return unless needs_adjustment > 0
+
+      log "\nTo normalize these files, run:"
+      log "neutraliser process [PATH_TO_PLEX_LIBRARY] --profile #{@profile[:name]} --tolerance #{@tolerance}"
     end
 
     def generate_csv_report(results)

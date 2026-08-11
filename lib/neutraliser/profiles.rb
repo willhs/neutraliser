@@ -16,11 +16,12 @@ module Neutraliser
       when String
         profile = PROFILES[name_or_lufs]
         raise ArgumentError, "Unknown profile: #{name_or_lufs}. Available: #{PROFILES.keys.join(', ')}" unless profile
+
         profile
       when Numeric
         custom_profile(name_or_lufs.to_f)
       else
-        raise ArgumentError, "Profile must be a string name or numeric LUFS value"
+        raise ArgumentError, 'Profile must be a string name or numeric LUFS value'
       end
     end
 
@@ -39,11 +40,11 @@ module Neutraliser
     def self.describe_profile(profile)
       case profile[:name]
       when 'reference'
-        "Reference/Home Theater profile for best fidelity with AVR systems"
+        'Reference/Home Theater profile for best fidelity with AVR systems'
       when 'livingroom'
-        "Living-room/Soundbar profile for general TV viewing (recommended)"
+        'Living-room/Soundbar profile for general TV viewing (recommended)'
       when 'night'
-        "Night mode profile with reduced dynamic range for quiet listening"
+        'Night mode profile with reduced dynamic range for quiet listening'
       else
         "Custom profile with #{profile[:lufs]} LUFS target"
       end
