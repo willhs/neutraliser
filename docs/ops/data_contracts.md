@@ -57,6 +57,17 @@ JSON in the run's root directory, mapping each file's path (relative to that roo
 
 One JSON line per file event: `timestamp`, `file` (absolute), `status` (`queued`/`done`/`skipped`/`failed`), `profile`, `target_lufs`, plus `reason`, `message` and `normalization_type` (`Linear`/`Dynamic`) when known. `--resume` reads it.
 
+A failed entry's `message` is one line: what failed plus the last stderr line that says why (e.g. `Normalization failed (exit 1): Error opening output files: Permission denied`), never the ffmpeg banner. Failure `reason`s:
+
+| reason | meaning | retry? |
+|---|---|---|
+| `not_writable` | The file's folder won't take a new file (preflight, before analysis) | after fixing folder permissions |
+| `unsupported_subtitle` | A subtitle stream this ffmpeg can't identify, so it can't be copied (preflight, or recognised in the encode's stderr) | after remuxing/removing that track |
+| `timeout` | A subprocess ran out of time | yes, with a bigger `NEUTRALISER_*_TIMEOUT` |
+| `output_verification_failed` | The output looked corrupt; the original is untouched | investigate |
+| `ffmpeg_error` | Any other ffmpeg/ffprobe failure | investigate |
+| `file_manager_error`, `processing_error`, `invalid_result` | Failures outside ffmpeg | investigate |
+
 ## Decisions / Rationale
 The record lives in the file because the sidecar is tied to the run's root directory: moving a file or starting from another root lost it and could lead to another lossy re-encode. Tags travel with the file.
 
@@ -68,5 +79,6 @@ The record lives in the file because the sidecar is tied to the run's root direc
 - docs/ops/runbook.md
 
 ### Change Log
+- 2026-10-15 (agent:preflight-failures): Documented failure reasons and the one-line failure message
 - 2026-10-15 (agent:record-what-was-done): Added the NEUTRALISER_* tag schema, sidecar and run-manifest contracts
 - 2025-09-24 (agent:create-project): Created data contracts placeholder

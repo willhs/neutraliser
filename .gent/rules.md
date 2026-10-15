@@ -29,6 +29,7 @@ A Ruby CLI tool that normalises audio volume in video files using industry-stand
 - **`CLI`**: Thor-based command-line interface with comprehensive options
 
 ### Processing Pipeline
+0. **Preflight**: the file's folder must take a new file (`not_writable`) and every subtitle stream must be one ffmpeg can copy (`unsupported_subtitle`) — both fail fast, before analysis
 1. **Skip Decision**: `SkipDecider` checks the `.neutraliser` sidecar (or a quick LUFS sample fallback) — already-normalised files are skipped
 2. **Analysis Pass**: FFmpeg loudnorm measurement → sidecar JSON cache (skipped in `--fast` mode)
 3. **Normalization Pass**: Constant gain (`volume` filter, peak-capped) by default; `--allow-dynamic` uses two-pass loudnorm (may go dynamic); `--fast` uses single-pass dynamic mode

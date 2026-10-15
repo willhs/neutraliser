@@ -99,6 +99,7 @@ RSpec.describe Neutraliser::FFmpegWrapper do
         :read_stamp,
         :probe_audio_profile_mid_file,
         :stream_counts,
+        :unsupported_subtitles,
         :capped_linear_gain
       )
     end
@@ -431,6 +432,31 @@ RSpec.describe Neutraliser::FFmpegWrapper do
 
       allow(described_class).to receive(:execute_with_timeout).and_return(['', 'bad', fail_status])
       expect(described_class.read_stamp('bad.mkv')).to be_nil
+    end
+  end
+
+  describe '.unsupported_subtitles' do
+    it 'names subtitle streams ffmpeg has no codec for, with the Matroska codec ID' do
+      stdout = JSON.generate(streams: [{ index: 2 }, { index: 3, codec_name: 'subrip' }, { index: 4 }])
+      stderr = "[matroska,webm @ 0x1] Unknown/unsupported AVCodecID S_TEXT/WEBVTT.\n" \
+               "[matroska,webm @ 0x1] Unknown/unsupported AVCodecID S_TEXT/FOO.\n"
+      allow(described_class).to receive(:execute_with_timeout).and_return([stdout, stderr, ok_status])
+
+      expect(described_class.unsupported_subtitles('episode.mkv'))
+        .to eq(['stream 2 (S_TEXT/WEBVTT)', 'stream 4 (S_TEXT/FOO)'])
+    end
+
+    it 'returns nothing when every subtitle has a codec' do
+      stdout = JSON.generate(streams: [{ index: 2, codec_name: 'hdmv_pgs_subtitle' }])
+      allow(described_class).to receive(:execute_with_timeout).and_return([stdout, '', ok_status])
+
+      expect(described_class.unsupported_subtitles('movie.mkv')).to eq([])
+    end
+
+    it 'is best effort: a failed probe blocks nothing' do
+      allow(described_class).to receive(:execute_with_timeout).and_return(['', 'boom', fail_status])
+
+      expect(described_class.unsupported_subtitles('movie.mkv')).to eq([])
     end
   end
 

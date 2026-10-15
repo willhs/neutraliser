@@ -1,10 +1,9 @@
 require 'open3'
 require 'json'
 require 'tmpdir'
+require_relative 'ffmpeg_error'
 
 module Neutraliser
-  class FFmpegError < StandardError; end
-  class FFmpegTimeoutError < FFmpegError; end
 
   class FFmpegWrapper
     # Timeout constants (in seconds).
@@ -134,10 +133,7 @@ module Neutraliser
       ]
 
       _, stderr, status = execute_with_timeout(cmd, ANALYSIS_TIMEOUT, 'Loudness measurement')
-      unless status.success?
-        exit_status = status.respond_to?(:exitstatus) ? status.exitstatus : 'unknown'
-        raise FFmpegError, "Measurement failed (exit #{exit_status}): #{stderr}"
-      end
+      raise FFmpegError.from_run('Measurement', stderr, status) unless status.success?
 
       Measurement.from_loudnorm_json(parse_loudnorm_json(stderr))
     end
@@ -342,6 +338,34 @@ module Neutraliser
       { video: 0, subtitle: 0 }
     end
 
+    # Subtitle streams this ffmpeg has no codec for ("Subtitle: none"), each
+    # described as "stream N (CODEC_ID)" when the demuxer names the ID.
+    # `-c:s copy` can't carry such a stream — the encode fails with
+    # "Subtitle codec 0 is not supported" — and no ffmpeg release maps
+    # Matroska's S_TEXT/WEBVTT (only D_WEBVTT/*), so upgrading doesn't help.
+    # -v info because the demuxer reports the unknown ID at info level.
+    # Best effort: a failed probe returns [] and any real problem surfaces
+    # (classified) from the encode itself.
+    def self.unsupported_subtitles(input_path)
+      cmd = [
+        'ffprobe', '-hide_banner', '-v', 'info', '-select_streams', 's',
+        '-show_entries', 'stream=index,codec_name', '-of', 'json', input_path
+      ]
+      stdout, stderr, status = execute_with_timeout(cmd, PROBE_TIMEOUT, 'Subtitle probe')
+      return [] unless status.success?
+
+      codec_ids = stderr.scan(%r{Unknown/unsupported AVCodecID (\S+?)\.?$}).flatten
+      unknown = (JSON.parse(stdout)['streams'] || []).reject { |stream| stream['codec_name'] }
+      unknown.each_with_index.map do |stream, i|
+        id = codec_ids[i] || 'unknown codec'
+        "stream #{stream['index']} (#{id})"
+      end
+    rescue FFmpegTimeoutError
+      raise
+    rescue StandardError
+      []
+    end
+
     def self.detect_audio_tracks(input_path)
       cmd = [
         'ffprobe', '-v', 'error', '-select_streams', 'a',
@@ -354,7 +378,7 @@ module Neutraliser
         # A genuinely failed probe is a hard error, not "assume stereo" —
         # letting it silently pass a fabricated track downstream would have
         # it drive real encoder/bitrate selection on made-up data.
-        raise FFmpegError, "Audio track detection failed: #{stderr}"
+        raise FFmpegError.from_run('Audio track detection', stderr, status)
       end
 
       tracks = parse_audio_tracks_json(stdout)
@@ -702,7 +726,7 @@ module Neutraliser
         '-map', '0', '-c', 'copy', '-map_metadata', '0', *stamp_args(stamp, path), temp
       ]
       _, stderr, status = execute_with_timeout(cmd, NORMALIZATION_TIMEOUT, 'Restamp')
-      raise FFmpegError, "Rewriting the neutraliser tags failed: #{stderr}" unless status.success?
+      raise FFmpegError.from_run('Rewriting the neutraliser tags', stderr, status) unless status.success?
 
       FileUtils.mv(temp, path)
     ensure
@@ -792,7 +816,7 @@ module Neutraliser
 
     def self.execute_with_progress(cmd)
       _, stderr, status = execute_with_timeout(cmd, NORMALIZATION_TIMEOUT, 'Normalization')
-      raise FFmpegError, "FFmpeg normalization failed: #{stderr}" unless status.success?
+      raise FFmpegError.from_run('Normalization', stderr, status) unless status.success?
 
       # ffmpeg writes the loudnorm summary (including "Normalization Type") to stderr
       stderr

@@ -118,6 +118,9 @@ module Neutraliser
       puts "Summary: found=#{summary[:found]}, queued=#{summary[:queued]}, resumed=#{summary[:resumed]}, " \
            "done=#{summary[:done]}, skipped=#{summary[:skipped]}, failed=#{summary[:failed]}, " \
            "linear=#{summary[:linear]}, dynamic=#{summary[:dynamic]}"
+      if summary[:failed_by_reason]&.any?
+        puts "Failed by reason: #{summary[:failed_by_reason].map { |reason, count| "#{reason}=#{count}" }.join(', ')}"
+      end
       puts "Manifest: #{summary[:manifest_path]}" if summary[:manifest_path]
       exit 1 if summary[:failed].to_i.positive?
     rescue ArgumentError => e

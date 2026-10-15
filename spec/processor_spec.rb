@@ -226,6 +226,90 @@ RSpec.describe Neutraliser::Processor do
     end
   end
 
+  describe 'preflight checks' do
+    let(:show_dir) { File.join(temp_dir, 'The Simpsons') }
+    let(:episodes) { %w[s01e01.mkv s01e02.mkv].map { |name| File.join(show_dir, name) } }
+
+    before do
+      FileUtils.mkdir_p(show_dir)
+      episodes.each { |episode| File.write(episode, 'x') }
+      allow(Neutraliser::FFmpegWrapper).to receive(:unsupported_subtitles).and_return([])
+      allow(Neutraliser::FFmpegWrapper).to receive(:read_stamp).and_return(nil)
+      allow(Neutraliser::FFmpegWrapper).to receive(:quick_loudness_sample).and_return(nil)
+    end
+
+    after { FileUtils.chmod(0o755, show_dir) }
+
+    it 'fails every file in a folder it cannot write to as :not_writable, before any analysis' do
+      FileUtils.chmod(0o555, show_dir)
+      processor = described_class.new(replace: true)
+      expect(FFMPEG::Movie).not_to receive(:new)
+      expect(processor).not_to receive(:analyze_loudness_for_path)
+
+      summary = nil
+      expect { summary = processor.process(show_dir) }
+        .to output(/Not writable — fix permissions on 1 folder\(s\):\n.*The Simpsons/).to_stdout
+
+      expect(summary[:results].map { |r| r[:reason] }).to eq(%i[not_writable not_writable])
+      expect(summary[:results].first[:message]).to eq("can't write to #{File.expand_path(show_dir)} (Permission denied); fix the folder's permissions")
+      expect(summary[:failed_by_reason]).to eq(not_writable: 2)
+      expect(summary[:not_writable_dirs]).to eq([File.expand_path(show_dir)])
+      expect(Dir.children(show_dir).grep(/write-check/)).to be_empty
+    end
+
+    it 'leaves no trace of the write check in a writable folder' do
+      processor = described_class.new
+      allow(FFMPEG::Movie).to receive(:new).and_return(instance_double(FFMPEG::Movie, audio_stream: nil))
+
+      result = nil
+      expect { result = processor.send(:process_file, episodes.first) }.to output.to_stdout
+
+      expect(result[:reason]).to eq(:no_audio_track)
+      expect(Dir.children(show_dir)).to contain_exactly('s01e01.mkv', 's01e02.mkv')
+    end
+
+    it 'does not check writability on a dry run, which writes nothing' do
+      FileUtils.chmod(0o555, show_dir)
+      processor = described_class.new(dry_run: true)
+      allow(FFMPEG::Movie).to receive(:new).and_return(instance_double(FFMPEG::Movie, audio_stream: nil))
+
+      result = nil
+      expect { result = processor.send(:process_file, episodes.first) }.to output.to_stdout
+
+      expect(result[:reason]).to eq(:no_audio_track)
+    end
+
+    it 'fails a file whose subtitles ffmpeg cannot copy as :unsupported_subtitle, before any analysis' do
+      allow(Neutraliser::FFmpegWrapper).to receive(:unsupported_subtitles)
+        .with(episodes.first).and_return(['stream 2 (S_TEXT/WEBVTT)'])
+      processor = described_class.new
+      expect(FFMPEG::Movie).not_to receive(:new)
+
+      result = nil
+      expect { result = processor.send(:process_file, episodes.first) }
+        .to output(/Unsupported subtitle: subtitle stream 2 \(S_TEXT\/WEBVTT\)/).to_stdout
+
+      expect(result).to include(status: :failed, reason: :unsupported_subtitle)
+      expect(result[:message]).to start_with("subtitle stream 2 (S_TEXT/WEBVTT) can't be copied")
+    end
+
+    it 'takes the failure reason an FFmpegError recognised from the encode' do
+      processor = described_class.new
+      allow(FFMPEG::Movie).to receive(:new).and_return(instance_double(FFMPEG::Movie, audio_stream: true))
+      allow(Neutraliser::FFmpegWrapper).to receive(:detect_audio_tracks).and_return([{ codec: 'aac' }])
+      allow(Neutraliser::ObjectAudio).to receive(:detect).and_return(Neutraliser::ObjectAudio::NONE)
+      allow(processor).to receive(:analyze_loudness_for_path)
+        .and_raise(Neutraliser::FFmpegError.new('Normalization failed (exit 1): Subtitle codec 0 is not supported.',
+                                                reason: :unsupported_subtitle))
+
+      result = nil
+      expect { result = processor.send(:process_file, episodes.first) }.to output.to_stdout
+
+      expect(result).to include(status: :failed, reason: :unsupported_subtitle,
+                                message: 'Normalization failed (exit 1): Subtitle codec 0 is not supported.')
+    end
+  end
+
   describe '#analyze_loudness_for_path' do
     let(:processor) { described_class.new }
     let(:analyser) { instance_double(Neutraliser::AudioAnalyser) }

@@ -1,6 +1,7 @@
 require 'json'
 require 'time'
 require 'pathname'
+require 'securerandom'
 require_relative 'skip_decider'
 
 module Neutraliser
@@ -129,6 +130,7 @@ module Neutraliser
         "skipped=#{summary[:skipped]}, failed=#{summary[:failed]}, resumed=#{summary[:resumed]}, " \
         "linear=#{summary[:linear]}, dynamic=#{summary[:dynamic]}"
       )
+      log_failure_groups(summary)
 
       summary
     end
@@ -202,6 +204,8 @@ module Neutraliser
       failed = results.count { |result| result[:status] == :failed }
       linear = results.count { |result| result[:normalization_type] == 'Linear' }
       dynamic = results.count { |result| result[:normalization_type] == 'Dynamic' }
+      failures = results.select { |result| result[:status] == :failed }
+      not_writable = failures.select { |result| result[:reason] == :not_writable }
 
       {
         found: found,
@@ -212,9 +216,23 @@ module Neutraliser
         failed: failed,
         linear: linear,
         dynamic: dynamic,
+        failed_by_reason: failures.map { |result| result[:reason] }.tally,
+        not_writable_dirs: not_writable.map { |result| File.dirname(result[:file]) }.uniq.sort,
         manifest_path: manifest_path,
         results: results
       }
+    end
+
+    # Whole folders failing the same way (a TV show the NAS user can't write
+    # to) read as one line per folder, not hundreds of per-file errors.
+    def log_failure_groups(summary)
+      return if summary[:failed_by_reason].empty?
+
+      log "Failed by reason: #{summary[:failed_by_reason].map { |reason, count| "#{reason}=#{count}" }.join(', ')}"
+      return if summary[:not_writable_dirs].empty?
+
+      log "Not writable — fix permissions on #{summary[:not_writable_dirs].length} folder(s):"
+      summary[:not_writable_dirs].each { |dir| log "  #{dir}" }
     end
 
     def process_file(file_path)
@@ -230,7 +248,13 @@ module Neutraliser
 
       log "Processing: #{file_path}"
 
+      preflight_failure = check_writable(file_path)
+      return preflight_failure if preflight_failure
+
       begin
+        subtitle_failure = check_subtitles(file_path)
+        return subtitle_failure if subtitle_failure
+
         @stager.with_working_copy(file_path) do |working_path|
           movie = FFMPEG::Movie.new(working_path)
 
@@ -274,9 +298,11 @@ module Neutraliser
       rescue FFmpegError => e
         # Non-retryable ffmpeg/ffprobe failure (bad container, unsupported
         # codec, failed probe) - distinct from a timeout so the manifest
-        # doesn't conflate "try again" with "this file is broken".
+        # doesn't conflate "try again" with "this file is broken". The error
+        # names the kinds it can recognise (:not_writable,
+        # :unsupported_subtitle); the rest stay :ffmpeg_error.
         log "  FFmpeg error processing file: #{e.message}"
-        file_result(file_path, status: :failed, reason: :ffmpeg_error, message: e.message)
+        file_result(file_path, status: :failed, reason: e.reason, message: e.message)
       rescue FileManagerError => e
         log "  File management error processing file: #{e.message}"
         file_result(file_path, status: :failed, reason: :file_manager_error, message: e.message)
@@ -338,6 +364,52 @@ module Neutraliser
       log "  Object audio (#{verdict.profile}): re-encoding would strip it, skipping " \
           '(--allow-object-audio-loss to process anyway)'
       file_result(original_path, status: :skipped, reason: :object_audio, message: verdict.profile)
+    end
+
+    # The output lands beside the original (temp + rename with --replace, a
+    # _normalized copy without), so a folder we can't write to fails every
+    # file in it - but only after a full analysis pass each. Proving the
+    # folder writable first turns that into one cheap check per folder. A dry
+    # run writes nothing, so it doesn't need one.
+    def check_writable(file_path)
+      return nil if @dry_run
+
+      dir = File.dirname(File.expand_path(file_path))
+      blocker = write_blocker(dir)
+      return nil unless blocker
+
+      message = "can't write to #{dir} (#{blocker}); fix the folder's permissions"
+      log "  Not writable: #{message}"
+      file_result(file_path, status: :failed, reason: :not_writable, message: message)
+    end
+
+    # nil when the directory takes a new file, else why not. Memoised per run:
+    # permissions are a property of the folder, and a TV season is one folder.
+    def write_blocker(dir)
+      @write_blockers ||= {}
+      return @write_blockers[dir] if @write_blockers.key?(dir)
+
+      @write_blockers[dir] = begin
+        probe = File.join(dir, ".neutraliser-write-check-#{Process.pid}-#{SecureRandom.hex(4)}")
+        File.open(probe, File::WRONLY | File::CREAT | File::EXCL) { nil }
+        File.delete(probe)
+        nil
+      rescue SystemCallError => e
+        SystemCallError.new(nil, e.errno).message # "Permission denied", without Ruby's call site and path
+      end
+    end
+
+    # Subtitles are copied as-is, never dropped. One ffmpeg can't identify
+    # can't be copied either, so the encode would fail after a full analysis
+    # pass; fail the file up front with a countable reason instead.
+    def check_subtitles(file_path)
+      unsupported = FFmpegWrapper.unsupported_subtitles(file_path)
+      return nil if unsupported.empty?
+
+      message = "subtitle #{unsupported.join(', ')} can't be copied by this ffmpeg; " \
+                'remux or remove it to process this file'
+      log "  Unsupported subtitle: #{message}"
+      file_result(file_path, status: :failed, reason: :unsupported_subtitle, message: message)
     end
 
     def applied_gain(measurement)
