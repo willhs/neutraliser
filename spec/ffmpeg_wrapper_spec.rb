@@ -141,6 +141,48 @@ RSpec.describe Neutraliser::FFmpegWrapper do
       expect(result[:normalization_type]).to eq('Linear')
     end
 
+    describe 'keep_original' do
+      let(:tracks) do
+        [
+          { index: 0, channels: 6, codec: 'ac3', title: 'English 5.1', bit_rate: 448_000, sample_rate: 48_000 },
+          { index: 1, channels: 2, codec: 'aac', title: 'Commentary', bit_rate: 256_000, sample_rate: 44_100 }
+        ]
+      end
+
+      def run(audio_tracks, **opts)
+        allow(described_class).to receive(:execute_with_timeout).and_return(['', 'Normalization Type:   Linear', ok_status])
+        described_class.apply_normalization('in.mkv', 'out.mkv', measured_data, profile.merge(name: 'livingroom'),
+                                            audio_tracks: audio_tracks, **opts)
+        captured = nil
+        expect(described_class).to have_received(:execute_with_timeout) { |cmd, *_| captured ||= cmd }
+        captured
+      end
+
+      it 'is off by default: no extra track' do
+        cmd = run(tracks)
+        expect(cmd).not_to include('-disposition:a:1')
+        expect(cmd.each_cons(2).count { |a, b| a == '-map' && b == '0:a:0' }).to eq(0)
+      end
+
+      it 'copies the original after the normalised track and shifts the other tracks' do
+        cmd = run(tracks, keep_original: true)
+        pairs = cmd.each_cons(2).to_a
+        expect(pairs).to include(['-map', '0:a:0'], ['-c:a:1', 'copy'], ['-map', '0:a:1'], ['-c:a:2', 'copy'])
+        expect(pairs).to include(['-map_metadata:s:a:0', '0:s:a:0'], ['-map_metadata:s:a:1', '0:s:a:0'],
+                                 ['-map_metadata:s:a:2', '0:s:a:1'])
+        expect(pairs).to include(['-metadata:s:a:1', 'title=English 5.1 (original, not normalised)'],
+                                 ['-disposition:a:0', 'default'], ['-disposition:a:1', '0'])
+      end
+
+      it 'does not add a second copy when a kept original is already present' do
+        kept = tracks + [{ index: 2, channels: 6, codec: 'ac3', title: 'English 5.1 (original, not normalised)' }]
+        kept = [tracks[0], kept.last, tracks[1]].each_with_index.map { |t, i| t.merge(index: i) }
+        cmd = run(kept, keep_original: true)
+        expect(cmd).not_to include('-disposition:a:1')
+        expect(cmd.each_cons(2)).to include(['-c:a:1', 'copy'], ['-c:a:2', 'copy'])
+      end
+    end
+
     it 'maps per-stream metadata from the primary track onto the normalised output stream' do
       tracks = [
         { index: 0, channels: 6, codec: 'ac3', bit_rate: 448_000, sample_rate: 48_000 },

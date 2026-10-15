@@ -1,3 +1,6 @@
+## [2026-10-15] update | --keep-original-audio for reversible processing
+Opt-in `--keep-original-audio` stream-copies the untouched primary audio track into the output as output `a:1` (non-default, titled `<title> (original, not normalised)`, language copied via `-map_metadata:s:a:1`); the normalised track stays `a:0` and default, and later tracks shift up one with their metadata mappings shifted too. A track already carrying the title suffix (from an earlier run) suppresses a second copy. Detection is by title because MP4 drops custom stream tags. `neutraliser restore` is not included — follow-up (needs to drop `a:0`, promote the original and clear stamps).
+
 ## [2026-08-09] fix | analyze-plex: hyphenated command broken, and its numbers were badly wrong
 Running the real Plex audit (token now valid — it was rotated between checks, so the earlier 401 is resolved; `PLEX_SERVER_URL` still points at the unresolvable `willdows.local`, use `--server-url http://192.168.69.217:32400`) surfaced two bugs in a command the README advertises.
 

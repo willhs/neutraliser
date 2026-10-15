@@ -69,6 +69,7 @@ Neutraliser does the one job: make the library level, leave everything else alon
 - **Full stream preservation** — every audio/subtitle track, per-stream metadata (titles, languages), chapters and dispositions survive the round trip
 - **Never silently strips Atmos / DTS:X** — ffmpeg can't re-encode object audio, so files whose primary track is Dolby Atmos (E-AC3 JOC, TrueHD) or DTS:X are skipped and logged; `--allow-object-audio-loss` processes them anyway ([detection notes](docs/research/object-audio-detection.md))
 - **Safe by default** — writes `*_normalized` copies; originals untouched unless you pass `--replace`
+- **Fully reversible on request** — `--keep-original-audio` stream-copies the untouched original track into the output as a non-default extra track, so nothing is lost even with `--replace`
 - **Every change is recorded in the file** — the normalised track carries `NEUTRALISER_*` tags (profile, linear/dynamic, gain, source codec, measured loudness, date), so the record survives moves and renames; `neutraliser report` reads it back
 - **Skips what's already fine** — a file tagged for the same profile is never re-encoded; a `.neutraliser` sidecar caches that check and an optional 30-second sample spots files already at target, so a re-run over a processed library costs seconds, not hours
 - **Resumable** — interrupted a 500-file run? `--resume` picks up from the manifest
@@ -232,6 +233,7 @@ Normalise a file or every video under a directory.
 | `--fast-verify` / `--no-fast-verify` | on | Use the 30-second quick sample before a full analysis |
 | `--resume` | `false` | Skip files already completed per `.neutraliser-run-manifest.jsonl` |
 | `--allow-dynamic` | `false` | Let `loudnorm` compress dynamics when it needs to. Default is constant gain only. Implied by the `night` profile |
+| `--keep-original-audio` | `false` | Keep the untouched original primary audio as an extra, non-default track titled `<title> (original, not normalised)`, after the normalised one. Costs file size; makes processing reversible. A re-run never adds a second copy |
 | `--allow-object-audio-loss` | `false` | Process files whose primary track is Atmos / DTS:X anyway. Re-encoding drops the object audio (plain 5.1/7.1 out); each such file logs a warning. Default skips them with reason `object_audio` |
 | `--fast` | `false` | Single-pass normalisation — quicker, always dynamic, so it errors unless `--allow-dynamic` or `night` is set |
 | `--local-stage` | `false` | Copy to local disk before processing; helps on slow mounts |

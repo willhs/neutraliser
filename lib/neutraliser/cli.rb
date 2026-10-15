@@ -88,6 +88,8 @@ module Neutraliser
                            desc: 'Allow loudnorm to compress dynamics (default is constant gain; quiet-but-peaky files land shy of target)'
     option :allow_object_audio_loss, type: :boolean, default: false,
                                      desc: 'Re-encode Atmos / DTS:X tracks anyway, losing the objects'
+    option :keep_original_audio, type: :boolean, default: false,
+                                 desc: 'Keep the untouched original audio as an extra non-default track (reversible)'
     option :linear_only, type: :boolean, default: false,
                          desc: 'Deprecated no-op: constant gain is now the default'
     def process(path)
@@ -105,7 +107,8 @@ module Neutraliser
         fast: options[:fast],
         local_stage: options[:local_stage],
         allow_dynamic: options[:allow_dynamic],
-        allow_object_audio_loss: options[:allow_object_audio_loss]
+        allow_object_audio_loss: options[:allow_object_audio_loss],
+        keep_original_audio: options[:keep_original_audio]
       )
 
       summary = processor.process(path)

@@ -224,7 +224,7 @@ module Neutraliser
       nil
     end
 
-    def self.apply_normalization(input_path, output_path, measured_data, profile, audio_tracks: nil, allow_dynamic: false)
+    def self.apply_normalization(input_path, output_path, measured_data, profile, audio_tracks: nil, allow_dynamic: false, keep_original: false)
       audio_tracks ||= detect_audio_tracks(input_path)
       primary_track = audio_tracks.first || UNKNOWN_AUDIO_TRACK
 
@@ -250,7 +250,7 @@ module Neutraliser
       cmd = build_complete_ffmpeg_command(
         input_path, output_path, audio_filter,
         codec_args, audio_tracks, stream_counts(input_path),
-        tags: stamp_args(stamp_for.call(predicted_type), output_path)
+        tags: stamp_args(stamp_for.call(predicted_type), output_path), keep_original: keep_original
       )
 
       ffmpeg_output = execute_with_progress(cmd)
@@ -268,7 +268,7 @@ module Neutraliser
       shortfall.positive? ? codec_decision.merge(shortfall_lu: shortfall) : codec_decision
     end
 
-    def self.apply_normalization_single_pass(input_path, output_path, audio_tracks, profile)
+    def self.apply_normalization_single_pass(input_path, output_path, audio_tracks, profile, keep_original: false)
       audio_tracks ||= detect_audio_tracks(input_path)
       primary_track = audio_tracks.first || UNKNOWN_AUDIO_TRACK
 
@@ -285,7 +285,7 @@ module Neutraliser
       cmd = build_complete_ffmpeg_command(
         input_path, output_path, loudnorm_filter,
         codec_args, audio_tracks, stream_counts(input_path),
-        tags: stamp_args(stamp, output_path)
+        tags: stamp_args(stamp, output_path), keep_original: keep_original
       )
 
       ffmpeg_output = execute_with_progress(cmd)
@@ -717,7 +717,7 @@ module Neutraliser
     end
 
     def self.build_complete_ffmpeg_command(input_path, output_path, loudnorm_filter, primary_codec, audio_tracks,
-                                           stream_counts = { video: 0, subtitle: 0 }, tags: [])
+                                           stream_counts = { video: 0, subtitle: 0 }, tags: [], keep_original: false)
       cmd = [
         'ffmpeg', '-hide_banner', '-y', '-i', input_path,
         # Video stream - always copy
@@ -730,12 +730,18 @@ module Neutraliser
         '-map', '[norm]'
       ] + primary_codec
 
+      # With keep_original, a stream-copy of the untouched primary track
+      # follows the normalised one (output a:1), so every other track's
+      # output index shifts by one. A file that already carries a kept
+      # original (from an earlier run) is not given a second copy.
+      keep_original &&= audio_tracks.none? { |track| original_copy?(track) }
+      shift = keep_original ? 1 : 0
+      source_for_output = audio_tracks.each_with_index.map { |track, i| [i.zero? ? 0 : i + shift, track] }
+      cmd += ['-map', '0:a:0', '-c:a:1', 'copy'] if keep_original
+
       # Additional audio streams - copy as-is with explicit indexing
-      if audio_tracks.length > 1
-        audio_tracks[1..-1].each_with_index do |track, idx|
-          output_index = idx + 1
-          cmd += ['-map', "0:a:#{track[:index]}", "-c:a:#{output_index}", 'copy']
-        end
+      audio_tracks[1..].each_with_index do |track, idx|
+        cmd += ['-map', "0:a:#{track[:index]}", "-c:a:#{idx + 1 + shift}", 'copy']
       end
 
       # Metadata and subtitles preservation. The primary track goes through
@@ -750,8 +756,13 @@ module Neutraliser
       # are otherwise a plain stream-copy would go from implicitly-correct
       # to silently stripped of language/title tags.
       cmd += ['-map_chapters', '0', '-map_metadata', '0']
-      audio_tracks.each_with_index do |track, output_index|
+      source_for_output.each do |output_index, track|
         cmd += ["-map_metadata:s:a:#{output_index}", "0:s:a:#{track[:index]}"]
+      end
+      if keep_original
+        cmd += ['-map_metadata:s:a:1', '0:s:a:0',
+                '-metadata:s:a:1', "title=#{original_title(audio_tracks.first)}",
+                '-disposition:a:0', 'default', '-disposition:a:1', '0']
       end
       stream_counts[:video].to_i.times do |i|
         cmd += ["-map_metadata:s:v:#{i}", "0:s:v:#{i}"]
@@ -766,6 +777,17 @@ module Neutraliser
       ]
 
       cmd
+    end
+
+    ORIGINAL_TITLE_SUFFIX = '(original, not normalised)'.freeze
+
+    def self.original_title(track)
+      [track[:title], ORIGINAL_TITLE_SUFFIX].compact.reject(&:empty?).join(' ')
+    end
+
+    # A track a previous --keep-original-audio run preserved.
+    def self.original_copy?(track)
+      track[:title].to_s.end_with?(ORIGINAL_TITLE_SUFFIX)
     end
 
     def self.execute_with_progress(cmd)
@@ -805,6 +827,8 @@ module Neutraliser
                          :stamp_args,
                          :restamp,
                          :build_complete_ffmpeg_command,
+                         :original_title,
+                         :original_copy?,
                          :execute_with_progress
   end
 end

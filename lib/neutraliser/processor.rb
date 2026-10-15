@@ -13,7 +13,7 @@ module Neutraliser
 
     def initialize(replace: false, target_level: nil, profile: 'livingroom', tolerance: 1.0, cache: true,
                    dry_run: false, fast_verify: true, resume: false, fast: false, local_stage: false,
-                   allow_dynamic: false, allow_object_audio_loss: false)
+                   allow_dynamic: false, allow_object_audio_loss: false, keep_original_audio: false)
       @replace = replace
       @profile = if target_level
                    Profiles.custom_profile(target_level.to_f)
@@ -31,6 +31,7 @@ module Neutraliser
       @local_stage = local_stage
       @allow_dynamic = allow_dynamic || @profile[:dynamic] == true
       @allow_object_audio_loss = allow_object_audio_loss
+      @keep_original_audio = keep_original_audio
       raise ArgumentError, FAST_REQUIRES_DYNAMIC_MESSAGE if @fast && !@allow_dynamic
 
       @stager = LocalStager.new(enabled: local_stage)
@@ -352,7 +353,8 @@ module Neutraliser
       codec_decision = render_normalization(
         original_path, working_path, audio_tracks,
         log_message: "  Fast mode: single-pass normalization to #{@profile[:lufs]} LUFS"
-      ) { |wp, out, tracks| FFmpegWrapper.apply_normalization_single_pass(wp, out, tracks, @profile) }
+      ) { |wp, out, tracks| FFmpegWrapper.apply_normalization_single_pass(wp, out, tracks, @profile,
+                                                                     keep_original: @keep_original_audio) }
 
       file_result(original_path, status: :done, reason: :normalized,
                                  normalization_type: codec_decision[:normalization_type])
@@ -386,7 +388,8 @@ module Neutraliser
         log_message: "  Current: #{current_lufs.round(1)} LUFS, Target: #{target_lufs} LUFS (#{adjustment.round(1)} LU adjustment)"
       ) do |wp, out, tracks|
         FFmpegWrapper.apply_normalization(wp, out, measurement, @profile, audio_tracks: tracks,
-                                                                          allow_dynamic: @allow_dynamic)
+                                                                          allow_dynamic: @allow_dynamic,
+                                                                          keep_original: @keep_original_audio)
       end
     end
 
