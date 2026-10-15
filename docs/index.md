@@ -17,7 +17,7 @@ tags: []
 Entry point and navigation map for the neutraliser documentation set. Neutraliser is a Ruby CLI tool for EBU R128 audio volume normalisation of video libraries.
 
 ## Philosophy
-- [`philosophy/vision.md`](philosophy/vision.md) — North star: consistent volume for your media library
+- [`philosophy/vision.md`](philosophy/vision.md) — North star: consistent volume for your media library, least lossy processing
 - [`philosophy/form.md`](philosophy/form.md) — Shape of the tool: Ruby CLI, volume pipeline, copy or replace
 
 ## Design
