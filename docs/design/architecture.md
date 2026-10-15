@@ -58,11 +58,15 @@ When re-encoding normalised audio, the codec and bitrate are selected to match t
 
 See [ADR-0001](adr/0001-smart-codec-selection.md) for the full rationale.
 
+### Constant gain by default, dynamic opt-in
+
+The default normalisation pass is a constant `volume=` gain (`FFmpegWrapper.build_volume_gain_filter`), capped so true peak stays at or below the profile TP. Quiet-but-peaky files land shy of target; `apply_normalization` returns `shortfall_lu` and the Processor logs it. `--allow-dynamic` switches to the two-pass `loudnorm` filter, which may fall back to dynamic compression; profiles with `dynamic: true` (`night`) imply it. Every result carries `normalization_type` (Linear/Dynamic); the run summary reports `linear`/`dynamic` counts and each Dynamic file logs a warning. `--linear-only` is a deprecated no-op.
+
 ### Performance Flags
 
 Two optional flags reduce per-file processing time. See [ADR-0002](adr/0002-performance-flags.md) for rationale and benchmark data.
 
-- **`--fast`** — uses FFmpeg's single-pass loudnorm (dynamic mode) instead of the default two-pass (linear mode). Skips the measurement pass entirely. Benchmarked at **30-37% faster**. Slightly less accurate — uses dynamic gain adjustment rather than a constant linear offset.
+- **`--fast`** — uses FFmpeg's single-pass loudnorm (dynamic mode) instead of the default constant-gain pass. Always dynamic, so it is refused unless `--allow-dynamic` is given or the profile is dynamic (`night`). Skips the measurement pass entirely. Benchmarked at **30-37% faster**. Slightly less accurate — uses dynamic gain adjustment rather than a constant linear offset.
 - **`--local-stage`** — copies each file to a local temp directory (`/tmp/neutraliser_staging/`) before processing, then copies the result back. Designed to avoid slow random I/O over SMB/NFS. Benchmarks showed **no improvement on fast LAN** (~110 MB/s SMB) where CPU is the bottleneck, but may help on slower network mounts. Cache sidecar files are still read/written next to the original video, not the staged copy.
 
 Both flags are independent and can be combined.

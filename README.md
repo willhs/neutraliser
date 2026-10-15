@@ -49,8 +49,11 @@ artifacts would show up if they were going to):
 | Audio codec | AAC 162k | AAC 162k |
 | Video bitstream | — | **MD5-identical**, stream-copied |
 
-Constant gain, not compression: the dynamic range is preserved exactly, so quiet
-scenes stay quiet relative to loud ones. Only the overall level moves.
+Constant gain, not compression, by default: the dynamic range is preserved exactly, so quiet
+scenes stay quiet relative to loud ones. Only the overall level moves. The gain is capped so
+true peak stays under the profile ceiling, so a quiet-but-peaky file lands shy of target
+(and the run log says by how much) rather than being squashed. Compression is opt-in:
+`--allow-dynamic`, or the `night` profile.
 
 ## Why this exists
 
@@ -142,16 +145,16 @@ Treat the output as a rough triage tool, not a verdict — it judges each title 
 neutraliser process --dry-run /media/tv/some-series
 ```
 
-**Level a large library overnight**, in place, at the faster single-pass setting:
+**Level a large library overnight**, in place, at the faster single-pass setting (always compresses, so it needs `--allow-dynamic`):
 
 ```bash
-neutraliser process --replace --fast /media/movies
+neutraliser process --replace --fast --allow-dynamic /media/movies
 ```
 
 **Resume after an interruption** — a dropped SMB mount, a reboot, a Ctrl-C:
 
 ```bash
-neutraliser process --replace --fast --resume /media/movies
+neutraliser process --replace --fast --allow-dynamic --resume /media/movies
 ```
 
 **Night listening** — a tighter dynamic range so quiet dialogue stays audible without explosions waking the house:
@@ -190,7 +193,7 @@ neutraliser process --replace --fast /media/movies
 |---|---|---|---|---|
 | `reference` | −23 LUFS | −1.5 dBTP | unlimited | Full home-theatre / AVR setups where you want the mix's original dynamics |
 | `livingroom` *(default)* | −20 LUFS | −1.5 dBTP | 12 | TVs and soundbars — general viewing. Start here |
-| `night` | −16 LUFS | −1.5 dBTP | 10 | Quiet listening: louder overall, compressed range, no explosive peaks |
+| `night` | −16 LUFS | −1.5 dBTP | 10 | Quiet listening: louder overall, compressed range, no explosive peaks. A compression profile — implies `--allow-dynamic` |
 
 Higher (less negative) LUFS = louder. Lower LRA = less difference between the quietest and loudest moments.
 
@@ -205,10 +208,10 @@ Any numeric `--target-level` overrides the profile's LUFS while keeping the rest
 1. **Skip check** — a `.neutraliser` sidecar (size + mtime + profile) says whether this exact file has already been done. If not, an optional 30-second sample estimates whether it's already within tolerance.
 2. **Measure** — an FFmpeg `loudnorm` analysis pass measures integrated loudness, true peak, and loudness range. Results are cached, so re-analysis is free.
 3. **Decide** — within `--tolerance` of the profile target? Skip it. Otherwise, pick an output codec that matches the source ([ADR-0001](docs/design/adr/0001-smart-codec-selection.md)).
-4. **Normalise** — a second `loudnorm` pass applies a constant linear gain using the measured values. Video is stream-copied — it is never re-encoded. Chapters, subtitles, and per-stream metadata are mapped across explicitly.
+4. **Normalise** — applies a constant gain (an ffmpeg `volume` filter) computed from the measured values, capped so true peak stays within the profile ceiling. With `--allow-dynamic` (or the `night` profile) a second `loudnorm` pass is used instead, which may fall back to dynamic compression. Video is stream-copied — it is never re-encoded. Chapters, subtitles, and per-stream metadata are mapped across explicitly.
 5. **Write** — atomically, to `*_normalized.<ext>` or over the original with `--replace`, and the sidecar is stamped.
 
-Use `--fast` to collapse steps 2 and 4 into a single dynamic-mode pass: roughly 30% quicker, marginally less precise ([ADR-0002](docs/design/adr/0002-performance-flags.md) has the benchmarks).
+Use `--fast` (requires `--allow-dynamic` or the `night` profile) to collapse steps 2 and 4 into a single dynamic-mode pass: roughly 30% quicker, marginally less precise ([ADR-0002](docs/design/adr/0002-performance-flags.md) has the benchmarks).
 
 ## Commands
 
@@ -226,9 +229,12 @@ Normalise a file or every video under a directory.
 | `--cache` / `--no-cache` | on | Cache loudness analysis results |
 | `--fast-verify` / `--no-fast-verify` | on | Use the 30-second quick sample before a full analysis |
 | `--resume` | `false` | Skip files already completed per `.neutraliser-run-manifest.jsonl` |
-| `--fast` | `false` | Single-pass normalisation — quicker, slightly less accurate |
+| `--allow-dynamic` | `false` | Let `loudnorm` compress dynamics when it needs to. Default is constant gain only. Implied by the `night` profile |
+| `--fast` | `false` | Single-pass normalisation — quicker, always dynamic, so it errors unless `--allow-dynamic` or `night` is set |
 | `--local-stage` | `false` | Copy to local disk before processing; helps on slow mounts |
-| `--linear-only` | `false` | Constant-gain only — never fall back to dynamic compression (quiet-but-peaky files may land shy of target) |
+| `--linear-only` | `false` | Deprecated no-op (constant gain is now the default); prints a warning |
+
+The run summary reports `linear=N, dynamic=N` counts; each file that went Dynamic logs a warning, and each peak-capped file logs how many LU it landed short of target.
 
 Exits `1` if any file fails, so batch runners can detect partial failure.
 

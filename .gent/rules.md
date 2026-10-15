@@ -28,7 +28,7 @@ A Ruby CLI tool that normalises audio volume in video files using industry-stand
 ### Processing Pipeline
 1. **Skip Decision**: `SkipDecider` checks the `.neutraliser` sidecar (or a quick LUFS sample fallback) — already-normalised files are skipped
 2. **Analysis Pass**: FFmpeg loudnorm measurement → sidecar JSON cache (skipped in `--fast` mode)
-3. **Normalization Pass**: Two-pass loudnorm by default; `--fast` uses single-pass dynamic mode
+3. **Normalization Pass**: Constant gain (`volume` filter, peak-capped) by default; `--allow-dynamic` uses two-pass loudnorm (may go dynamic); `--fast` uses single-pass dynamic mode
 4. **Codec Intelligence**: Matches source codec/bitrate where encodable, falls back to FLAC/EAC3/AC3 for non-encodable surround formats — see [ADR-0001](docs/design/adr/0001-smart-codec-selection.md)
 5. **Atomic Operations**: Safe file replacement with integrity verification
 
@@ -42,7 +42,7 @@ A Ruby CLI tool that normalises audio volume in video files using industry-stand
 ### Normalization Profiles
 - **Reference** (-23 LUFS, 50 LRA): Home theater/broadcast standard
 - **Livingroom** (-20 LUFS, 12 LRA): TV/soundbar optimal (default)
-- **Night** (-16 LUFS, 10 LRA): Reduced dynamics for quiet listening
+- **Night** (-16 LUFS, 10 LRA): Reduced dynamics for quiet listening; `dynamic: true` profile flag, so implies `--allow-dynamic`
 
 ### Smart Features
 - **Intelligent Caching**: Profile-specific sidecar JSON with file integrity checks
@@ -65,10 +65,11 @@ A Ruby CLI tool that normalises audio volume in video files using industry-stand
 - `--tolerance N.N` - Skip threshold in LU (default: 1.0)
 - `--dry-run` - Analysis only mode
 - `--cache/--no-cache` - Toggle sidecar caching
-- `--fast` - Single-pass normalization (faster, slightly less accurate)
+- `--fast` - Single-pass normalization (faster, always dynamic; errors unless `--allow-dynamic` or night profile)
 - `--local-stage` - Copy files to local disk before processing
 - `--resume` - Resume a prior directory run, skipping completed files
-- `--linear-only` - Constant-gain normalization only, never falls back to dynamic compression
+- `--allow-dynamic` - Opt in to loudnorm two-pass, which may go dynamic (default is constant gain, peak-capped)
+- `--linear-only` - Deprecated no-op alias (constant gain is the default)
 
 ## Testing Strategy ✅ COMPLETED
 

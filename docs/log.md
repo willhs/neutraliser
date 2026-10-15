@@ -63,3 +63,6 @@ Ran neutraliser (--dry-run then --replace) over an 8-file slice of the real NAS/
 
 ## [2026-10-15] update | Vision adds "least lossy" as a core principle
 Rewrote docs/philosophy/vision.md (was a two-line draft): consistent volume at the smallest cost to quality. Constant gain by default, compression opt-in and reported, other streams untouched, source-matched codec. Records the current gap: 63% (2,026/3,208) of processed TV files went to loudnorm dynamic mode under the default livingroom profile (LRA 12).
+
+## [2026-10-15] update | Constant gain is the default; dynamic compression is opt-in
+Implements the vision's "least lossy" principle. The default pass is now the peak-capped `volume` filter (previously `--linear-only`); `--allow-dynamic` opts back into loudnorm two-pass, and profiles gain a `dynamic` flag (`night` is true) that implies it. `--fast` is always dynamic and now errors without `--allow-dynamic` or a dynamic profile. `--linear-only` stays as a deprecated no-op. Run summary gains `linear`/`dynamic` counts, Dynamic files log a warning, and peak-capped files log how many LU short of target they landed. README, AGENTS.md and architecture.md updated.

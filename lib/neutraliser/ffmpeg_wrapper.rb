@@ -189,7 +189,7 @@ module Neutraliser
       nil
     end
 
-    def self.apply_normalization(input_path, output_path, measured_data, profile, audio_tracks: nil, linear_only: false)
+    def self.apply_normalization(input_path, output_path, measured_data, profile, audio_tracks: nil, allow_dynamic: false)
       audio_tracks ||= detect_audio_tracks(input_path)
       primary_track = audio_tracks.first || UNKNOWN_AUDIO_TRACK
 
@@ -197,7 +197,7 @@ module Neutraliser
       codec_args = build_codec_args(codec_decision)
 
       audio_filter, forced_normalization_type = build_audio_filter(
-        measured_data, profile[:lufs], profile[:tp], profile[:lra], primary_track[:sample_rate], linear_only: linear_only
+        measured_data, profile[:lufs], profile[:tp], profile[:lra], primary_track[:sample_rate], allow_dynamic: allow_dynamic
       )
 
       cmd = build_complete_ffmpeg_command(
@@ -208,7 +208,11 @@ module Neutraliser
       ffmpeg_output = execute_with_progress(cmd)
       normalization_type = forced_normalization_type || parse_normalization_type(ffmpeg_output) || 'Unknown'
 
-      codec_decision.merge(normalization_type: normalization_type)
+      codec_decision = codec_decision.merge(normalization_type: normalization_type)
+      return codec_decision unless forced_normalization_type
+
+      shortfall = linear_shortfall(measured_data, profile[:lufs], profile[:tp])
+      shortfall.positive? ? codec_decision.merge(shortfall_lu: shortfall) : codec_decision
     end
 
     def self.apply_normalization_single_pass(input_path, output_path, audio_tracks, profile)
@@ -534,15 +538,15 @@ module Neutraliser
     # Returns [filter_string, forced_normalization_type]. forced_normalization_type
     # is nil when the filter is loudnorm (its actual Linear/Dynamic behavior can
     # only be known after ffmpeg runs, by parsing its summary output) and 'Linear'
-    # when linear_only mode is used (a plain gain filter that can never engage
-    # dynamic compression).
-    def self.build_audio_filter(measured, target_i, target_tp, target_lra, source_sample_rate, linear_only:)
-      if linear_only
-        filter = build_volume_gain_filter(measured, target_i, target_tp)
-        forced_normalization_type = 'Linear'
-      else
+    # by default (a plain gain filter that can never engage dynamic compression);
+    # loudnorm is only used when the caller opts in with allow_dynamic.
+    def self.build_audio_filter(measured, target_i, target_tp, target_lra, source_sample_rate, allow_dynamic:)
+      if allow_dynamic
         filter = build_loudnorm_filter(measured, target_i, target_tp, target_lra)
         forced_normalization_type = nil
+      else
+        filter = build_volume_gain_filter(measured, target_i, target_tp)
+        forced_normalization_type = 'Linear'
       end
 
       filter += ",aresample=#{source_sample_rate}" if source_sample_rate
@@ -564,6 +568,13 @@ module Neutraliser
       desired_gain = target_i - measured.input_i
       max_safe_gain = target_tp - measured.input_tp
       [desired_gain, max_safe_gain].min
+    end
+
+    # How many LU the peak cap leaves the output short of target_i (0 when the
+    # full gain fits under the true-peak ceiling).
+    def self.linear_shortfall(measured, target_i, target_tp)
+      desired_gain = target_i - measured.input_i
+      (desired_gain - capped_linear_gain(measured, target_i, target_tp)).round(2)
     end
 
     def self.parse_normalization_type(ffmpeg_output)
@@ -654,6 +665,7 @@ module Neutraliser
                          :build_audio_filter,
                          :build_volume_gain_filter,
                          :capped_linear_gain,
+                         :linear_shortfall,
                          :parse_normalization_type,
                          :build_complete_ffmpeg_command,
                          :execute_with_progress

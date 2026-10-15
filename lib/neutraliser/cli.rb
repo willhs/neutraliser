@@ -84,9 +84,13 @@ module Neutraliser
     option :resume, type: :boolean, default: false, desc: 'Resume from previous run manifest and skip completed files'
     option :fast, type: :boolean, default: false, desc: 'Single-pass normalization (faster, slightly less accurate)'
     option :local_stage, type: :boolean, default: false, desc: 'Copy files to local disk before processing'
+    option :allow_dynamic, type: :boolean, default: false,
+                           desc: 'Allow loudnorm to compress dynamics (default is constant gain; quiet-but-peaky files land shy of target)'
     option :linear_only, type: :boolean, default: false,
-                         desc: 'Use constant-gain normalization only — never falls back to dynamic compression (quiet-but-peaky files may land shy of target)'
+                         desc: 'Deprecated no-op: constant gain is now the default'
     def process(path)
+      warn 'Warning: --linear-only is now the default and has no effect' if options[:linear_only]
+
       processor = Processor.new(
         replace: options[:replace],
         target_level: options[:target_level],
@@ -98,7 +102,7 @@ module Neutraliser
         resume: options[:resume],
         fast: options[:fast],
         local_stage: options[:local_stage],
-        linear_only: options[:linear_only]
+        allow_dynamic: options[:allow_dynamic]
       )
 
       summary = processor.process(path)
@@ -106,9 +110,13 @@ module Neutraliser
       return unless summary.is_a?(Hash)
 
       puts "Summary: found=#{summary[:found]}, queued=#{summary[:queued]}, resumed=#{summary[:resumed]}, " \
-           "done=#{summary[:done]}, skipped=#{summary[:skipped]}, failed=#{summary[:failed]}"
+           "done=#{summary[:done]}, skipped=#{summary[:skipped]}, failed=#{summary[:failed]}, " \
+           "linear=#{summary[:linear]}, dynamic=#{summary[:dynamic]}"
       puts "Manifest: #{summary[:manifest_path]}" if summary[:manifest_path]
       exit 1 if summary[:failed].to_i.positive?
+    rescue ArgumentError => e
+      # Invalid option combinations (e.g. --fast without --allow-dynamic)
+      raise Thor::Error, "Error: #{e.message}"
     end
 
     desc 'analyze-plex', 'Analyze Plex library audio levels'

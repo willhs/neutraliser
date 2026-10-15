@@ -302,8 +302,8 @@ RSpec.describe Neutraliser::Processor do
       expect(result[:normalization_type]).to eq('Dynamic')
     end
 
-    it 'passes linear_only through to FFmpegWrapper' do
-      linear_processor = described_class.new(replace: false, linear_only: true)
+    it 'passes allow_dynamic through to FFmpegWrapper' do
+      linear_processor = described_class.new(replace: false, allow_dynamic: true)
       File.write(video_file, 'x')
       allow(Neutraliser::FFmpegWrapper).to receive(:detect_audio_tracks).and_return([{ index: 0, codec: 'aac', channels: 2, bit_rate: 256_000, sample_rate: 48_000 }])
       allow(Neutraliser::FileManager).to receive(:verify_file_integrity).and_return(true)
@@ -311,7 +311,7 @@ RSpec.describe Neutraliser::Processor do
       linear_processor.send(:normalize_file_with_paths, video_file, video_file, measured_data)
 
       expect(Neutraliser::FFmpegWrapper).to have_received(:apply_normalization)
-        .with(video_file, output_file, measured_data, anything, hash_including(linear_only: true))
+        .with(video_file, output_file, measured_data, anything, hash_including(allow_dynamic: true))
     end
 
     it 'cleans up the temp output file even when interrupted (not just on StandardError)' do
@@ -364,8 +364,66 @@ RSpec.describe Neutraliser::Processor do
     end
   end
 
+  describe 'dynamic opt-in' do
+    it 'defaults to constant gain' do
+      processor = described_class.new
+      expect(processor.instance_variable_get(:@allow_dynamic)).to be(false)
+    end
+
+    it 'is implied by the night profile' do
+      processor = described_class.new(profile: 'night')
+      expect(processor.instance_variable_get(:@allow_dynamic)).to be(true)
+    end
+
+    it 'is not implied by livingroom or reference' do
+      %w[livingroom reference].each do |name|
+        expect(described_class.new(profile: name).instance_variable_get(:@allow_dynamic)).to be(false)
+      end
+    end
+
+    it 'refuses --fast without allow_dynamic or a dynamic profile' do
+      expect { described_class.new(fast: true) }.to raise_error(ArgumentError, /--fast.*--allow-dynamic/)
+    end
+
+    it 'allows --fast with allow_dynamic or the night profile' do
+      expect { described_class.new(fast: true, allow_dynamic: true) }.not_to raise_error
+      expect { described_class.new(fast: true, profile: 'night') }.not_to raise_error
+    end
+  end
+
+  describe 'run reporting' do
+    let(:processor) { described_class.new }
+
+    it 'counts Linear and Dynamic files in the summary' do
+      results = [
+        { status: :done, normalization_type: 'Linear' },
+        { status: :done, normalization_type: 'Linear' },
+        { status: :done, normalization_type: 'Dynamic' },
+        { status: :skipped, normalization_type: nil }
+      ]
+
+      summary = processor.send(:summarize_results, found: 4, queued: 4, resumed: 0, manifest_path: nil, results: results)
+
+      expect(summary).to include(linear: 2, dynamic: 1)
+    end
+
+    it 'warns when a file went Dynamic' do
+      expect(Neutraliser.logger).to receive(:log).with(/Warning: file went Dynamic/).at_least(:once)
+      allow(Neutraliser.logger).to receive(:log)
+
+      processor.send(:log_codec_decision, encoder: 'aac', bitrate: 128_000, normalization_type: 'Dynamic')
+    end
+
+    it 'logs the shortfall when the gain was peak-capped' do
+      expect(Neutraliser.logger).to receive(:log).with(/Peak-capped: landed 8.5 LU short of -20.0 LUFS/)
+      allow(Neutraliser.logger).to receive(:log)
+
+      processor.send(:log_codec_decision, encoder: 'aac', bitrate: 128_000, normalization_type: 'Linear', shortfall_lu: 8.5)
+    end
+  end
+
   describe '#process_file with fast mode' do
-    let(:processor) { described_class.new(fast: true, dry_run: true) }
+    let(:processor) { described_class.new(fast: true, allow_dynamic: true, dry_run: true) }
     let(:video_file) { File.join(temp_dir, 'movie.mp4') }
 
     before do

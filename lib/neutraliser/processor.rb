@@ -7,10 +7,12 @@ module Neutraliser
   class Processor
     SUPPORTED_FORMATS = %w[.mp4 .mkv .avi .mov .wmv .flv .webm .m4v].freeze
     MANIFEST_FILENAME = '.neutraliser-run-manifest.jsonl'.freeze
+    FAST_REQUIRES_DYNAMIC_MESSAGE = '--fast is single-pass loudnorm and always compresses dynamics; ' \
+                                    'add --allow-dynamic (or use the night profile) to accept that'.freeze
     TERMINAL_RESUME_STATES = %w[done skipped].freeze
 
     def initialize(replace: false, target_level: nil, profile: 'livingroom', tolerance: 1.0, cache: true,
-                   dry_run: false, fast_verify: true, resume: false, fast: false, local_stage: false, linear_only: false)
+                   dry_run: false, fast_verify: true, resume: false, fast: false, local_stage: false, allow_dynamic: false)
       @replace = replace
       @profile = if target_level
                    Profiles.custom_profile(target_level.to_f)
@@ -26,7 +28,9 @@ module Neutraliser
       @resume = resume
       @fast = fast
       @local_stage = local_stage
-      @linear_only = linear_only
+      @allow_dynamic = allow_dynamic || @profile[:dynamic] == true
+      raise ArgumentError, FAST_REQUIRES_DYNAMIC_MESSAGE if @fast && !@allow_dynamic
+
       @stager = LocalStager.new(enabled: local_stage)
     end
 
@@ -118,7 +122,8 @@ module Neutraliser
 
       log(
         "Run summary: queued=#{summary[:queued]}, done=#{summary[:done]}, " \
-        "skipped=#{summary[:skipped]}, failed=#{summary[:failed]}, resumed=#{summary[:resumed]}"
+        "skipped=#{summary[:skipped]}, failed=#{summary[:failed]}, resumed=#{summary[:resumed]}, " \
+        "linear=#{summary[:linear]}, dynamic=#{summary[:dynamic]}"
       )
 
       summary
@@ -182,6 +187,8 @@ module Neutraliser
       done = results.count { |result| result[:status] == :done }
       skipped = results.count { |result| result[:status] == :skipped }
       failed = results.count { |result| result[:status] == :failed }
+      linear = results.count { |result| result[:normalization_type] == 'Linear' }
+      dynamic = results.count { |result| result[:normalization_type] == 'Dynamic' }
 
       {
         found: found,
@@ -190,6 +197,8 @@ module Neutraliser
         done: done,
         skipped: skipped,
         failed: failed,
+        linear: linear,
+        dynamic: dynamic,
         manifest_path: manifest_path,
         results: results
       }
@@ -319,7 +328,7 @@ module Neutraliser
         log_message: "  Current: #{current_lufs.round(1)} LUFS, Target: #{target_lufs} LUFS (#{adjustment.round(1)} LU adjustment)"
       ) do |wp, out, tracks|
         FFmpegWrapper.apply_normalization(wp, out, measurement, @profile, audio_tracks: tracks,
-                                                                          linear_only: @linear_only)
+                                                                          allow_dynamic: @allow_dynamic)
       end
     end
 
@@ -407,6 +416,20 @@ module Neutraliser
 
       log "  Audio: #{source} -> #{target}"
       log "  Normalization: #{decision[:normalization_type]}" if decision[:normalization_type]
+      log_dynamic_warning(decision)
+      log_shortfall(decision)
+    end
+
+    def log_dynamic_warning(decision)
+      return unless decision[:normalization_type] == 'Dynamic'
+
+      log '  Warning: file went Dynamic - loudnorm compressed its dynamic range'
+    end
+
+    def log_shortfall(decision)
+      return unless decision[:shortfall_lu].to_f.positive?
+
+      log "  Peak-capped: landed #{decision[:shortfall_lu]} LU short of #{@profile[:lufs]} LUFS target"
     end
 
     def generate_output_path(file_path)

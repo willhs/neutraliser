@@ -47,18 +47,48 @@ RSpec.describe Neutraliser::CLI do
       end.to output(/Summary: found=2, queued=1, resumed=1, done=1, skipped=0, failed=0/).to_stdout
     end
 
-    it 'passes --linear-only to Processor initialization' do
+    it 'passes --allow-dynamic to Processor initialization' do
       processor = instance_double(Neutraliser::Processor)
       allow(processor).to receive(:process).and_return(
-        found: 1, queued: 1, resumed: 0, done: 1, skipped: 0, failed: 0, manifest_path: '/tmp/manifest', results: []
+        found: 1, queued: 1, resumed: 0, done: 1, skipped: 0, failed: 0, linear: 0, dynamic: 1,
+        manifest_path: '/tmp/manifest', results: []
       )
 
       expect(Neutraliser::Processor).to receive(:new) do |**kwargs|
-        expect(kwargs[:linear_only]).to eq(true)
+        expect(kwargs[:allow_dynamic]).to eq(true)
         processor
       end
 
-      described_class.start(['process', '--linear-only', '/tmp/library'])
+      expect do
+        described_class.start(['process', '--allow-dynamic', '/tmp/library'])
+      end.to output(/linear=0, dynamic=1/).to_stdout
+    end
+
+    it 'defaults allow_dynamic to false' do
+      processor = instance_double(Neutraliser::Processor)
+      allow(processor).to receive(:process).and_return(found: 0, queued: 0, resumed: 0, done: 0, skipped: 0, failed: 0)
+
+      expect(Neutraliser::Processor).to receive(:new) do |**kwargs|
+        expect(kwargs[:allow_dynamic]).to eq(false)
+        processor
+      end
+
+      described_class.start(['process', '/tmp/library'])
+    end
+
+    it 'refuses --fast without --allow-dynamic, with a clear message' do
+      expect do
+        expect { described_class.start(['process', '--fast', '/tmp/library']) }.to raise_error(SystemExit)
+      end.to output(/--fast.*--allow-dynamic/m).to_stderr
+    end
+
+    it 'accepts --linear-only as a deprecated no-op' do
+      processor = instance_double(Neutraliser::Processor)
+      allow(processor).to receive(:process).and_return(found: 0, queued: 0, resumed: 0, done: 0, skipped: 0, failed: 0)
+      allow(Neutraliser::Processor).to receive(:new).and_return(processor)
+
+      expect { described_class.start(['process', '--linear-only', '/tmp/library']) }
+        .to output(/--linear-only is now the default/).to_stderr
     end
 
     it 'exits non-zero when processing summary contains failures' do

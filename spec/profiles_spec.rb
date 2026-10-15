@@ -23,7 +23,15 @@ RSpec.describe Neutraliser::Profiles do
     it 'builds a custom profile hash' do
       profile = described_class.custom_profile(-18.0, name: 'my-profile', tp: -2.0, lra: 9.0)
 
-      expect(profile).to eq(name: 'my-profile', lufs: -18.0, tp: -2.0, lra: 9.0)
+      expect(profile).to eq(name: 'my-profile', lufs: -18.0, tp: -2.0, lra: 9.0, dynamic: false)
+    end
+  end
+
+  describe 'dynamic flag' do
+    it 'is set only on the night (compression) profile' do
+      expect(described_class.get_profile('night')[:dynamic]).to be(true)
+      expect(described_class.get_profile('livingroom')[:dynamic]).to be(false)
+      expect(described_class.get_profile('reference')[:dynamic]).to be(false)
     end
   end
 

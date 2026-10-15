@@ -191,16 +191,17 @@ RSpec.describe Neutraliser::FFmpegWrapper do
       tracks = [{ index: 0, channels: 2, codec: 'aac', bit_rate: 128_000, sample_rate: 48_000 }]
       allow(described_class).to receive(:execute_with_timeout).and_return(['', 'Normalization Type:   Dynamic', ok_status])
 
-      result = described_class.apply_normalization('in.mp4', 'out.mp4', measured_data, profile, audio_tracks: tracks)
+      result = described_class.apply_normalization('in.mp4', 'out.mp4', measured_data, profile, audio_tracks: tracks,
+                                                                                                allow_dynamic: true)
 
       expect(result[:normalization_type]).to eq('Dynamic')
     end
 
-    it 'never engages dynamic compression in linear_only mode, regardless of ffmpeg output' do
+    it 'never engages dynamic compression by default, regardless of ffmpeg output' do
       tracks = [{ index: 0, channels: 2, codec: 'aac', bit_rate: 128_000, sample_rate: 48_000 }]
       allow(described_class).to receive(:execute_with_timeout).and_return(['', 'Normalization Type:   Dynamic', ok_status])
 
-      result = described_class.apply_normalization('in.mp4', 'out.mp4', measured_data, profile, audio_tracks: tracks, linear_only: true)
+      result = described_class.apply_normalization('in.mp4', 'out.mp4', measured_data, profile, audio_tracks: tracks)
 
       expect(result[:normalization_type]).to eq('Linear')
       expect(described_class).to have_received(:execute_with_timeout) do |cmd, *_rest|
@@ -208,6 +209,33 @@ RSpec.describe Neutraliser::FFmpegWrapper do
         expect(filter_arg).to include('volume=')
         expect(filter_arg).not_to include('loudnorm')
       end
+    end
+  end
+
+  describe '.apply_normalization shortfall' do
+    let(:profile) { { lufs: -20.0, tp: -1.5, lra: 12.0, name: 'livingroom' } }
+    let(:ok_status) { instance_double(Process::Status, success?: true) }
+    let(:tracks) { [{ index: 0, channels: 2, codec: 'aac', bit_rate: 128_000, sample_rate: 48_000 }] }
+
+    before do
+      allow(described_class).to receive_messages(stream_counts: { video: 0, subtitle: 0 },
+                                                 execute_with_timeout: ['', '', ok_status])
+    end
+
+    it 'reports how far a peak-capped file lands short of target' do
+      peaky = Neutraliser::Measurement.from_loudnorm_json('input_i' => '-30.0', 'input_tp' => '-3.0', 'input_lra' => '5', 'input_thresh' => '-40', 'target_offset' => '0')
+
+      result = described_class.apply_normalization('in.mp4', 'out.mp4', peaky, profile, audio_tracks: tracks)
+
+      expect(result[:shortfall_lu]).to eq(8.5)
+    end
+
+    it 'reports no shortfall when the full gain fits under the peak ceiling' do
+      safe = Neutraliser::Measurement.from_loudnorm_json('input_i' => '-25.0', 'input_tp' => '-10.0', 'input_lra' => '5', 'input_thresh' => '-40', 'target_offset' => '0')
+
+      result = described_class.apply_normalization('in.mp4', 'out.mp4', safe, profile, audio_tracks: tracks)
+
+      expect(result).not_to have_key(:shortfall_lu)
     end
   end
 
@@ -506,11 +534,11 @@ RSpec.describe Neutraliser::FFmpegWrapper do
     end
   end
 
-  describe 'linear_only sample rate pinning' do
+  describe 'constant-gain sample rate pinning' do
     it 'pins output sample rate to source when no measured peak headroom issue exists' do
       measured = Neutraliser::Measurement.from_loudnorm_json('input_i' => '-25.0', 'input_tp' => '-10.0', 'input_lra' => '0', 'input_thresh' => '0', 'target_offset' => '0')
       filter, forced_type = described_class.send(
-        :build_audio_filter, measured, -20.0, -1.5, 12.0, 48_000, linear_only: true
+        :build_audio_filter, measured, -20.0, -1.5, 12.0, 48_000, allow_dynamic: false
       )
 
       expect(filter).to eq('volume=5.00dB,aresample=48000')
@@ -520,16 +548,16 @@ RSpec.describe Neutraliser::FFmpegWrapper do
     it 'omits aresample when source sample rate is unknown' do
       measured = Neutraliser::Measurement.from_loudnorm_json('input_i' => '-25.0', 'input_tp' => '-10.0', 'input_lra' => '0', 'input_thresh' => '0', 'target_offset' => '0')
       filter, = described_class.send(
-        :build_audio_filter, measured, -20.0, -1.5, 12.0, nil, linear_only: true
+        :build_audio_filter, measured, -20.0, -1.5, 12.0, nil, allow_dynamic: false
       )
 
       expect(filter).not_to include('aresample')
     end
 
-    it 'pins aresample on the loudnorm (non-linear-only) path too, to prevent the 192kHz leak' do
+    it 'pins aresample on the loudnorm (allow_dynamic) path too, to prevent the 192kHz leak' do
       measured = Neutraliser::Measurement.from_loudnorm_json('input_i' => '-25.0', 'input_tp' => '-10.0', 'input_lra' => '8.0', 'input_thresh' => '-30.0', 'target_offset' => '0.0')
       filter, forced_type = described_class.send(
-        :build_audio_filter, measured, -20.0, -1.5, 12.0, 48_000, linear_only: false
+        :build_audio_filter, measured, -20.0, -1.5, 12.0, 48_000, allow_dynamic: true
       )
 
       expect(filter).to include('loudnorm=')
