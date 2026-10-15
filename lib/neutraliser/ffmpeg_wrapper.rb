@@ -664,7 +664,6 @@ module Neutraliser
                          :build_loudnorm_filter,
                          :build_audio_filter,
                          :build_volume_gain_filter,
-                         :capped_linear_gain,
                          :linear_shortfall,
                          :parse_normalization_type,
                          :build_complete_ffmpeg_command,

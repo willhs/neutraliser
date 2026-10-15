@@ -88,7 +88,7 @@ RSpec.describe Neutraliser::FFmpegWrapper do
   end
 
   describe 'public surface' do
-    it 'exposes only the intended ~7 methods' do
+    it 'exposes only the intended ~8 methods' do
       expect(described_class.singleton_methods(false)).to contain_exactly(
         :measure_loudness,
         :probe_duration,
@@ -96,7 +96,8 @@ RSpec.describe Neutraliser::FFmpegWrapper do
         :apply_normalization,
         :apply_normalization_single_pass,
         :detect_audio_tracks,
-        :stream_counts
+        :stream_counts,
+        :capped_linear_gain
       )
     end
   end

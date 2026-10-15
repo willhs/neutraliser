@@ -492,4 +492,53 @@ RSpec.describe Neutraliser::Processor do
       expect(Dir.glob(File.join(staging_dir, '*'))).to be_empty
     end
   end
+
+  describe 'peak-limited skip (constant-gain path)' do
+    let(:path) { File.join(temp_dir, 'a.mp4') }
+    let(:profile_lufs) { Neutraliser::Profiles.get_profile('livingroom')[:lufs] }
+    let(:tp) { Neutraliser::Profiles.get_profile('livingroom')[:tp] }
+
+    def measurement(input_i:, input_tp:)
+      Neutraliser::Measurement.new(input_i: input_i, input_tp: input_tp, input_lra: 5.0,
+                                   input_thresh: -30.0, target_offset: 0.0)
+    end
+
+    before do
+      allow(Neutraliser::FFmpegWrapper).to receive(:detect_audio_tracks)
+      File.write(path, 'x')
+    end
+
+    it 'skips a file already at its max safe gain' do
+      m = measurement(input_i: profile_lufs - 6, input_tp: tp - 0.2)
+      allow_any_instance_of(described_class).to receive(:analyze_loudness_for_path).and_return(m)
+      proc = described_class.new(replace: false)
+      expect(proc).not_to receive(:normalize_file_with_paths)
+
+      result = proc.send(:process_file_two_pass, path, path, nil)
+
+      expect(result).to include(status: :skipped, reason: :peak_limited)
+    end
+
+    it 'still processes a file with real achievable gain' do
+      m = measurement(input_i: profile_lufs - 6, input_tp: tp - 5)
+      proc = described_class.new(replace: false)
+      allow(proc).to receive(:analyze_loudness_for_path).and_return(m)
+      allow(proc).to receive(:normalize_file_with_paths).and_return({ normalization_type: 'Linear' })
+
+      result = proc.send(:process_file_two_pass, path, path, nil)
+
+      expect(result).to include(status: :done, reason: :normalized)
+    end
+
+    it 'keeps the distance-to-target rule on the dynamic path' do
+      m = measurement(input_i: profile_lufs - 6, input_tp: tp - 0.2)
+      proc = described_class.new(replace: false, allow_dynamic: true)
+      allow(proc).to receive(:analyze_loudness_for_path).and_return(m)
+      allow(proc).to receive(:normalize_file_with_paths).and_return({ normalization_type: 'Dynamic' })
+
+      result = proc.send(:process_file_two_pass, path, path, nil)
+
+      expect(result).to include(status: :done, reason: :normalized)
+    end
+  end
 end

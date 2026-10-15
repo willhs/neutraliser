@@ -270,7 +270,11 @@ module Neutraliser
     def process_file_two_pass(original_path, working_path, _movie)
       measurement = analyze_loudness_for_path(working_path, original_path)
 
-      if measurement.needs_normalization?(@profile, tolerance: @tolerance)
+      if peak_limited?(measurement)
+        log "  Peak-limited: max safe gain #{applied_gain(measurement).round(2)} dB is within " \
+            "tolerance (#{@tolerance}), skipping re-encode"
+        file_result(original_path, status: :skipped, reason: :peak_limited)
+      elsif measurement.needs_normalization?(@profile, tolerance: @tolerance)
         if @dry_run
           log "  [DRY RUN] Would normalize: #{measurement.input_i.round(1)} LUFS → #{@profile[:lufs]} LUFS"
           file_result(original_path, status: :done, reason: :dry_run)
@@ -283,6 +287,18 @@ module Neutraliser
         log '  Already at target level, skipping'
         file_result(original_path, status: :skipped, reason: :within_tolerance)
       end
+    end
+
+    # Constant-gain mode only: a file far from target whose peak ceiling
+    # leaves no real gain to apply. Re-encoding it is pure generation loss.
+    def peak_limited?(measurement)
+      return false if @allow_dynamic || !measurement.needs_normalization?(@profile, tolerance: @tolerance)
+
+      applied_gain(measurement).abs <= @tolerance
+    end
+
+    def applied_gain(measurement)
+      FFmpegWrapper.capped_linear_gain(measurement, @profile[:lufs], @profile[:tp])
     end
 
     def process_file_fast(original_path, working_path)
