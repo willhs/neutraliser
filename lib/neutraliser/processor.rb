@@ -12,7 +12,8 @@ module Neutraliser
     TERMINAL_RESUME_STATES = %w[done skipped].freeze
 
     def initialize(replace: false, target_level: nil, profile: 'livingroom', tolerance: 1.0, cache: true,
-                   dry_run: false, fast_verify: true, resume: false, fast: false, local_stage: false, allow_dynamic: false)
+                   dry_run: false, fast_verify: true, resume: false, fast: false, local_stage: false,
+                   allow_dynamic: false, allow_object_audio_loss: false)
       @replace = replace
       @profile = if target_level
                    Profiles.custom_profile(target_level.to_f)
@@ -29,6 +30,7 @@ module Neutraliser
       @fast = fast
       @local_stage = local_stage
       @allow_dynamic = allow_dynamic || @profile[:dynamic] == true
+      @allow_object_audio_loss = allow_object_audio_loss
       raise ArgumentError, FAST_REQUIRES_DYNAMIC_MESSAGE if @fast && !@allow_dynamic
 
       @stager = LocalStager.new(enabled: local_stage)
@@ -107,6 +109,7 @@ module Neutraliser
           manifest_path,
           file: result[:file],
           status: result[:status].to_s,
+          reason: result[:reason],
           message: result[:message],
           normalization_type: result[:normalization_type]
         )
@@ -132,9 +135,9 @@ module Neutraliser
     def files_for_run(video_files, manifest_path)
       return [video_files, 0] unless @resume
 
-      manifest_status = load_manifest_statuses(manifest_path)
+      manifest_entries = load_manifest_entries(manifest_path)
       pending_files = video_files.reject do |file_path|
-        TERMINAL_RESUME_STATES.include?(manifest_status[File.expand_path(file_path)])
+        resume_terminal?(manifest_entries[File.expand_path(file_path)])
       end
 
       resumed_count = video_files.length - pending_files.length
@@ -143,21 +146,29 @@ module Neutraliser
       [pending_files, resumed_count]
     end
 
-    def load_manifest_statuses(manifest_path)
+    # An object-audio skip is only final while the loss is refused: resuming
+    # with --allow-object-audio-loss must pick those files back up.
+    def resume_terminal?(entry)
+      return false unless entry && TERMINAL_RESUME_STATES.include?(entry['status'])
+
+      !(@allow_object_audio_loss && entry['reason'] == 'object_audio')
+    end
+
+    def load_manifest_entries(manifest_path)
       return {} unless File.exist?(manifest_path)
 
-      statuses = {}
+      entries = {}
       File.foreach(manifest_path) do |line|
         next if line.strip.empty?
 
         entry = JSON.parse(line)
         next unless entry['file'] && entry['status']
 
-        statuses[entry['file']] = entry['status']
+        entries[entry['file']] = entry
       rescue JSON::ParserError
         next
       end
-      statuses
+      entries
     rescue StandardError => e
       log "Warning: Could not read run manifest '#{manifest_path}': #{e.message}"
       {}
@@ -167,7 +178,7 @@ module Neutraliser
       File.join(dir_path, MANIFEST_FILENAME)
     end
 
-    def append_manifest_entry(manifest_path, file:, status:, message: nil, normalization_type: nil)
+    def append_manifest_entry(manifest_path, file:, status:, reason: nil, message: nil, normalization_type: nil)
       entry = {
         timestamp: Time.now.utc.iso8601,
         file: File.expand_path(file),
@@ -175,6 +186,7 @@ module Neutraliser
         profile: @profile[:name],
         target_lufs: @profile[:lufs]
       }
+      entry[:reason] = reason.to_s if reason
       entry[:message] = message if message && !message.empty?
       entry[:normalization_type] = normalization_type if normalization_type
 
@@ -226,10 +238,16 @@ module Neutraliser
             next file_result(file_path, status: :skipped, reason: :no_audio_track)
           end
 
+          audio_tracks = FFmpegWrapper.detect_audio_tracks(working_path)
+          # Not stamped in the sidecar: a later --allow-object-audio-loss run
+          # (or an ffmpeg that can keep the objects) must still see the file.
+          object_audio_skip = check_object_audio(file_path, working_path, audio_tracks.first)
+          next object_audio_skip if object_audio_skip
+
           result = if @fast
-                     process_file_fast(file_path, working_path)
+                     process_file_fast(file_path, working_path, audio_tracks)
                    else
-                     process_file_two_pass(file_path, working_path, movie)
+                     process_file_two_pass(file_path, working_path, audio_tracks)
                    end
 
           # A dry run must never stamp the sidecar. Its :dry_run result is
@@ -267,7 +285,7 @@ module Neutraliser
       end
     end
 
-    def process_file_two_pass(original_path, working_path, _movie)
+    def process_file_two_pass(original_path, working_path, audio_tracks)
       measurement = analyze_loudness_for_path(working_path, original_path)
 
       if peak_limited?(measurement)
@@ -279,7 +297,7 @@ module Neutraliser
           log "  [DRY RUN] Would normalize: #{measurement.input_i.round(1)} LUFS → #{@profile[:lufs]} LUFS"
           file_result(original_path, status: :done, reason: :dry_run)
         else
-          codec_decision = normalize_file_with_paths(original_path, working_path, measurement)
+          codec_decision = normalize_file_with_paths(original_path, working_path, measurement, audio_tracks)
           file_result(original_path, status: :done, reason: :normalized,
                                      normalization_type: codec_decision[:normalization_type])
         end
@@ -297,18 +315,42 @@ module Neutraliser
       applied_gain(measurement).abs <= @tolerance
     end
 
+    # ffmpeg can't encode Atmos/DTS:X object metadata, so re-encoding the
+    # primary track flattens it to plain channel audio. Returns a skip result,
+    # or nil to carry on (no object audio, or the user accepted the loss).
+    def check_object_audio(original_path, working_path, primary_track)
+      verdict = ObjectAudio.detect(working_path, primary_track, name: File.basename(original_path))
+
+      if verdict.status == :suspected
+        log "  Note: name suggests object audio but ffprobe found none on the #{primary_track[:codec]} track, " \
+            'processing'
+        return nil
+      end
+      return nil unless verdict.object_audio?
+
+      if @allow_object_audio_loss
+        log "  Warning: primary track is #{verdict.profile}; re-encoding drops the object audio " \
+            '(--allow-object-audio-loss)'
+        return nil
+      end
+
+      log "  Object audio (#{verdict.profile}): re-encoding would strip it, skipping " \
+          '(--allow-object-audio-loss to process anyway)'
+      file_result(original_path, status: :skipped, reason: :object_audio, message: verdict.profile)
+    end
+
     def applied_gain(measurement)
       FFmpegWrapper.capped_linear_gain(measurement, @profile[:lufs], @profile[:tp])
     end
 
-    def process_file_fast(original_path, working_path)
+    def process_file_fast(original_path, working_path, audio_tracks)
       if @dry_run
         log "  [DRY RUN] Would normalize (fast single-pass) to #{@profile[:lufs]} LUFS"
         return file_result(original_path, status: :done, reason: :dry_run)
       end
 
       codec_decision = render_normalization(
-        original_path, working_path,
+        original_path, working_path, audio_tracks,
         log_message: "  Fast mode: single-pass normalization to #{@profile[:lufs]} LUFS"
       ) { |wp, out, tracks| FFmpegWrapper.apply_normalization_single_pass(wp, out, tracks, @profile) }
 
@@ -334,13 +376,13 @@ module Neutraliser
       analyzer.analyze(working_path, cached_as: original_path, profile: @profile, tolerance: @tolerance)
     end
 
-    def normalize_file_with_paths(original_path, working_path, measurement)
+    def normalize_file_with_paths(original_path, working_path, measurement, audio_tracks = nil)
       current_lufs = measurement.input_i
       target_lufs = @profile[:lufs]
       adjustment = target_lufs - current_lufs
 
       render_normalization(
-        original_path, working_path,
+        original_path, working_path, audio_tracks,
         log_message: "  Current: #{current_lufs.round(1)} LUFS, Target: #{target_lufs} LUFS (#{adjustment.round(1)} LU adjustment)"
       ) do |wp, out, tracks|
         FFmpegWrapper.apply_normalization(wp, out, measurement, @profile, audio_tracks: tracks,
@@ -353,7 +395,7 @@ module Neutraliser
     # caller-supplied normalization (the only variation point), verify, and
     # commit - with a single ensure-based cleanup for a partially written
     # output_path.
-    def render_normalization(original_path, working_path, log_message:)
+    def render_normalization(original_path, working_path, audio_tracks, log_message:)
       committed = false
       output_path = if @replace
                       FileManager.safe_temp_path(working_path)
@@ -361,7 +403,7 @@ module Neutraliser
                       generate_output_path(working_path)
                     end
 
-      audio_tracks = FFmpegWrapper.detect_audio_tracks(working_path)
+      audio_tracks ||= FFmpegWrapper.detect_audio_tracks(working_path)
       warn_if_audio_track_unknown(audio_tracks)
       log "  Found #{audio_tracks.length} audio tracks, normalizing primary track only" if audio_tracks.length > 1
 
@@ -422,6 +464,7 @@ module Neutraliser
       return unless decision.is_a?(Hash) && decision[:encoder]
 
       source = decision[:source_codec].to_s
+      source += " (#{decision[:source_profile]})" if decision[:source_profile]
       source += " #{decision[:source_bitrate] / 1000}k" if decision[:source_bitrate].to_i > 0
 
       target = if decision[:lossless_output]

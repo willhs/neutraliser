@@ -67,6 +67,7 @@ Neutraliser does the one job: make the library level, leave everything else alon
 - **Home-theatre profiles** — `reference`, `livingroom`, `night`, tuned for how you're actually listening
 - **Source-matched codec & bitrate** — AAC 512k stays AAC 512k; FLAC stays lossless. No fixed 256k downgrade, no generational decay ([ADR-0001](docs/design/adr/0001-smart-codec-selection.md))
 - **Full stream preservation** — every audio/subtitle track, per-stream metadata (titles, languages), chapters and dispositions survive the round trip
+- **Never silently strips Atmos / DTS:X** — ffmpeg can't re-encode object audio, so files whose primary track is Dolby Atmos (E-AC3 JOC, TrueHD) or DTS:X are skipped and logged; `--allow-object-audio-loss` processes them anyway ([detection notes](docs/research/object-audio-detection.md))
 - **Safe by default** — writes `*_normalized` copies; originals untouched unless you pass `--replace`
 - **Skips what's already fine** — a `.neutraliser` sidecar plus an optional 30-second sample check means a re-run over a processed library costs seconds, not hours
 - **Resumable** — interrupted a 500-file run? `--resume` picks up from the manifest
@@ -230,6 +231,7 @@ Normalise a file or every video under a directory.
 | `--fast-verify` / `--no-fast-verify` | on | Use the 30-second quick sample before a full analysis |
 | `--resume` | `false` | Skip files already completed per `.neutraliser-run-manifest.jsonl` |
 | `--allow-dynamic` | `false` | Let `loudnorm` compress dynamics when it needs to. Default is constant gain only. Implied by the `night` profile |
+| `--allow-object-audio-loss` | `false` | Process files whose primary track is Atmos / DTS:X anyway. Re-encoding drops the object audio (plain 5.1/7.1 out); each such file logs a warning. Default skips them with reason `object_audio` |
 | `--fast` | `false` | Single-pass normalisation — quicker, always dynamic, so it errors unless `--allow-dynamic` or `night` is set |
 | `--local-stage` | `false` | Copy to local disk before processing; helps on slow mounts |
 | `--linear-only` | `false` | Deprecated no-op (constant gain is now the default); prints a warning |

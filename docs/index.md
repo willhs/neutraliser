@@ -33,6 +33,7 @@ Entry point and navigation map for the neutraliser documentation set. Neutralise
 
 ## Research
 - [`research/landscape.md`](research/landscape.md) — Market and prior-art survey
+- [`research/object-audio-detection.md`](research/object-audio-detection.md) — How ffprobe reports Atmos/DTS:X (decoder-set profile), FATE-sample tests, and the detect-and-skip approach
 - [`research/library-validation-2026-08.md`](research/library-validation-2026-08.md) — Pre-release validation run over a real NAS/Plex library slice; found and fixed a video/subtitle metadata-preservation bug
 
 ## Tasks

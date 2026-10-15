@@ -102,6 +102,8 @@ RSpec.describe Neutraliser::Processor do
 
     before do
       File.write(video_file, 'video')
+      allow(Neutraliser::FFmpegWrapper).to receive(:detect_audio_tracks)
+        .and_return([{ index: 0, codec: 'aac', channels: 2, bit_rate: 256_000, sample_rate: 48_000 }])
     end
 
     it 'skips unsupported file extensions' do
@@ -428,6 +430,8 @@ RSpec.describe Neutraliser::Processor do
 
     before do
       File.write(video_file, 'x')
+      allow(Neutraliser::FFmpegWrapper).to receive(:detect_audio_tracks)
+        .and_return([{ index: 0, codec: 'aac', channels: 2, bit_rate: 256_000, sample_rate: 48_000 }])
     end
 
     it 'uses fast single-pass in dry-run mode' do
@@ -448,6 +452,8 @@ RSpec.describe Neutraliser::Processor do
 
     before do
       File.write(video_file, 'video content')
+      allow(Neutraliser::FFmpegWrapper).to receive(:detect_audio_tracks)
+        .and_return([{ index: 0, codec: 'aac', channels: 2, bit_rate: 256_000, sample_rate: 48_000 }])
     end
 
     after do
@@ -490,6 +496,130 @@ RSpec.describe Neutraliser::Processor do
 
       expect { processor.send(:process_file, video_file) }.to raise_error(Interrupt)
       expect(Dir.glob(File.join(staging_dir, '*'))).to be_empty
+    end
+  end
+
+  describe 'object audio (Atmos / DTS:X)' do
+    let(:video_file) { File.join(temp_dir, 'Show.S01E01.DDP5.1.Atmos.mkv') }
+    let(:atmos_track) do
+      { index: 0, codec: 'eac3', profile: 'Dolby Digital Plus + Dolby Atmos', channels: 6, bit_rate: 768_000,
+        sample_rate: 48_000 }
+    end
+    let(:skip_decider) { instance_double(Neutraliser::SkipDecider, already_processed?: false) }
+    let(:measured) do
+      Neutraliser::Measurement.new(input_i: -26.0, input_tp: -12.0, input_lra: 8.0, input_thresh: -36.0,
+                                   target_offset: 0.0)
+    end
+
+    before do
+      File.write(video_file, 'x')
+      allow(FFMPEG::Movie).to receive(:new).and_return(instance_double(FFMPEG::Movie, audio_stream: true))
+      allow(Neutraliser::FFmpegWrapper).to receive(:detect_audio_tracks).and_return([atmos_track])
+      allow(skip_decider).to receive(:mark_processed)
+    end
+
+    def run(processor)
+      processor.instance_variable_set(:@skip_decider, skip_decider)
+      result = nil
+      output = capture_stdout { result = processor.send(:process_file, video_file) }
+      [result, output]
+    end
+
+    def capture_stdout
+      original = $stdout
+      $stdout = StringIO.new
+      yield
+      $stdout.string
+    ensure
+      $stdout = original
+    end
+
+    it 'skips by default, before measuring, and leaves the sidecar unstamped' do
+      processor = described_class.new
+      expect(processor).not_to receive(:analyze_loudness_for_path)
+
+      result, output = run(processor)
+
+      expect(result).to include(status: :skipped, reason: :object_audio, message: 'Dolby Digital Plus + Dolby Atmos')
+      expect(output).to match(/Object audio \(Dolby Digital Plus \+ Dolby Atmos\).*skipping.*--allow-object-audio-loss/)
+      expect(skip_decider).not_to have_received(:mark_processed)
+    end
+
+    it 'skips in a dry run too, so the preview shows what a real run will do' do
+      result, = run(described_class.new(dry_run: true))
+
+      expect(result[:reason]).to eq(:object_audio)
+    end
+
+    it 'processes with an explicit warning under --allow-object-audio-loss, reusing the probed tracks' do
+      processor = described_class.new(allow_object_audio_loss: true)
+      allow(processor).to receive(:analyze_loudness_for_path).and_return(measured)
+      expect(processor).to receive(:normalize_file_with_paths)
+        .with(video_file, video_file, measured, [atmos_track]).and_return({ normalization_type: 'Linear' })
+
+      result, output = run(processor)
+
+      expect(result).to include(status: :done, reason: :normalized)
+      expect(output).to match(/Warning: primary track is Dolby Digital Plus \+ Dolby Atmos; re-encoding drops/)
+    end
+
+    it 'processes a file whose name says Atmos when neither probe finds it, with a note' do
+      allow(Neutraliser::FFmpegWrapper).to receive_messages(
+        detect_audio_tracks: [atmos_track.merge(profile: nil)], probe_audio_profile_mid_file: nil
+      )
+      processor = described_class.new
+      allow(processor).to receive(:analyze_loudness_for_path).and_return(measured)
+      allow(processor).to receive(:normalize_file_with_paths).and_return({ normalization_type: 'Linear' })
+
+      result, output = run(processor)
+
+      expect(result[:status]).to eq(:done)
+      expect(output).to match(/name suggests object audio but ffprobe found none/)
+    end
+
+    it 'records the source profile in the codec-decision log line' do
+      expect(Neutraliser.logger).to receive(:log).with('  Audio: truehd (Dolby TrueHD + Dolby Atmos) -> flac (lossless)')
+      allow(Neutraliser.logger).to receive(:log)
+
+      described_class.new.send(:log_codec_decision, encoder: 'flac', source_codec: 'truehd',
+                                                    source_profile: 'Dolby TrueHD + Dolby Atmos', lossless_output: true)
+    end
+  end
+
+  describe 'object audio in the run manifest' do
+    let(:video) { File.join(temp_dir, 'atmos.mkv') }
+    let(:manifest_path) { File.join(temp_dir, '.neutraliser-run-manifest.jsonl') }
+
+    before do
+      File.write(video, 'x')
+      File.write(manifest_path, "#{JSON.generate(file: File.expand_path(video), status: 'skipped',
+                                                 reason: 'object_audio')}\n")
+    end
+
+    it 'records the skip reason' do
+      processor = described_class.new
+      allow(processor).to receive(:process_one).and_return(
+        { file: File.expand_path(video), status: :skipped, reason: :object_audio, message: 'Dolby TrueHD + Dolby Atmos' }
+      )
+
+      processor.process(temp_dir)
+
+      expect(JSON.parse(File.readlines(manifest_path).last)).to include('status' => 'skipped', 'reason' => 'object_audio')
+    end
+
+    it 'keeps an object-audio skip final on resume' do
+      processor = described_class.new(resume: true)
+      expect(processor).not_to receive(:process_one)
+
+      expect(processor.process(temp_dir)[:resumed]).to eq(1)
+    end
+
+    it 'picks object-audio skips back up when resuming with --allow-object-audio-loss' do
+      processor = described_class.new(resume: true, allow_object_audio_loss: true)
+      expect(processor).to receive(:process_one).with(video)
+                                                .and_return({ file: video, status: :done, reason: :normalized })
+
+      expect(processor.process(temp_dir)[:resumed]).to eq(0)
     end
   end
 

@@ -16,6 +16,7 @@ A Ruby CLI tool that normalises audio volume in video files using industry-stand
 - **`Processor`**: Main orchestration class handling file/directory processing
 - **`SkipDecider`**: Single authority for "already normalised?" — one `.neutraliser` sidecar (size+mtime+profile), quick LUFS sampling as an internal fallback
 - **`FFmpegWrapper`**: Two-pass loudnorm implementation, ffprobe, source-matched codec selection
+- **`ObjectAudio`**: Detects Atmos / DTS:X on the primary track (ffprobe profile, name-hinted mid-file probe) so it is skipped, not silently flattened
 - **`AudioAnalyser`**: Full loudnorm measurement coordination with sidecar caching
 - **`Measurement`**: Value object for loudnorm measurement results
 - **`Profiles`**: Normalization profile system (reference/livingroom/night)
@@ -68,6 +69,7 @@ A Ruby CLI tool that normalises audio volume in video files using industry-stand
 - `--fast` - Single-pass normalization (faster, always dynamic; errors unless `--allow-dynamic` or night profile)
 - `--local-stage` - Copy files to local disk before processing
 - `--resume` - Resume a prior directory run, skipping completed files
+- `--allow-object-audio-loss` - Process Atmos / DTS:X primary tracks anyway (skipped by default; re-encoding drops the objects)
 - `--allow-dynamic` - Opt in to loudnorm two-pass, which may go dynamic (default is constant gain, peak-capped)
 - `--linear-only` - Deprecated no-op alias (constant gain is the default)
 

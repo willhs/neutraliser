@@ -96,6 +96,7 @@ RSpec.describe Neutraliser::FFmpegWrapper do
         :apply_normalization,
         :apply_normalization_single_pass,
         :detect_audio_tracks,
+        :probe_audio_profile_mid_file,
         :stream_counts,
         :capped_linear_gain
       )
@@ -293,9 +294,30 @@ RSpec.describe Neutraliser::FFmpegWrapper do
         array_including('-of', 'json'), described_class::PROBE_TIMEOUT, 'Audio track detection'
       )
       expect(result).to eq([
-                             { index: 0, stream_index: 1, channels: 6, codec: 'ac3', bit_rate: 640_000, sample_rate: 48_000 },
-                             { index: 1, stream_index: 2, channels: 2, codec: 'aac', bit_rate: 256_000, sample_rate: 44_100 }
+                             { index: 0, stream_index: 1, channels: 6, codec: 'ac3', profile: nil, title: nil, bit_rate: 640_000,
+                               sample_rate: 48_000 },
+                             { index: 1, stream_index: 2, channels: 2, codec: 'aac', profile: nil, title: nil, bit_rate: 256_000,
+                               sample_rate: 44_100 }
                            ])
+    end
+
+    it 'reads the codec profile and track title, treating "unknown" as no profile' do
+      ffprobe_json = {
+        streams: [
+          { index: 1, codec_name: 'truehd', profile: 'Dolby TrueHD + Dolby Atmos', channels: 8,
+            tags: { title: 'TrueHD Atmos 7.1' } },
+          { index: 2, codec_name: 'eac3', profile: 'unknown', channels: 6 }
+        ]
+      }.to_json
+      allow(described_class).to receive(:execute_with_timeout).and_return([ffprobe_json, '', ok_status])
+
+      result = described_class.detect_audio_tracks('test.mkv')
+
+      expect(result.map { |t| t.slice(:profile, :title) }).to eq([
+                                                                   { profile: 'Dolby TrueHD + Dolby Atmos',
+                                                                     title: 'TrueHD Atmos 7.1' },
+                                                                   { profile: nil, title: nil }
+                                                                 ])
     end
 
     it 'raises FFmpegError when ffprobe fails, instead of fabricating a track' do
@@ -337,6 +359,40 @@ RSpec.describe Neutraliser::FFmpegWrapper do
 
       result = described_class.detect_audio_tracks('no_audio.mkv')
       expect(result).to eq([described_class::UNKNOWN_AUDIO_TRACK])
+    end
+  end
+
+  describe '.probe_audio_profile_mid_file' do
+    let(:track) { { index: 1, codec: 'eac3' } }
+
+    it 'stream-copies a slice from mid-file and returns the profile ffprobe decodes from it' do
+      allow(described_class).to receive(:probe_duration).and_return(3600.0)
+      allow(described_class).to receive(:execute_with_timeout) do |cmd, _timeout, _name|
+        cmd.first == 'ffprobe' ? ["Dolby Digital Plus + Dolby Atmos\n", '', ok_status] : ['', '', ok_status]
+      end
+
+      expect(described_class.probe_audio_profile_mid_file('movie.mkv', track))
+        .to eq('Dolby Digital Plus + Dolby Atmos')
+      expect(described_class).to have_received(:execute_with_timeout).with(
+        array_including('-ss', '1800', '-i', 'movie.mkv', '-map', '0:a:1', '-c', 'copy'),
+        described_class::QUICK_TIMEOUT, 'Profile slice'
+      )
+    end
+
+    it 'returns nil for an unnamed profile' do
+      allow(described_class).to receive_messages(probe_duration: 60.0,
+                                                 execute_with_timeout: ["unknown\n", '', ok_status])
+
+      expect(described_class.probe_audio_profile_mid_file('movie.mkv', track)).to be_nil
+    end
+
+    it 'returns nil instead of raising when the slice fails or times out' do
+      allow(described_class).to receive(:probe_duration).and_return(60.0)
+      allow(described_class).to receive(:execute_with_timeout).and_return(['', 'err', fail_status])
+      expect(described_class.probe_audio_profile_mid_file('movie.mkv', track)).to be_nil
+
+      allow(described_class).to receive(:execute_with_timeout).and_raise(Neutraliser::FFmpegTimeoutError, 'slow')
+      expect(described_class.probe_audio_profile_mid_file('movie.mkv', track)).to be_nil
     end
   end
 

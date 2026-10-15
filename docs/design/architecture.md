@@ -51,12 +51,16 @@ Output File
 
 When re-encoding normalised audio, the codec and bitrate are selected to match the source as closely as possible:
 
-1. **Probe** — `detect_audio_tracks` reads codec, bitrate, sample rate, and channel count via ffprobe.
+1. **Probe** — `detect_audio_tracks` reads codec, profile, bitrate, sample rate, channel count and track title via ffprobe. This happens once per file, before measuring.
 2. **Match** — `select_output_codec` tries to re-encode to the same codec at `max(source_bitrate, quality_floor)`, capped at a per-codec maximum.
 3. **Fallback** — non-encodable codecs (DTS, TrueHD) fall back to FLAC in MKV or EAC3/AC3 in MP4. Lossless sources stay lossless when the container supports it.
 4. **Log** — every normalisation logs the decision (e.g., `Audio: ac3 448k -> ac3 448k`).
 
 See [ADR-0001](adr/0001-smart-codec-selection.md) for the full rationale.
+
+### Object audio is skipped by default
+
+ffmpeg can't encode Atmos or DTS:X object metadata, so re-encoding the primary track would flatten it. `ObjectAudio.detect` (`lib/neutraliser/object_audio.rb`) checks the probed stream `profile` (FFmpeg 7.1+ names `Dolby Digital Plus + Dolby Atmos`, `Dolby TrueHD + Dolby Atmos`, `DTS-HD MA + DTS:X`). libavcodec sets these profiles while decoding, so for an E-AC3/TrueHD/DTS track whose name or title says Atmos/DTS:X but whose profile doesn't, it checks again on a slice cut from mid-file. A name alone never triggers a skip. Object audio returns `skipped` / `object_audio` before the loudness pass. The skip isn't stamped in the sidecar, and `--resume --allow-object-audio-loss` reprocesses those files. `--allow-object-audio-loss` processes them anyway, with a warning. See [object-audio-detection](../research/object-audio-detection.md).
 
 ### Constant gain by default, dynamic opt-in
 
@@ -78,6 +82,7 @@ Both flags are independent and can be combined.
 | CLI | `lib/neutraliser/cli.rb` | Thor-based command interface |
 | Processor | `lib/neutraliser/processor.rb` | Pipeline orchestration, resume (serial dispatch) |
 | FFmpegWrapper | `lib/neutraliser/ffmpeg_wrapper.rb` | ffmpeg/ffprobe commands, codec selection, loudnorm filter |
+| ObjectAudio | `lib/neutraliser/object_audio.rb` | Atmos / DTS:X detection (stream profile, name-hinted mid-file probe) |
 | AudioAnalyser | `lib/neutraliser/audio_analyser.rb` | Loudness analysis with sidecar caching |
 | CacheManager | `lib/neutraliser/cache_manager.rb` | Sidecar `.loudnorm_{profile}.json` analysis cache read/write |
 | SkipDecider | `lib/neutraliser/skip_decider.rb` | Single authority for "already normalised?" — one `.neutraliser` sidecar (size+mtime+profile, never expires), quick LUFS sampling as an internal fallback strategy |
@@ -103,6 +108,8 @@ Both flags are independent and can be combined.
 - docs/ops/runbook.md
 
 ### Change Log
+
+- 2026-10-15 (agent:object-audio): Added object-audio skip section, ObjectAudio component, profile in probe
 - 2025-09-24 (agent:create-project): Created architecture placeholder
 - 2026-03-07 (agent:implement-plan): Added pipeline diagram, codec selection, component table
 - 2026-03-08 (agent:implement-plan): Added performance flags section, LocalStager component

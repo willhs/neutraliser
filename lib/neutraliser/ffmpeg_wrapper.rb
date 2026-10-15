@@ -1,5 +1,6 @@
 require 'open3'
 require 'json'
+require 'tmpdir'
 
 module Neutraliser
   class FFmpegError < StandardError; end
@@ -156,6 +157,36 @@ module Neutraliser
       duration.positive? ? duration : nil
     end
 
+    # Second opinion on an audio track's profile, from a slice cut out of the
+    # middle of the file. libavcodec sets object-audio profiles (Atmos, DTS:X)
+    # in the decoder, so a plain probe only sees what it decoded from the
+    # file's opening frames. Stream-copying a mid-file slice into a scratch
+    # .mka and probing that decodes different frames. Returns the profile name,
+    # or nil if there is none or the probe fails (best effort, like
+    # quick_loudness_sample).
+    def self.probe_audio_profile_mid_file(input_path, track, seconds: 10)
+      start = (probe_duration(input_path) || 0) / 2
+      Dir.mktmpdir('neutraliser-profile') do |dir|
+        slice = File.join(dir, 'slice.mka')
+        cmd = [
+          'ffmpeg', '-hide_banner', '-nostats', '-v', 'error', '-y',
+          '-ss', start.round.to_s, '-i', input_path,
+          '-map', "0:a:#{track[:index]}", '-c', 'copy', '-t', seconds.to_s, slice
+        ]
+        _, _, status = execute_with_timeout(cmd, QUICK_TIMEOUT, 'Profile slice')
+        return nil unless status.success?
+
+        cmd = [
+          'ffprobe', '-v', 'error', '-select_streams', 'a:0',
+          '-show_entries', 'stream=profile', '-of', 'default=nw=1:nk=1', slice
+        ]
+        stdout, _, status = execute_with_timeout(cmd, PROBE_TIMEOUT, 'Profile probe')
+        status.success? ? parse_profile(stdout.strip) : nil
+      end
+    rescue StandardError
+      nil
+    end
+
     def self.quick_loudness_sample(input_path, duration: 30, target_i: -20.0)
       # Quick LUFS estimation using a sample from the middle of the file
       # Much faster than analyzing the entire file
@@ -271,7 +302,7 @@ module Neutraliser
     def self.detect_audio_tracks(input_path)
       cmd = [
         'ffprobe', '-v', 'error', '-select_streams', 'a',
-        '-show_entries', 'stream=index,codec_name,sample_rate,channels,bit_rate',
+        '-show_entries', 'stream=index,codec_name,profile,sample_rate,channels,bit_rate:stream_tags=title',
         '-of', 'json', input_path
       ]
 
@@ -303,12 +334,21 @@ module Neutraliser
           stream_index: stream['index'].to_i,
           channels: stream['channels'].to_i,
           codec: stream['codec_name'] || 'unknown',
+          profile: parse_profile(stream['profile']),
+          title: stream.dig('tags', 'title'),
           bit_rate: parse_bit_rate(stream['bit_rate']),
           sample_rate: stream['sample_rate']&.to_i
         }
       end
     rescue JSON::ParserError
       []
+    end
+
+    # ffprobe prints "unknown" when the decoder named no profile.
+    def self.parse_profile(value)
+      return nil if value.nil? || value == 'unknown'
+
+      value
     end
 
     def self.parse_bit_rate(value)
@@ -419,6 +459,7 @@ module Neutraliser
         encoder: encoder,
         bitrate: bitrate,
         source_codec: source_codec,
+        source_profile: track[:profile],
         source_bitrate: source_bitrate,
         lossless_output: lossless_encoder?(encoder)
       }
@@ -645,13 +686,14 @@ module Neutraliser
 
     # The real public surface is measure_loudness, apply_normalization,
     # apply_normalization_single_pass, quick_loudness_sample,
-    # detect_audio_tracks, and probe_duration — everything else is an
-    # implementation detail and made genuinely private here (see the NOTE
+    # detect_audio_tracks, probe_audio_profile_mid_file, and probe_duration —
+    # everything else is an implementation detail and made genuinely private here (see the NOTE
     # above `execute_with_timeout` on why the old `private` keyword didn't
     # do this).
     private_class_method :execute_with_timeout,
                          :parse_loudnorm_json,
                          :parse_audio_tracks_json,
+                         :parse_profile,
                          :parse_bit_rate,
                          :select_output_codec,
                          :resolve_encoder,

@@ -64,6 +64,21 @@ RSpec.describe Neutraliser::CLI do
       end.to output(/linear=0, dynamic=1/).to_stdout
     end
 
+    it 'passes --allow-object-audio-loss to Processor initialization, off by default' do
+      processor = instance_double(Neutraliser::Processor)
+      allow(processor).to receive(:process).and_return(found: 0, queued: 0, resumed: 0, done: 0, skipped: 0, failed: 0)
+      seen = []
+      allow(Neutraliser::Processor).to receive(:new) do |**kwargs|
+        seen << kwargs[:allow_object_audio_loss]
+        processor
+      end
+
+      described_class.start(['process', '/tmp/library'])
+      described_class.start(['process', '--allow-object-audio-loss', '/tmp/library'])
+
+      expect(seen).to eq([false, true])
+    end
+
     it 'defaults allow_dynamic to false' do
       processor = instance_double(Neutraliser::Processor)
       allow(processor).to receive(:process).and_return(found: 0, queued: 0, resumed: 0, done: 0, skipped: 0, failed: 0)

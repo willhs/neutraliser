@@ -86,6 +86,8 @@ module Neutraliser
     option :local_stage, type: :boolean, default: false, desc: 'Copy files to local disk before processing'
     option :allow_dynamic, type: :boolean, default: false,
                            desc: 'Allow loudnorm to compress dynamics (default is constant gain; quiet-but-peaky files land shy of target)'
+    option :allow_object_audio_loss, type: :boolean, default: false,
+                                     desc: 'Re-encode Atmos / DTS:X tracks anyway, losing the objects'
     option :linear_only, type: :boolean, default: false,
                          desc: 'Deprecated no-op: constant gain is now the default'
     def process(path)
@@ -102,7 +104,8 @@ module Neutraliser
         resume: options[:resume],
         fast: options[:fast],
         local_stage: options[:local_stage],
-        allow_dynamic: options[:allow_dynamic]
+        allow_dynamic: options[:allow_dynamic],
+        allow_object_audio_loss: options[:allow_object_audio_loss]
       )
 
       summary = processor.process(path)
