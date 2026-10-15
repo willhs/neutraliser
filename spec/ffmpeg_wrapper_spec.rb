@@ -24,7 +24,7 @@ RSpec.describe Neutraliser::FFmpegWrapper do
       expect(described_class).to have_received(:execute_with_timeout).with(
         [
           'ffmpeg', '-hide_banner', '-nostats', '-i', 'test.mp4',
-          '-map', 'a:0',
+          '-map', '0:a:0',
           '-af', 'loudnorm=I=-20.0:TP=-1.5:LRA=12.0:print_format=json',
           '-f', 'null', '-'
         ],
@@ -97,6 +97,8 @@ RSpec.describe Neutraliser::FFmpegWrapper do
         :apply_normalization_single_pass,
         :detect_audio_tracks,
         :read_stamp,
+        :primary_audio_track,
+        :primary_audio_index,
         :probe_audio_profile_mid_file,
         :stream_counts,
         :unsupported_subtitles,
@@ -140,6 +142,55 @@ RSpec.describe Neutraliser::FFmpegWrapper do
       expect(result[:encoder]).to eq('ac3')
       expect(result[:bitrate]).to eq(448_000)
       expect(result[:normalization_type]).to eq('Linear')
+    end
+
+    describe 'default-disposition primary' do
+      let(:tracks) do
+        [
+          { index: 0, channels: 2, codec: 'aac', title: 'Commentary', bit_rate: 128_000, sample_rate: 44_100, default: false },
+          { index: 1, channels: 6, codec: 'ac3', title: 'English', bit_rate: 448_000, sample_rate: 48_000, default: true },
+          { index: 2, channels: 2, codec: 'aac', title: 'French', bit_rate: 128_000, sample_rate: 48_000, default: false }
+        ]
+      end
+
+      def run(audio_tracks, **opts)
+        allow(described_class).to receive(:execute_with_timeout).and_return(['', 'Normalization Type:   Linear', ok_status])
+        described_class.apply_normalization('in.mkv', 'out.mkv', measured_data, profile.merge(name: 'livingroom'),
+                                            audio_tracks: audio_tracks, **opts)
+        captured = nil
+        expect(described_class).to have_received(:execute_with_timeout) { |cmd, *_| captured ||= cmd }
+        captured
+      end
+
+      it 'normalises the default track in place and copies the others around it' do
+        cmd = run(tracks)
+        pairs = cmd.each_cons(2).to_a
+        expect(cmd[cmd.index('-filter_complex') + 1]).to start_with('[0:a:1]')
+        maps = cmd.each_cons(2).select { |a, _| a == '-map' }.map(&:last)
+        expect(maps).to eq(['0:v', '0:a:0', '[norm]', '0:a:2', '0:s?'])
+        expect(pairs).to include(['-c:a:0', 'copy'], ['-c:a:1', 'ac3'], ['-b:a:1', '448k'], ['-c:a:2', 'copy'])
+        expect(pairs).to include(['-map_metadata:s:a:0', '0:s:a:0'], ['-map_metadata:s:a:1', '0:s:a:1'],
+                                 ['-map_metadata:s:a:2', '0:s:a:2'])
+        expect(pairs).to include(['-metadata:s:a:1', a_string_starting_with('NEUTRALISER_')])
+        expect(pairs).to include(['-disposition:a:1', 'default'])
+        expect(pairs).not_to include(['-c:a:0', 'ac3'])
+      end
+
+      it 'puts the kept original right after the normalised track and shifts later tracks' do
+        cmd = run(tracks, keep_original: true)
+        pairs = cmd.each_cons(2).to_a
+        maps = pairs.select { |a, _| a == '-map' }.map(&:last)
+        expect(maps).to eq(['0:v', '0:a:0', '[norm]', '0:a:1', '0:a:2', '0:s?'])
+        expect(pairs).to include(['-c:a:2', 'copy'], ['-c:a:3', 'copy'])
+        expect(pairs).to include(['-map_metadata:s:a:2', '0:s:a:1'], ['-map_metadata:s:a:3', '0:s:a:2'])
+        expect(pairs).to include(['-disposition:a:1', 'default'], ['-disposition:a:2', '0'])
+      end
+
+      it 'falls back to the first track when none is flagged default' do
+        cmd = run(tracks.map { |t| t.merge(default: false) })
+        expect(cmd[cmd.index('-filter_complex') + 1]).to start_with('[0:a:0]')
+        expect(cmd.each_cons(2).to_a).not_to include(['-disposition:a:0', 'default'])
+      end
     end
 
     describe 'keep_original' do
@@ -460,6 +511,22 @@ RSpec.describe Neutraliser::FFmpegWrapper do
     end
   end
 
+  describe '.primary_audio_track' do
+    it 'is the default-disposition track, else the first' do
+      tracks = [{ index: 0 }, { index: 1, default: true }]
+      expect(described_class.primary_audio_track(tracks)).to eq(index: 1, default: true)
+      expect(described_class.primary_audio_track([{ index: 0 }, { index: 1 }])).to eq(index: 0)
+    end
+  end
+
+  describe '.measure_loudness audio_index' do
+    it 'maps the requested audio stream' do
+      allow(described_class).to receive(:execute_with_timeout).and_return(['', '{"input_i":"-18","input_tp":"-2","input_lra":"5","input_thresh":"-28","target_offset":"0"}', ok_status])
+      described_class.measure_loudness('a.mkv', audio_index: 2)
+      expect(described_class).to have_received(:execute_with_timeout) { |cmd, *_| expect(cmd.each_cons(2)).to include(['-map', '0:a:2']) }
+    end
+  end
+
   describe '.detect_audio_tracks' do
     it 'parses ffprobe json output by field name, not positional order' do
       # ffprobe emits fields in canonical order (index,codec_name,sample_rate,channels,bit_rate)
@@ -478,11 +545,18 @@ RSpec.describe Neutraliser::FFmpegWrapper do
         array_including('-of', 'json'), described_class::PROBE_TIMEOUT, 'Audio track detection'
       )
       expect(result).to eq([
-                             { index: 0, stream_index: 1, channels: 6, codec: 'ac3', profile: nil, title: nil, bit_rate: 640_000,
+                             { index: 0, stream_index: 1, channels: 6, codec: 'ac3', profile: nil, title: nil, default: false, bit_rate: 640_000,
                                sample_rate: 48_000 },
-                             { index: 1, stream_index: 2, channels: 2, codec: 'aac', profile: nil, title: nil, bit_rate: 256_000,
+                             { index: 1, stream_index: 2, channels: 2, codec: 'aac', profile: nil, title: nil, default: false, bit_rate: 256_000,
                                sample_rate: 44_100 }
                            ])
+    end
+
+    it 'flags the default-disposition track' do
+      json = { streams: [{ index: 1, codec_name: 'aac', disposition: { default: 0 } },
+                         { index: 2, codec_name: 'ac3', disposition: { default: 1 } }] }.to_json
+      allow(described_class).to receive(:execute_with_timeout).and_return([json, '', ok_status])
+      expect(described_class.detect_audio_tracks('a.mkv').map { |t| t[:default] }).to eq([false, true])
     end
 
     it 'reads the codec profile and track title, treating "unknown" as no profile' do

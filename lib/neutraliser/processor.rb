@@ -266,7 +266,7 @@ module Neutraliser
           audio_tracks = FFmpegWrapper.detect_audio_tracks(working_path)
           # Not stamped in the sidecar: a later --allow-object-audio-loss run
           # (or an ffmpeg that can keep the objects) must still see the file.
-          object_audio_skip = check_object_audio(file_path, working_path, audio_tracks.first)
+          object_audio_skip = check_object_audio(file_path, working_path, FFmpegWrapper.primary_audio_track(audio_tracks))
           next object_audio_skip if object_audio_skip
 
           result = if @fast
@@ -438,7 +438,8 @@ module Neutraliser
     # already checked), but deliberately, with an explicit warning rather
     # than silently trusting fabricated stereo/unknown data.
     def warn_if_audio_track_unknown(audio_tracks)
-      return unless audio_tracks.first && audio_tracks.first[:unknown]
+      primary = FFmpegWrapper.primary_audio_track(audio_tracks)
+      return unless primary[:unknown]
 
       log '  Warning: could not determine audio track format, using conservative defaults'
     end

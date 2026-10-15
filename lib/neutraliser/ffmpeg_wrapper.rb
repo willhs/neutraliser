@@ -121,13 +121,13 @@ module Neutraliser
     # logos and titles and reads several LU quieter than the film itself, so a
     # slice taken from the start systematically under-reports loudness.
     def self.measure_loudness(input_path, target_i: -20.0, target_tp: -1.5, target_lra: 12.0, input_args: [],
-                              duration: nil, start_offset: nil)
+                              duration: nil, start_offset: nil, audio_index: 0)
       cmd = ['ffmpeg', '-hide_banner', '-nostats', *input_args]
       cmd += ['-ss', start_offset.round.to_s] if start_offset&.positive?
       cmd += ['-i', input_path]
       cmd += ['-t', duration.to_s] if duration
       cmd += [
-        '-map', 'a:0',
+        '-map', "0:a:#{audio_index}",
         '-af', "loudnorm=I=#{target_i}:TP=#{target_tp}:LRA=#{target_lra}:print_format=json",
         '-f', 'null', '-'
       ]
@@ -187,7 +187,7 @@ module Neutraliser
       nil
     end
 
-    def self.quick_loudness_sample(input_path, duration: 30, target_i: -20.0)
+    def self.quick_loudness_sample(input_path, duration: 30, target_i: -20.0, audio_index: 0)
       # Quick LUFS estimation using a sample from the middle of the file
       # Much faster than analyzing the entire file
 
@@ -202,7 +202,7 @@ module Neutraliser
         'ffmpeg', '-hide_banner', '-nostats',
         '-ss', start_time.to_s, '-i', input_path,
         '-t', duration.to_s,
-        '-map', 'a:0',
+        '-map', "0:a:#{audio_index}",
         '-af', "loudnorm=I=#{target_i}:print_format=json",
         '-f', 'null', '-'
       ]
@@ -220,12 +220,24 @@ module Neutraliser
       nil
     end
 
+    # The track that gets measured and normalised: the one flagged default,
+    # else the first. Players pick the default track, so that is the one whose
+    # level the viewer hears.
+    def self.primary_audio_track(tracks)
+      tracks.find { |t| t[:default] } || tracks.first || UNKNOWN_AUDIO_TRACK
+    end
+
+    # Index (among audio streams) of the primary track, for `0:a:N` maps.
+    def self.primary_audio_index(input_path)
+      primary_audio_track(detect_audio_tracks(input_path))[:index]
+    end
+
     def self.apply_normalization(input_path, output_path, measured_data, profile, audio_tracks: nil, allow_dynamic: false, keep_original: false)
       audio_tracks ||= detect_audio_tracks(input_path)
-      primary_track = audio_tracks.first || UNKNOWN_AUDIO_TRACK
+      primary_track = primary_audio_track(audio_tracks)
 
       codec_decision = select_output_codec(primary_track, output_path, input_path)
-      codec_args = build_codec_args(codec_decision)
+      codec_args = build_codec_args(codec_decision, primary_track[:index])
 
       audio_filter, forced_normalization_type = build_audio_filter(
         measured_data, profile[:lufs], profile[:tp], profile[:lra], primary_track[:sample_rate], allow_dynamic: allow_dynamic
@@ -246,7 +258,7 @@ module Neutraliser
       cmd = build_complete_ffmpeg_command(
         input_path, output_path, audio_filter,
         codec_args, audio_tracks, stream_counts(input_path),
-        tags: stamp_args(stamp_for.call(predicted_type), output_path), keep_original: keep_original
+        tags: stamp_args(stamp_for.call(predicted_type), output_path, primary_track[:index]), keep_original: keep_original
       )
 
       ffmpeg_output = execute_with_progress(cmd)
@@ -266,10 +278,10 @@ module Neutraliser
 
     def self.apply_normalization_single_pass(input_path, output_path, audio_tracks, profile, keep_original: false)
       audio_tracks ||= detect_audio_tracks(input_path)
-      primary_track = audio_tracks.first || UNKNOWN_AUDIO_TRACK
+      primary_track = primary_audio_track(audio_tracks)
 
       codec_decision = select_output_codec(primary_track, output_path, input_path)
-      codec_args = build_codec_args(codec_decision)
+      codec_args = build_codec_args(codec_decision, primary_track[:index])
 
       loudnorm_filter = "loudnorm=I=#{profile[:lufs]}:TP=#{profile[:tp]}:LRA=#{profile[:lra]}:print_format=summary"
       loudnorm_filter += ",aresample=#{primary_track[:sample_rate]}" if primary_track[:sample_rate]
@@ -281,7 +293,7 @@ module Neutraliser
       cmd = build_complete_ffmpeg_command(
         input_path, output_path, loudnorm_filter,
         codec_args, audio_tracks, stream_counts(input_path),
-        tags: stamp_args(stamp, output_path), keep_original: keep_original
+        tags: stamp_args(stamp, output_path, primary_track[:index]), keep_original: keep_original
       )
 
       ffmpeg_output = execute_with_progress(cmd)
@@ -297,16 +309,22 @@ module Neutraliser
     # means "not known to be processed").
     def self.read_stamp(input_path)
       cmd = [
-        'ffprobe', '-v', 'error', '-select_streams', 'a:0',
-        '-show_entries', 'stream_tags:format_tags', '-of', 'json', input_path
+        'ffprobe', '-v', 'error', '-select_streams', 'a',
+        '-show_entries', 'stream_tags:stream_disposition=default:format_tags', '-of', 'json', input_path
       ]
       stdout, _stderr, status = execute_with_timeout(cmd, PROBE_TIMEOUT, 'Stamp probe')
       return nil unless status.success?
 
       data = JSON.parse(stdout)
-      Stamp.from_tags(data.dig('streams', 0, 'tags')) || Stamp.from_tags(data.dig('format', 'tags'))
+      Stamp.from_tags(primary_stream_tags(data['streams'])) || Stamp.from_tags(data.dig('format', 'tags'))
     rescue StandardError
       nil
+    end
+
+    def self.primary_stream_tags(streams)
+      streams = Array(streams)
+      stream = streams.find { |st| st.dig('disposition', 'default') == 1 } || streams.first
+      stream&.dig('tags')
     end
 
     # Counts video and subtitle streams so build_complete_ffmpeg_command can
@@ -369,7 +387,7 @@ module Neutraliser
     def self.detect_audio_tracks(input_path)
       cmd = [
         'ffprobe', '-v', 'error', '-select_streams', 'a',
-        '-show_entries', 'stream=index,codec_name,profile,sample_rate,channels,bit_rate:stream_tags=title',
+        '-show_entries', 'stream=index,codec_name,profile,sample_rate,channels,bit_rate:stream_tags=title:stream_disposition=default',
         '-of', 'json', input_path
       ]
 
@@ -403,6 +421,7 @@ module Neutraliser
           codec: stream['codec_name'] || 'unknown',
           profile: parse_profile(stream['profile']),
           title: stream.dig('tags', 'title'),
+          default: stream.dig('disposition', 'default') == 1,
           bit_rate: parse_bit_rate(stream['bit_rate']),
           sample_rate: stream['sample_rate']&.to_i
         }
@@ -625,9 +644,9 @@ module Neutraliser
       encoder.start_with?('flac', 'pcm_')
     end
 
-    def self.build_codec_args(codec_decision)
-      args = ['-c:a:0', codec_decision[:encoder]]
-      args += ['-b:a:0', "#{codec_decision[:bitrate] / 1000}k"] if codec_decision[:bitrate]
+    def self.build_codec_args(codec_decision, output_index = 0)
+      args = ["-c:a:#{output_index}", codec_decision[:encoder]]
+      args += ["-b:a:#{output_index}", "#{codec_decision[:bitrate] / 1000}k"] if codec_decision[:bitrate]
       args
     end
 
@@ -708,9 +727,9 @@ module Neutraliser
     # The stamp goes on the normalised audio stream and on the container.
     # MP4/MOV only keep arbitrary keys at container level, and only with
     # use_metadata_tags; their stream-level copy is silently dropped.
-    def self.stamp_args(stamp, output_path)
+    def self.stamp_args(stamp, output_path, output_index = 0)
       args = stamp.to_tags.flat_map do |key, value|
-        ['-metadata:s:a:0', "#{key}=#{value}", '-metadata', "#{key}=#{value}"]
+        ["-metadata:s:a:#{output_index}", "#{key}=#{value}", '-metadata', "#{key}=#{value}"]
       end
       args += ['-movflags', '+use_metadata_tags'] if MP4_FAMILY.include?(File.extname(output_path).downcase)
       args
@@ -748,24 +767,33 @@ module Neutraliser
         '-map', '0:v', '-c:v', 'copy'
       ]
 
-      # Primary audio stream - normalize using filter_complex
-      cmd += [
-        '-filter_complex', "[0:a:0]#{loudnorm_filter}[norm]",
-        '-map', '[norm]'
-      ] + primary_codec
+      # Output audio order matches input order: the primary track (the
+      # default-disposition one, else the first) is replaced in place by its
+      # normalised version; the rest are stream-copied around it.
+      primary = primary_audio_track(audio_tracks)
+      cmd += ['-filter_complex', "[0:a:#{primary[:index]}]#{loudnorm_filter}[norm]"]
 
       # With keep_original, a stream-copy of the untouched primary track
-      # follows the normalised one (output a:1), so every other track's
-      # output index shifts by one. A file that already carries a kept
-      # original (from an earlier run) is not given a second copy.
+      # follows the normalised one, so every later track's output index
+      # shifts by one. A file that already carries a kept original (from an
+      # earlier run) is not given a second copy.
       keep_original &&= audio_tracks.none? { |track| original_copy?(track) }
-      shift = keep_original ? 1 : 0
-      source_for_output = audio_tracks.each_with_index.map { |track, i| [i.zero? ? 0 : i + shift, track] }
-      cmd += ['-map', '0:a:0', '-c:a:1', 'copy'] if keep_original
-
-      # Additional audio streams - copy as-is with explicit indexing
-      audio_tracks[1..].each_with_index do |track, idx|
-        cmd += ['-map', "0:a:#{track[:index]}", "-c:a:#{idx + 1 + shift}", 'copy']
+      source_for_output = []
+      normalised_output = kept_output = nil
+      audio_tracks.each do |track|
+        output_index = source_for_output.length + (kept_output ? 1 : 0)
+        if track.equal?(primary)
+          normalised_output = output_index
+          cmd += ['-map', '[norm]'] + primary_codec
+          source_for_output << [output_index, track]
+          if keep_original
+            kept_output = output_index + 1
+            cmd += ['-map', "0:a:#{track[:index]}", "-c:a:#{kept_output}", 'copy']
+          end
+        else
+          cmd += ['-map', "0:a:#{track[:index]}", "-c:a:#{output_index}", 'copy']
+          source_for_output << [output_index, track]
+        end
       end
 
       # Metadata and subtitles preservation. The primary track goes through
@@ -784,9 +812,12 @@ module Neutraliser
         cmd += ["-map_metadata:s:a:#{output_index}", "0:s:a:#{track[:index]}"]
       end
       if keep_original
-        cmd += ['-map_metadata:s:a:1', '0:s:a:0',
-                '-metadata:s:a:1', "title=#{original_title(audio_tracks.first)}",
-                '-disposition:a:0', 'default', '-disposition:a:1', '0']
+        cmd += ["-map_metadata:s:a:#{kept_output}", "0:s:a:#{primary[:index]}",
+                "-metadata:s:a:#{kept_output}", "title=#{original_title(primary)}",
+                "-disposition:a:#{normalised_output}", 'default', "-disposition:a:#{kept_output}", '0']
+      elsif primary[:default]
+        # A filtered stream carries no disposition of its own.
+        cmd += ["-disposition:a:#{normalised_output}", 'default']
       end
       stream_counts[:video].to_i.times do |i|
         cmd += ["-map_metadata:s:v:#{i}", "0:s:v:#{i}"]
@@ -850,6 +881,7 @@ module Neutraliser
                          :build_stamp,
                          :stamp_args,
                          :restamp,
+                         :primary_stream_tags,
                          :build_complete_ffmpeg_command,
                          :original_title,
                          :original_copy?,

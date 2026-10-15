@@ -117,7 +117,7 @@ RSpec.describe Neutraliser::SkipDecider do
     it 'marks the sidecar (not a separate marker file) when a quick sample verifies within tolerance' do
       decider = described_class.new(temp_dir, fast_verification: true)
       quick_result = Neutraliser::Measurement.already_at_target(profile)
-      allow(Neutraliser::FFmpegWrapper).to receive(:quick_loudness_sample).and_return(quick_result)
+      allow(Neutraliser::FFmpegWrapper).to receive_messages(quick_loudness_sample: quick_result, primary_audio_index: 0)
 
       expect(decider.skip?(video_path, profile, tolerance: 1.0)).to be true
       expect(decider.already_processed?(video_path, profile)).to be true
@@ -132,7 +132,7 @@ RSpec.describe Neutraliser::SkipDecider do
         'input_i' => (profile[:lufs] + 0.9).to_s, 'input_tp' => '0', 'input_lra' => '0',
         'input_thresh' => '0', 'target_offset' => '0'
       )
-      allow(Neutraliser::FFmpegWrapper).to receive(:quick_loudness_sample).and_return(quick_result)
+      allow(Neutraliser::FFmpegWrapper).to receive_messages(quick_loudness_sample: quick_result, primary_audio_index: 0)
 
       expect(decider.skip?(video_path, profile, tolerance: 1.0)).to be false
     end

@@ -10,6 +10,8 @@ RSpec.describe Neutraliser::AudioAnalyser do
   end
 
   describe '#analyze' do
+    before { allow(Neutraliser::FFmpegWrapper).to receive(:primary_audio_index).and_return(0) }
+
     context 'when the skip decider says the file is already normalised' do
       it 'returns an already-at-target Measurement without measuring' do
         analyser = described_class.new(cache_enabled: true, fast_verification: true)
@@ -42,7 +44,8 @@ RSpec.describe Neutraliser::AudioAnalyser do
         analyser = described_class.new(cache_enabled: true, fast_verification: false)
         allow_any_instance_of(Neutraliser::CacheManager).to receive(:load_cached_analysis).and_return(nil)
         allow(Neutraliser::FFmpegWrapper).to receive(:measure_loudness)
-          .with('/working/movie.mp4', target_i: profile[:lufs], target_tp: profile[:tp], target_lra: profile[:lra])
+          .with('/working/movie.mp4', target_i: profile[:lufs], target_tp: profile[:tp], target_lra: profile[:lra],
+                audio_index: 0)
           .and_return(measurement)
 
         expect_any_instance_of(Neutraliser::CacheManager).to receive(:save_analysis)

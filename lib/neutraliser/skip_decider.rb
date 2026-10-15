@@ -93,7 +93,8 @@ module Neutraliser
 
     def quick_sample_verified?(file_path, profile, tolerance:)
       quick_result = FFmpegWrapper.quick_loudness_sample(
-        file_path, duration: QUICK_SAMPLE_DURATION_S, target_i: profile[:lufs]
+        file_path, duration: QUICK_SAMPLE_DURATION_S, target_i: profile[:lufs],
+        audio_index: FFmpegWrapper.primary_audio_index(file_path)
       )
       return false unless quick_result
 

@@ -41,7 +41,8 @@ module Neutraliser
         working_path,
         target_i: profile[:lufs],
         target_tp: profile[:tp],
-        target_lra: profile[:lra]
+        target_lra: profile[:lra],
+        audio_index: FFmpegWrapper.primary_audio_index(working_path)
       )
 
       @cache_manager.save_analysis(cached_as, profile, measurement) if @cache_enabled
