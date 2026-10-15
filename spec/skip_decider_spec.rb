@@ -6,7 +6,10 @@ RSpec.describe Neutraliser::SkipDecider do
   let(:profile) { { name: 'livingroom', lufs: -20.0, tp: -1.5, lra: 12.0 } }
   let(:video_path) { File.join(temp_dir, 'movie.mp4') }
 
-  before { File.write(video_path, 'x' * 100) }
+  before do
+    File.write(video_path, 'x' * 100)
+    allow(Neutraliser::FFmpegWrapper).to receive(:read_stamp).and_return(nil)
+  end
   after { FileUtils.remove_entry(temp_dir) if Dir.exist?(temp_dir) }
 
   describe '#already_processed? / #mark_processed' do
@@ -54,6 +57,44 @@ RSpec.describe Neutraliser::SkipDecider do
       decider = described_class.new(temp_dir)
 
       expect(decider.already_processed?(video_path, profile)).to be false
+    end
+  end
+
+  describe 'the in-file NEUTRALISER_* stamp' do
+    def stamped(profile_name)
+      Neutraliser::Stamp.now(profile: profile_name, mode: 'linear', gain_db: 1.0, source_codec: 'aac',
+                             source_bitrate: nil, measured_i: -21.0, measured_tp: -5.0, measured_lra: 6.0)
+    end
+
+    it 'counts a file stamped for the same profile as processed, with no sidecar (moved, or a new root)' do
+      allow(Neutraliser::FFmpegWrapper).to receive(:read_stamp).with(video_path).and_return(stamped('livingroom'))
+      other_root = Dir.mktmpdir
+
+      expect(described_class.new(other_root).already_processed?(video_path, profile)).to be true
+    ensure
+      FileUtils.remove_entry(other_root)
+    end
+
+    it 'does not count a stamp for a different profile' do
+      allow(Neutraliser::FFmpegWrapper).to receive(:read_stamp).with(video_path).and_return(stamped('night'))
+
+      expect(described_class.new(temp_dir).already_processed?(video_path, profile)).to be false
+    end
+
+    it 'refreshes the sidecar cache on a tag hit, so the next check skips the probe' do
+      allow(Neutraliser::FFmpegWrapper).to receive(:read_stamp).with(video_path).and_return(stamped('livingroom'))
+      described_class.new(temp_dir).already_processed?(video_path, profile)
+
+      next_run = described_class.new(temp_dir)
+      expect(Neutraliser::FFmpegWrapper).not_to receive(:read_stamp)
+      expect(next_run.already_processed?(video_path, profile)).to be true
+    end
+
+    it 'lets #skip? short-circuit on the stamp without a quick sample' do
+      allow(Neutraliser::FFmpegWrapper).to receive(:read_stamp).with(video_path).and_return(stamped('livingroom'))
+
+      expect(Neutraliser::FFmpegWrapper).not_to receive(:quick_loudness_sample)
+      expect(described_class.new(temp_dir).skip?(video_path, profile, tolerance: 1.0)).to be true
     end
   end
 

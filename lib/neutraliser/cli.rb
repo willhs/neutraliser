@@ -148,6 +148,22 @@ module Neutraliser
       exit 1
     end
 
+    desc 'report PATH', 'Report what neutraliser recorded inside each video file (NEUTRALISER_* tags)'
+    option :format, type: :string, default: 'summary', enum: Report::FORMATS,
+                    desc: 'summary (counts), tsv or json (per-file rows)'
+    def report(path)
+      raise Thor::Error, "Error: Path '#{path}' does not exist" unless File.exist?(path)
+
+      report = Report.new(path)
+      case options[:format]
+      when 'tsv'
+        puts report.to_tsv
+        warn report.summary
+      when 'json' then puts report.to_json
+      else puts report.summary
+      end
+    end
+
     desc 'profiles', 'List available normalization profiles'
     option :verbose, type: :boolean, aliases: ['-v'], default: false, desc: 'Show detailed profile descriptions'
     def profiles

@@ -3,7 +3,7 @@ type: architecture
 status: draft
 owner: will
 contributors: []
-updated: 2026-08-07
+updated: 2026-10-15
 review_cycle: 90d
 agent_write: false
 links: []
@@ -27,15 +27,15 @@ Input File
 │  Processor          │  Orchestrates the pipeline per file
 │                     │
 │  ┌───────────────┐  │
-│  │ SkipDecider   │  │  Single "already normalised?" authority (sidecar
-│  └───────┬───────┘  │  hit, or quick LUFS sample as a fallback strategy)
+│  │ SkipDecider   │  │  Single "already normalised?" authority (in-file
+│  └───────┬───────┘  │  stamp / sidecar cache, quick LUFS sample fallback)
 │          ▼          │
 │  ┌───────────────┐  │
 │  │ AudioAnalyser │  │  Full loudnorm measurement (with sidecar cache)
 │  └───────┬───────┘  │
 │          ▼          │
 │  ┌───────────────┐  │
-│  │ FFmpegWrapper │  │  Two-pass loudnorm: measure → apply
+│  │ FFmpegWrapper │  │  Measure → apply gain, writing the Stamp tags
 │  └───────┬───────┘  │
 │          ▼          │
 │  ┌───────────────┐  │
@@ -66,6 +66,14 @@ ffmpeg can't encode Atmos or DTS:X object metadata, so re-encoding the primary t
 
 The default normalisation pass is a constant `volume=` gain (`FFmpegWrapper.build_volume_gain_filter`), capped so true peak stays at or below the profile TP. Quiet-but-peaky files land shy of target; `apply_normalization` returns `shortfall_lu` and the Processor logs it. `--allow-dynamic` switches to the two-pass `loudnorm` filter, which may fall back to dynamic compression; profiles with `dynamic: true` (`night`) imply it. Every result carries `normalization_type` (Linear/Dynamic); the run summary reports `linear`/`dynamic` counts and each Dynamic file logs a warning. `--linear-only` is a deprecated no-op.
 
+### Every change is recorded in the file (Stamp)
+
+The normalise pass writes a `Stamp` (`lib/neutraliser/stamp.rb`) as `NEUTRALISER_*` tags in the same ffmpeg command: on the normalised audio stream (`-metadata:s:a:0`) and on the container (`-metadata`). They come after the explicit per-stream `-map_metadata` mappings, so language and title tags are kept and the stamp is added on top. MP4/M4V/MOV only keep custom keys at container level, and only with `-movflags +use_metadata_tags`, so that flag is added for them. MKV/WebM/FLV/WMV keep the tags; AVI drops them, and there the sidecar is the only record. `FFmpegWrapper.read_stamp` prefers the stream tags and falls back to the container. The schema is in [data_contracts](../ops/data_contracts.md).
+
+The mode tag has to be written before ffmpeg runs, but with `--allow-dynamic` loudnorm only says afterwards whether it stayed linear. So `predict_loudnorm_type` copies loudnorm's own rule (valid measured values, gain fits under the true-peak ceiling, source LRA ≤ target LRA). If loudnorm's summary disagrees, `restamp` stream-copies the output once with corrected tags before it is committed. The tags never claim the wrong mode. Constant gain (the default) is always linear and `--fast` is always dynamic, so neither needs a prediction.
+
+`neutraliser report PATH` (`lib/neutraliser/report.rb`) reads the stamps back to count linear / dynamic / untouched files and the profile mix.
+
 ### Performance Flags
 
 Two optional flags reduce per-file processing time. See [ADR-0002](adr/0002-performance-flags.md) for rationale and benchmark data.
@@ -85,7 +93,9 @@ Both flags are independent and can be combined.
 | ObjectAudio | `lib/neutraliser/object_audio.rb` | Atmos / DTS:X detection (stream profile, name-hinted mid-file probe) |
 | AudioAnalyser | `lib/neutraliser/audio_analyser.rb` | Loudness analysis with sidecar caching |
 | CacheManager | `lib/neutraliser/cache_manager.rb` | Sidecar `.loudnorm_{profile}.json` analysis cache read/write |
-| SkipDecider | `lib/neutraliser/skip_decider.rb` | Single authority for "already normalised?" — one `.neutraliser` sidecar (size+mtime+profile, never expires), quick LUFS sampling as an internal fallback strategy |
+| SkipDecider | `lib/neutraliser/skip_decider.rb` | Single authority for "already normalised?" — the in-file Stamp for the same profile, cached in one `.neutraliser` sidecar (size+mtime+profile, never expires), quick LUFS sampling as an internal fallback strategy |
+| Stamp | `lib/neutraliser/stamp.rb` | Value object for the `NEUTRALISER_*` tags: what was done to a file, both directions of the tag encoding |
+| Report | `lib/neutraliser/report.rb` | `neutraliser report`: reads stamps across a directory, counts and per-file rows |
 | FileManager | `lib/neutraliser/file_manager.rb` | Atomic file replacement, integrity verification |
 | LocalStager | `lib/neutraliser/local_stager.rb` | Stage files to local NVMe for fast processing, copy result back |
 
@@ -94,6 +104,7 @@ Both flags are independent and can be combined.
 - **Two-pass loudnorm** — first pass measures, second pass applies with measured values for accurate normalisation.
 - **Smart codec selection** — match source codec and bitrate to avoid quality loss. See [ADR-0001](adr/0001-smart-codec-selection.md).
 - **Sidecar caching** — `.loudnorm_{profile}.json` files next to videos avoid re-analysis on repeated runs.
+- **The file is the record** — the `.neutraliser` sidecar lives in whichever root a run started from, so moving a file or running from another root lost the record and could cause another lossy re-encode. The Stamp travels with the file. The sidecar stays as a cache in front of the one-ffprobe tag check and is refreshed on a tag hit.
 - **One skip decider** — SkipDecider is the single place that answers "is this file already normalised?", backed by one sidecar (`.neutraliser`) and one staleness rule (size+mtime+profile, never expires). Quick LUFS sampling lives inside it as an internal fallback strategy and never writes its own marker file; a verified quick sample is recorded through the same sidecar. The legacy `.{basename}.neutralised_{profile}` marker format is retired; `neutraliser cache clean` removes any left over from older runs.
 - **Atomic replace** — write to temp file, verify integrity, then rename to prevent corruption.
 
@@ -109,6 +120,7 @@ Both flags are independent and can be combined.
 
 ### Change Log
 
+- 2026-10-15 (agent:record-what-was-done): Added the Stamp section (in-file NEUTRALISER_* tags), Stamp and Report components, tag-first skip decision
 - 2026-10-15 (agent:object-audio): Added object-audio skip section, ObjectAudio component, profile in probe
 - 2025-09-24 (agent:create-project): Created architecture placeholder
 - 2026-03-07 (agent:implement-plan): Added pipeline diagram, codec selection, component table

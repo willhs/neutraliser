@@ -14,7 +14,9 @@ A Ruby CLI tool that normalises audio volume in video files using industry-stand
 
 ### Core Components
 - **`Processor`**: Main orchestration class handling file/directory processing
-- **`SkipDecider`**: Single authority for "already normalised?" — one `.neutraliser` sidecar (size+mtime+profile), quick LUFS sampling as an internal fallback
+- **`SkipDecider`**: Single authority for "already normalised?" — the in-file `NEUTRALISER_*` stamp for the same profile, cached in one `.neutraliser` sidecar (size+mtime+profile), quick LUFS sampling as an internal fallback
+- **`Stamp`**: Value object for the `NEUTRALISER_*` tags written on the normalised track and container (schema: `docs/ops/data_contracts.md`)
+- **`Report`**: `neutraliser report PATH` — reads stamps, counts linear/dynamic/untouched and profiles
 - **`FFmpegWrapper`**: Two-pass loudnorm implementation, ffprobe, source-matched codec selection
 - **`ObjectAudio`**: Detects Atmos / DTS:X on the primary track (ffprobe profile, name-hinted mid-file probe) so it is skipped, not silently flattened
 - **`AudioAnalyser`**: Full loudnorm measurement coordination with sidecar caching
@@ -56,6 +58,7 @@ A Ruby CLI tool that normalises audio volume in video files using industry-stand
 
 ### Primary Commands
 - `neutraliser process PATH` - Main processing command
+- `neutraliser report PATH [--format summary|tsv|json]` - What was done to each file, from its tags
 - `neutraliser profiles` - List normalization profiles
 - `neutraliser analyze-plex` - Plex library analysis
 - `neutraliser cache stats/clean` - Cache management

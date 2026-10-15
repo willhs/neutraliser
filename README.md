@@ -69,7 +69,8 @@ Neutraliser does the one job: make the library level, leave everything else alon
 - **Full stream preservation** — every audio/subtitle track, per-stream metadata (titles, languages), chapters and dispositions survive the round trip
 - **Never silently strips Atmos / DTS:X** — ffmpeg can't re-encode object audio, so files whose primary track is Dolby Atmos (E-AC3 JOC, TrueHD) or DTS:X are skipped and logged; `--allow-object-audio-loss` processes them anyway ([detection notes](docs/research/object-audio-detection.md))
 - **Safe by default** — writes `*_normalized` copies; originals untouched unless you pass `--replace`
-- **Skips what's already fine** — a `.neutraliser` sidecar plus an optional 30-second sample check means a re-run over a processed library costs seconds, not hours
+- **Every change is recorded in the file** — the normalised track carries `NEUTRALISER_*` tags (profile, linear/dynamic, gain, source codec, measured loudness, date), so the record survives moves and renames; `neutraliser report` reads it back
+- **Skips what's already fine** — a file tagged for the same profile is never re-encoded; a `.neutraliser` sidecar caches that check and an optional 30-second sample spots files already at target, so a re-run over a processed library costs seconds, not hours
 - **Resumable** — interrupted a 500-file run? `--resume` picks up from the manifest
 - **Plex-aware** — `analyze-plex` gives a quick loudness triage across your Plex libraries before you change a single file
 - **Big-batch friendly** — `--fast` (single-pass, ~30% quicker) and `--local-stage` for slow network mounts
@@ -206,11 +207,11 @@ Any numeric `--target-level` overrides the profile's LUFS while keeping the rest
 
 ## How it works
 
-1. **Skip check** — a `.neutraliser` sidecar (size + mtime + profile) says whether this exact file has already been done. If not, an optional 30-second sample estimates whether it's already within tolerance.
+1. **Skip check** — a file whose primary audio track (or container) carries a `NEUTRALISER_PROFILE` tag for this profile has already been done, wherever it lives now. A `.neutraliser` sidecar (size + mtime + profile) caches that answer. If neither says so, an optional 30-second sample estimates whether it's already within tolerance.
 2. **Measure** — an FFmpeg `loudnorm` analysis pass measures integrated loudness, true peak, and loudness range. Results are cached, so re-analysis is free.
 3. **Decide** — within `--tolerance` of the profile target? Skip it. Otherwise, pick an output codec that matches the source ([ADR-0001](docs/design/adr/0001-smart-codec-selection.md)).
 4. **Normalise** — applies a constant gain (an ffmpeg `volume` filter) computed from the measured values, capped so true peak stays within the profile ceiling. With `--allow-dynamic` (or the `night` profile) a second `loudnorm` pass is used instead, which may fall back to dynamic compression. Video is stream-copied — it is never re-encoded. Chapters, subtitles, and per-stream metadata are mapped across explicitly.
-5. **Write** — atomically, to `*_normalized.<ext>` or over the original with `--replace`, and the sidecar is stamped.
+5. **Write** — atomically, to `*_normalized.<ext>` or over the original with `--replace`. The same ffmpeg pass writes the `NEUTRALISER_*` tags ([tag schema](docs/ops/data_contracts.md)), and the sidecar is updated.
 
 Use `--fast` (requires `--allow-dynamic` or the `night` profile) to collapse steps 2 and 4 into a single dynamic-mode pass: roughly 30% quicker, marginally less precise ([ADR-0002](docs/design/adr/0002-performance-flags.md) has the benchmarks).
 
@@ -266,6 +267,21 @@ Rough loudness triage across your Plex libraries, modifying nothing. Reads audio
 | `--tolerance` | `1.0` | Files within this many LU count as OK |
 
 Copy `.env.example` to `.env` and add your token. See [docs/design/plex-analysis-guide.md](docs/design/plex-analysis-guide.md).
+
+### `report PATH`
+
+Reads the `NEUTRALISER_*` tags from every video under PATH (or one file) with ffprobe and changes nothing. By default it prints counts: normalised linear, normalised dynamic, untouched, and the profile mix.
+
+| Option | Default | Description |
+|---|---|---|
+| `--format` | `summary` | `summary` (counts), `tsv` (one row per file on stdout, counts on stderr) or `json` (counts plus every file's tags) |
+
+```bash
+neutraliser report /media/tv
+neutraliser report /media/tv --format tsv > tv-report.tsv
+```
+
+AVI can't hold custom tags, so AVI files always show as untouched. Their skip state lives only in the sidecar.
 
 ### `profiles`
 

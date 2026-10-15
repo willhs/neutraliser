@@ -96,6 +96,7 @@ RSpec.describe Neutraliser::FFmpegWrapper do
         :apply_normalization,
         :apply_normalization_single_pass,
         :detect_audio_tracks,
+        :read_stamp,
         :probe_audio_profile_mid_file,
         :stream_counts,
         :capped_linear_gain
@@ -189,14 +190,84 @@ RSpec.describe Neutraliser::FFmpegWrapper do
       end
     end
 
-    it 'records Dynamic normalization type when loudnorm falls back silently' do
+    it 'records Dynamic normalization type when loudnorm falls back silently, and corrects the stamp' do
+      # measured_data fits loudnorm's linear rule, so linear is predicted and
+      # written; ffmpeg then reports Dynamic, so the tags are rewritten.
+      tracks = [{ index: 0, channels: 2, codec: 'aac', bit_rate: 128_000, sample_rate: 48_000 }]
+      allow(described_class).to receive(:execute_with_timeout).and_return(['', 'Normalization Type:   Dynamic', ok_status])
+      allow(FileUtils).to receive(:mv)
+
+      result = described_class.apply_normalization('in.mp4', 'out.mp4', measured_data, profile.merge(name: 'livingroom'),
+                                                   audio_tracks: tracks, allow_dynamic: true)
+
+      expect(result[:normalization_type]).to eq('Dynamic')
+      expect(described_class).to have_received(:execute_with_timeout).with(
+        array_including('-map', '0', '-c', 'copy', 'NEUTRALISER_MODE=dynamic', 'NEUTRALISER_GAIN_DB='),
+        described_class::NORMALIZATION_TIMEOUT, 'Restamp'
+      )
+      expect(FileUtils).to have_received(:mv).with('./.restamp-out.mp4', 'out.mp4')
+    end
+
+    it 'does not remux when loudnorm does what was predicted' do
+      tracks = [{ index: 0, channels: 2, codec: 'aac', bit_rate: 128_000, sample_rate: 48_000 }]
+      allow(described_class).to receive(:execute_with_timeout).and_return(['', 'Normalization Type:   Linear', ok_status])
+
+      described_class.apply_normalization('in.mkv', 'out.mkv', measured_data, profile.merge(name: 'livingroom'),
+                                          audio_tracks: tracks, allow_dynamic: true)
+
+      expect(described_class).to have_received(:execute_with_timeout).once
+      expect(described_class).to have_received(:execute_with_timeout) do |cmd, *_rest|
+        expect(cmd).to include('NEUTRALISER_MODE=linear', 'NEUTRALISER_GAIN_DB=-1.50')
+      end
+    end
+
+    it 'predicts dynamic up front when the source LRA exceeds the target' do
+      wide = Neutraliser::Measurement.from_loudnorm_json(
+        'input_i' => '-24', 'input_tp' => '-10', 'input_lra' => '20', 'input_thresh' => '-34', 'target_offset' => '0'
+      )
       tracks = [{ index: 0, channels: 2, codec: 'aac', bit_rate: 128_000, sample_rate: 48_000 }]
       allow(described_class).to receive(:execute_with_timeout).and_return(['', 'Normalization Type:   Dynamic', ok_status])
 
-      result = described_class.apply_normalization('in.mp4', 'out.mp4', measured_data, profile, audio_tracks: tracks,
-                                                                                                allow_dynamic: true)
+      described_class.apply_normalization('in.mkv', 'out.mkv', wide, profile.merge(name: 'livingroom'),
+                                          audio_tracks: tracks, allow_dynamic: true)
 
-      expect(result[:normalization_type]).to eq('Dynamic')
+      expect(described_class).to have_received(:execute_with_timeout).once
+      expect(described_class).to have_received(:execute_with_timeout) do |cmd, *_rest|
+        expect(cmd).to include('NEUTRALISER_MODE=dynamic', 'NEUTRALISER_GAIN_DB=')
+      end
+    end
+
+    it 'stamps the normalised stream and the container, after the existing metadata mappings' do
+      tracks = [{ index: 0, channels: 2, codec: 'aac', bit_rate: 128_000, sample_rate: 48_000 }]
+      allow(described_class).to receive(:execute_with_timeout).and_return(['', '', ok_status])
+
+      described_class.apply_normalization('in.mkv', 'out.mkv', measured_data, profile.merge(name: 'livingroom'),
+                                          audio_tracks: tracks)
+
+      expect(described_class).to have_received(:execute_with_timeout) do |cmd, *_rest|
+        expect(cmd.each_cons(2).to_a).to include(
+          ['-metadata:s:a:0', 'NEUTRALISER_PROFILE=livingroom'], ['-metadata', 'NEUTRALISER_PROFILE=livingroom'],
+          ['-metadata:s:a:0', 'NEUTRALISER_MODE=linear'], ['-metadata:s:a:0', 'NEUTRALISER_GAIN_DB=-1.50'],
+          ['-metadata:s:a:0', 'NEUTRALISER_SOURCE_CODEC=aac'], ['-metadata:s:a:0', 'NEUTRALISER_SOURCE_BITRATE=128000'],
+          ['-metadata:s:a:0', 'NEUTRALISER_MEASURED_I=-18.50'], ['-metadata:s:a:0', "NEUTRALISER_VERSION=#{Neutraliser::VERSION}"]
+        )
+        expect(cmd).to include('-map_metadata:s:a:0', '0:s:a:0')
+        expect(cmd.index('-metadata:s:a:0')).to be > cmd.index('-map_metadata:s:a:0')
+        expect(cmd.last).to eq('out.mkv')
+        expect(cmd).not_to include('-movflags')
+      end
+    end
+
+    it 'turns on use_metadata_tags for MP4 so the container-level stamp survives' do
+      tracks = [{ index: 0, channels: 2, codec: 'aac', bit_rate: 128_000, sample_rate: 48_000 }]
+      allow(described_class).to receive(:execute_with_timeout).and_return(['', '', ok_status])
+
+      described_class.apply_normalization('in.mp4', 'out.mp4', measured_data, profile.merge(name: 'livingroom'),
+                                          audio_tracks: tracks)
+
+      expect(described_class).to have_received(:execute_with_timeout) do |cmd, *_rest|
+        expect(cmd.each_cons(2).to_a).to include(['-movflags', '+use_metadata_tags'])
+      end
     end
 
     it 'never engages dynamic compression by default, regardless of ffmpeg output' do
@@ -264,6 +335,19 @@ RSpec.describe Neutraliser::FFmpegWrapper do
       end
     end
 
+    it 'stamps the output as dynamic with no gain or measurement' do
+      allow(described_class).to receive(:detect_audio_tracks).and_return(
+        [{ index: 0, channels: 2, codec: 'aac', bit_rate: 256_000, sample_rate: 48_000 }]
+      )
+      allow(described_class).to receive(:execute_with_progress)
+
+      described_class.apply_normalization_single_pass('/in.mp4', '/out.mp4', nil, profile)
+
+      expect(described_class).to have_received(:execute_with_progress) do |cmd|
+        expect(cmd).to include('NEUTRALISER_MODE=dynamic', 'NEUTRALISER_GAIN_DB=', 'NEUTRALISER_MEASURED_I=')
+      end
+    end
+
     it 'returns a codec decision hash' do
       allow(described_class).to receive(:detect_audio_tracks).and_return(
         [{ index: 0, channels: 2, codec: 'aac', bit_rate: 256_000, sample_rate: 48_000 }]
@@ -273,6 +357,38 @@ RSpec.describe Neutraliser::FFmpegWrapper do
       result = described_class.apply_normalization_single_pass('/in.mp4', '/out.mp4', nil, profile)
 
       expect(result).to include(encoder: 'aac', source_codec: 'aac')
+    end
+  end
+
+  describe '.read_stamp' do
+    def probe_json(stream_tags: nil, format_tags: nil)
+      JSON.generate(streams: [{ tags: stream_tags }.compact], format: { tags: format_tags }.compact)
+    end
+
+    it 'reads the stamp from the primary audio stream' do
+      json = probe_json(stream_tags: { 'NEUTRALISER_PROFILE' => 'night', 'NEUTRALISER_MODE' => 'dynamic' },
+                        format_tags: { 'NEUTRALISER_PROFILE' => 'livingroom' })
+      allow(described_class).to receive(:execute_with_timeout).and_return([json, '', ok_status])
+
+      stamp = described_class.read_stamp('in.mkv')
+
+      expect(stamp).to have_attributes(profile: 'night', mode: 'dynamic')
+    end
+
+    it 'falls back to container tags (all MP4 keeps)' do
+      json = probe_json(stream_tags: { 'language' => 'eng' },
+                        format_tags: { 'NEUTRALISER_PROFILE' => 'livingroom', 'NEUTRALISER_GAIN_DB' => '3.20' })
+      allow(described_class).to receive(:execute_with_timeout).and_return([json, '', ok_status])
+
+      expect(described_class.read_stamp('in.mp4')).to have_attributes(profile: 'livingroom', gain_db: 3.2)
+    end
+
+    it 'is nil for an unstamped file or a failed probe' do
+      allow(described_class).to receive(:execute_with_timeout).and_return([probe_json(stream_tags: { 'a' => 'b' }), '', ok_status])
+      expect(described_class.read_stamp('plain.mkv')).to be_nil
+
+      allow(described_class).to receive(:execute_with_timeout).and_return(['', 'bad', fail_status])
+      expect(described_class.read_stamp('bad.mkv')).to be_nil
     end
   end
 
@@ -697,6 +813,66 @@ RSpec.describe Neutraliser::FFmpegWrapper do
         # must land near the real ~256k source, not the 128k AAC stereo floor.
         expect(result[:bitrate]).to be > 128_000
         expect(result[:source_bitrate]).to be > 128_000
+      end
+    end
+  end
+
+  describe 'integration: NEUTRALISER_* stamp on real MKV and MP4 output' do
+    before do
+      unless system('which ffmpeg > /dev/null 2>&1') && system('which ffprobe > /dev/null 2>&1')
+        skip 'ffmpeg/ffprobe not available on PATH'
+      end
+    end
+
+    def make_fixture(path)
+      system('ffmpeg', '-hide_banner', '-loglevel', 'error', '-y',
+             '-f', 'lavfi', '-i', 'color=c=blue:size=64x64:duration=4',
+             '-f', 'lavfi', '-i', 'anoisesrc=color=pink:duration=4:sample_rate=48000:amplitude=0.05',
+             '-c:v', 'libx264', '-preset', 'ultrafast', '-c:a', 'aac', '-b:a', '128k',
+             '-metadata:s:a:0', 'language=eng', path, exception: true)
+    end
+
+    def language(path)
+      `ffprobe -v error -select_streams a:0 -show_entries stream_tags=language -of default=nw=1:nk=1 #{path.shellescape}`.strip
+    end
+
+    let(:profile) { Neutraliser::Profiles::LIVING_ROOM }
+
+    %w[mkv mp4].each do |ext|
+      it "writes a readable stamp into #{ext} and keeps the stream language tag" do
+        Dir.mktmpdir do |dir|
+          input = File.join(dir, "in.#{ext}")
+          output = File.join(dir, "out.#{ext}")
+          make_fixture(input)
+          measured = described_class.measure_loudness(input, target_i: profile[:lufs])
+
+          described_class.apply_normalization(input, output, measured, profile)
+
+          stamp = described_class.read_stamp(output)
+          expect(stamp).to have_attributes(profile: 'livingroom', mode: 'linear', source_codec: 'aac',
+                                           version: Neutraliser::VERSION)
+          expect(stamp.gain_db).to be_within(0.01).of(
+            described_class.capped_linear_gain(measured, profile[:lufs], profile[:tp]).round(2)
+          )
+          expect(stamp.measured_i).to be_within(0.01).of(measured.input_i)
+          expect(language(output)).to eq('eng')
+          expect(described_class.read_stamp(input)).to be_nil
+        end
+      end
+
+      it "re-stamps #{ext} in place without losing stream tags" do
+        Dir.mktmpdir do |dir|
+          path = File.join(dir, "clip.#{ext}")
+          make_fixture(path)
+          stamp = Neutraliser::Stamp.now(profile: 'night', mode: 'dynamic', gain_db: nil, source_codec: 'aac',
+                                         source_bitrate: nil, measured_i: nil, measured_tp: nil, measured_lra: nil)
+
+          described_class.send(:restamp, path, stamp)
+
+          expect(described_class.read_stamp(path)).to have_attributes(profile: 'night', mode: 'dynamic')
+          expect(language(path)).to eq('eng')
+          expect(Dir.children(dir)).to eq(["clip.#{ext}"])
+        end
       end
     end
   end

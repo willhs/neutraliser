@@ -95,6 +95,10 @@ module Neutraliser
       '.flv' => %w[aac libmp3lame]
     }.freeze
 
+    # Containers that keep custom tags only at container level, and only
+    # with -movflags +use_metadata_tags.
+    MP4_FAMILY = %w[.mp4 .m4v .mov].freeze
+
     # Preferred fallback codec per container when source codec can't be matched
     CONTAINER_FALLBACKS = {
       '.mkv' => 'flac',
@@ -231,13 +235,31 @@ module Neutraliser
         measured_data, profile[:lufs], profile[:tp], profile[:lra], primary_track[:sample_rate], allow_dynamic: allow_dynamic
       )
 
+      # Tags go into the same encode, so loudnorm's Linear/Dynamic choice has
+      # to be predicted up front; its summary afterwards is the truth.
+      predicted_type = forced_normalization_type || predict_loudnorm_type(measured_data, profile)
+      stamp_for = lambda do |type|
+        gain = if forced_normalization_type
+                 capped_linear_gain(measured_data, profile[:lufs], profile[:tp])
+               elsif type == 'Linear'
+                 profile[:lufs] - measured_data.input_i
+               end
+        build_stamp(profile, type, codec_decision, gain: gain, measured: measured_data)
+      end
+
       cmd = build_complete_ffmpeg_command(
         input_path, output_path, audio_filter,
-        codec_args, audio_tracks, stream_counts(input_path)
+        codec_args, audio_tracks, stream_counts(input_path),
+        tags: stamp_args(stamp_for.call(predicted_type), output_path)
       )
 
       ffmpeg_output = execute_with_progress(cmd)
       normalization_type = forced_normalization_type || parse_normalization_type(ffmpeg_output) || 'Unknown'
+      # Rare: loudnorm disagreed with the prediction. A stream-copy remux
+      # corrects the record rather than leave a tag that lies.
+      if %w[Linear Dynamic].include?(normalization_type) && normalization_type != predicted_type
+        restamp(output_path, stamp_for.call(normalization_type))
+      end
 
       codec_decision = codec_decision.merge(normalization_type: normalization_type)
       return codec_decision unless forced_normalization_type
@@ -256,18 +278,39 @@ module Neutraliser
       loudnorm_filter = "loudnorm=I=#{profile[:lufs]}:TP=#{profile[:tp]}:LRA=#{profile[:lra]}:print_format=summary"
       loudnorm_filter += ",aresample=#{primary_track[:sample_rate]}" if primary_track[:sample_rate]
 
-      cmd = build_complete_ffmpeg_command(
-        input_path, output_path, loudnorm_filter,
-        codec_args, audio_tracks, stream_counts(input_path)
-      )
-
-      ffmpeg_output = execute_with_progress(cmd)
       # Single-pass loudnorm has no prior measurement pass, so it always
       # behaves as dynamic (per-frame) normalization regardless of the
       # filter's default linear setting.
+      stamp = build_stamp(profile, 'Dynamic', codec_decision, gain: nil, measured: nil)
+      cmd = build_complete_ffmpeg_command(
+        input_path, output_path, loudnorm_filter,
+        codec_args, audio_tracks, stream_counts(input_path),
+        tags: stamp_args(stamp, output_path)
+      )
+
+      ffmpeg_output = execute_with_progress(cmd)
       normalization_type = parse_normalization_type(ffmpeg_output) || 'Dynamic'
 
       codec_decision.merge(normalization_type: normalization_type)
+    end
+
+    # Reads the NEUTRALISER_* record a previous run left in the file. The
+    # primary audio stream's tags win; container tags are the fallback,
+    # because MP4 only keeps custom tags at container level. Returns nil when
+    # the file carries no record or can't be probed (best effort: a miss just
+    # means "not known to be processed").
+    def self.read_stamp(input_path)
+      cmd = [
+        'ffprobe', '-v', 'error', '-select_streams', 'a:0',
+        '-show_entries', 'stream_tags:format_tags', '-of', 'json', input_path
+      ]
+      stdout, _stderr, status = execute_with_timeout(cmd, PROBE_TIMEOUT, 'Stamp probe')
+      return nil unless status.success?
+
+      data = JSON.parse(stdout)
+      Stamp.from_tags(data.dig('streams', 0, 'tags')) || Stamp.from_tags(data.dig('format', 'tags'))
+    rescue StandardError
+      nil
     end
 
     # Counts video and subtitle streams so build_complete_ffmpeg_command can
@@ -618,6 +661,54 @@ module Neutraliser
       (desired_gain - capped_linear_gain(measured, target_i, target_tp)).round(2)
     end
 
+    # loudnorm's own linear-mode rule (af_loudnorm.c init): valid measured
+    # values, the gain fits under the true-peak ceiling, and the source LRA
+    # is within the target LRA. Anything else goes dynamic.
+    def self.predict_loudnorm_type(measured, profile)
+      valid = measured.input_tp != 99 && measured.input_thresh != -70 &&
+              measured.input_lra != 0 && measured.input_i != 0
+      gain = profile[:lufs] - measured.input_i
+      fits = measured.input_tp + gain <= profile[:tp] && measured.input_lra <= profile[:lra]
+      valid && fits ? 'Linear' : 'Dynamic'
+    end
+
+    def self.build_stamp(profile, normalization_type, codec_decision, gain:, measured:)
+      Stamp.now(
+        profile: profile[:name], mode: normalization_type.downcase, gain_db: gain,
+        source_codec: codec_decision[:source_codec],
+        source_bitrate: codec_decision[:source_bitrate].to_i.positive? ? codec_decision[:source_bitrate] : nil,
+        measured_i: measured&.input_i, measured_tp: measured&.input_tp, measured_lra: measured&.input_lra
+      )
+    end
+
+    # The stamp goes on the normalised audio stream and on the container.
+    # MP4/MOV only keep arbitrary keys at container level, and only with
+    # use_metadata_tags; their stream-level copy is silently dropped.
+    def self.stamp_args(stamp, output_path)
+      args = stamp.to_tags.flat_map do |key, value|
+        ['-metadata:s:a:0', "#{key}=#{value}", '-metadata', "#{key}=#{value}"]
+      end
+      args += ['-movflags', '+use_metadata_tags'] if MP4_FAMILY.include?(File.extname(output_path).downcase)
+      args
+    end
+
+    # Rewrites only the stamp, stream-copying everything else. No
+    # stream-scoped -map_metadata here, so ffmpeg's default per-stream
+    # metadata copy stays on.
+    def self.restamp(path, stamp)
+      temp = File.join(File.dirname(path), ".restamp-#{File.basename(path)}")
+      cmd = [
+        'ffmpeg', '-hide_banner', '-v', 'error', '-y', '-i', path,
+        '-map', '0', '-c', 'copy', '-map_metadata', '0', *stamp_args(stamp, path), temp
+      ]
+      _, stderr, status = execute_with_timeout(cmd, NORMALIZATION_TIMEOUT, 'Restamp')
+      raise FFmpegError, "Rewriting the neutraliser tags failed: #{stderr}" unless status.success?
+
+      FileUtils.mv(temp, path)
+    ensure
+      FileUtils.rm_f(temp) if temp
+    end
+
     def self.parse_normalization_type(ffmpeg_output)
       return nil if ffmpeg_output.nil?
 
@@ -626,7 +717,7 @@ module Neutraliser
     end
 
     def self.build_complete_ffmpeg_command(input_path, output_path, loudnorm_filter, primary_codec, audio_tracks,
-                                           stream_counts = { video: 0, subtitle: 0 })
+                                           stream_counts = { video: 0, subtitle: 0 }, tags: [])
       cmd = [
         'ffmpeg', '-hide_banner', '-y', '-i', input_path,
         # Video stream - always copy
@@ -670,6 +761,7 @@ module Neutraliser
       end
       cmd += [
         '-map', '0:s?', '-c:s', 'copy',
+        *tags,
         output_path
       ]
 
@@ -686,7 +778,7 @@ module Neutraliser
 
     # The real public surface is measure_loudness, apply_normalization,
     # apply_normalization_single_pass, quick_loudness_sample,
-    # detect_audio_tracks, probe_audio_profile_mid_file, and probe_duration —
+    # detect_audio_tracks, probe_audio_profile_mid_file, read_stamp and probe_duration —
     # everything else is an implementation detail and made genuinely private here (see the NOTE
     # above `execute_with_timeout` on why the old `private` keyword didn't
     # do this).
@@ -708,6 +800,10 @@ module Neutraliser
                          :build_volume_gain_filter,
                          :linear_shortfall,
                          :parse_normalization_type,
+                         :predict_loudnorm_type,
+                         :build_stamp,
+                         :stamp_args,
+                         :restamp,
                          :build_complete_ffmpeg_command,
                          :execute_with_progress
   end

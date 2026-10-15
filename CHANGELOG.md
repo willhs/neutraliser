@@ -6,6 +6,15 @@ All notable changes to this project are documented here. The format follows
 
 ## [Unreleased]
 
+### Added
+
+- Normalised files now record what was done to them as `NEUTRALISER_*` tags
+  (profile, linear/dynamic, gain, source codec/bitrate, measured loudness, date)
+  on the audio track and container. A file tagged for the same profile is skipped
+  even after it moves or the run starts from a different root.
+- `neutraliser report PATH [--format summary|tsv|json]` reads those tags and counts
+  linear, dynamic and untouched files and the profile mix.
+
 ### Fixed
 
 - Analysis no longer times out on large files. `ANALYSIS_TIMEOUT` was 300s while

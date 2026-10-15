@@ -4,8 +4,11 @@ require 'pathname'
 module Neutraliser
   # The single authority for "is this file already normalised?".
   #
-  # Owns the one sidecar format (`.neutraliser`, size+mtime+profile, never
-  # expires) and the one staleness rule. Quick-sample verification (a fast
+  # The file's own NEUTRALISER_* tags (Stamp) are the record of truth: a file
+  # stamped for the same profile is processed, wherever it now lives and
+  # whichever root the run started from. The `.neutraliser` sidecar
+  # (size+mtime+profile, never expires) is a cheap cache in front of that
+  # probe, refreshed on a tag hit. Quick-sample verification (a fast
   # ~30s LUFS estimate, formerly the standalone FastVerifier class) is an
   # internal strategy here, not a parallel authority: it never writes its own
   # marker file. When a quick sample verifies a file as already at target,
@@ -35,17 +38,13 @@ module Neutraliser
     end
 
     # Cheap pre-check: has this exact file+profile been fully processed
-    # before? No ffmpeg involved — just a sidecar lookup.
+    # before? A sidecar lookup, then one header-only ffprobe for the tags.
+    # No loudness measurement either way.
     def already_processed?(file_path, profile)
-      key = tracker_key(file_path)
-      entry = @entries[key]
-      return false unless entry
+      return true if sidecar_hit?(file_path, profile)
+      return false unless File.exist?(file_path) && FFmpegWrapper.read_stamp(file_path)&.profile == profile[:name]
 
-      return false unless File.exist?(file_path)
-      return false if File.size(file_path) != entry['size']
-      return false if File.mtime(file_path).to_i != entry['mtime']
-      return false if entry['profile'] != profile[:name]
-
+      mark_processed(file_path, profile)
       true
     end
 
@@ -78,6 +77,19 @@ module Neutraliser
     end
 
     private
+
+    def sidecar_hit?(file_path, profile)
+      key = tracker_key(file_path)
+      entry = @entries[key]
+      return false unless entry
+
+      return false unless File.exist?(file_path)
+      return false if File.size(file_path) != entry['size']
+      return false if File.mtime(file_path).to_i != entry['mtime']
+      return false if entry['profile'] != profile[:name]
+
+      true
+    end
 
     def quick_sample_verified?(file_path, profile, tolerance:)
       quick_result = FFmpegWrapper.quick_loudness_sample(
