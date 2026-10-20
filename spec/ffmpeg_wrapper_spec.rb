@@ -101,8 +101,7 @@ RSpec.describe Neutraliser::FFmpegWrapper do
         :primary_audio_index,
         :probe_audio_profile_mid_file,
         :stream_counts,
-        :unsupported_subtitles,
-        :capped_linear_gain
+        :unsupported_subtitles
       )
     end
   end
@@ -831,53 +830,32 @@ RSpec.describe Neutraliser::FFmpegWrapper do
     end
   end
 
-  describe '.capped_linear_gain' do
-    let(:measured) { Neutraliser::Measurement.from_loudnorm_json('input_i' => '-25.0', 'input_tp' => '-20.0', 'input_lra' => '0', 'input_thresh' => '0', 'target_offset' => '0') }
-
-    it 'uses the full gain needed to reach target loudness when peak headroom allows it' do
-      gain = described_class.send(:capped_linear_gain, measured, -20.0, -1.5)
-      expect(gain).to eq(5.0) # -20.0 - (-25.0)
-    end
-
-    it 'caps gain so the resulting true peak never exceeds target_tp' do
-      # Desired gain (13.0) would push -3.0 dBTP up to +10.0 dBTP — way past -1.5.
-      # Gain must be capped to the max safe headroom (-1.5 - (-3.0) = 1.5 dB),
-      # landing the file shy of target_i instead of engaging dynamic compression.
-      peaky_measured = Neutraliser::Measurement.from_loudnorm_json('input_i' => '-33.0', 'input_tp' => '-3.0', 'input_lra' => '0', 'input_thresh' => '0', 'target_offset' => '0')
-      gain = described_class.send(:capped_linear_gain, peaky_measured, -20.0, -1.5)
-      expect(gain).to eq(1.5)
-    end
-  end
-
   describe 'constant-gain sample rate pinning' do
+    let(:profile) { Neutraliser::Profiles::LIVING_ROOM }
+
     it 'pins output sample rate to source when no measured peak headroom issue exists' do
       measured = Neutraliser::Measurement.from_loudnorm_json('input_i' => '-25.0', 'input_tp' => '-10.0', 'input_lra' => '0', 'input_thresh' => '0', 'target_offset' => '0')
-      filter, forced_type = described_class.send(
-        :build_audio_filter, measured, -20.0, -1.5, 12.0, 48_000, allow_dynamic: false
-      )
+      plan = Neutraliser::GainPlan.for(measured, profile)
+      filter = described_class.send(:build_audio_filter, measured, profile, 48_000, plan: plan)
 
       expect(filter).to eq('volume=5.00dB,aresample=48000')
-      expect(forced_type).to eq('Linear')
+      expect(plan.mode).to eq('linear')
     end
 
     it 'omits aresample when source sample rate is unknown' do
       measured = Neutraliser::Measurement.from_loudnorm_json('input_i' => '-25.0', 'input_tp' => '-10.0', 'input_lra' => '0', 'input_thresh' => '0', 'target_offset' => '0')
-      filter, = described_class.send(
-        :build_audio_filter, measured, -20.0, -1.5, 12.0, nil, allow_dynamic: false
-      )
+      plan = Neutraliser::GainPlan.for(measured, profile)
+      filter = described_class.send(:build_audio_filter, measured, profile, nil, plan: plan)
 
       expect(filter).not_to include('aresample')
     end
 
     it 'pins aresample on the loudnorm (allow_dynamic) path too, to prevent the 192kHz leak' do
       measured = Neutraliser::Measurement.from_loudnorm_json('input_i' => '-25.0', 'input_tp' => '-10.0', 'input_lra' => '8.0', 'input_thresh' => '-30.0', 'target_offset' => '0.0')
-      filter, forced_type = described_class.send(
-        :build_audio_filter, measured, -20.0, -1.5, 12.0, 48_000, allow_dynamic: true
-      )
+      filter = described_class.send(:build_audio_filter, measured, profile, 48_000, plan: nil)
 
       expect(filter).to include('loudnorm=')
       expect(filter).to end_with('aresample=48000')
-      expect(forced_type).to be_nil
     end
   end
 
@@ -993,9 +971,7 @@ RSpec.describe Neutraliser::FFmpegWrapper do
           stamp = described_class.read_stamp(output)
           expect(stamp).to have_attributes(profile: 'livingroom', mode: 'linear', source_codec: 'aac',
                                            version: Neutraliser::VERSION)
-          expect(stamp.gain_db).to be_within(0.01).of(
-            described_class.capped_linear_gain(measured, profile[:lufs], profile[:tp]).round(2)
-          )
+          expect(stamp.gain_db).to be_within(0.01).of(Neutraliser::GainPlan.for(measured, profile).applied.round(2))
           expect(stamp.measured_i).to be_within(0.01).of(measured.input_i)
           expect(language(output)).to eq('eng')
           expect(described_class.read_stamp(input)).to be_nil

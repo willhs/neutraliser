@@ -32,7 +32,7 @@ RSpec.describe Neutraliser::Report do
 
   it 'counts linear, dynamic and untouched files and the profile mix' do
     expect(described_class.new(dir).counts).to eq(
-      total: 4, linear: 2, dynamic: 1, untouched: 1, profiles: { 'livingroom' => 2, 'night' => 1 }
+      total: 4, linear: 2, limited: 0, dynamic: 1, untouched: 1, profiles: { 'livingroom' => 2, 'night' => 1 }
     )
   end
 

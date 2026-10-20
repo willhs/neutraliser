@@ -733,6 +733,46 @@ RSpec.describe Neutraliser::Processor do
       expect(result).to include(status: :skipped, reason: :peak_limited)
     end
 
+    it 'skips a quiet file whose peaks would turn it down (gain the wrong way)' do
+      m = measurement(input_i: -28.0, input_tp: 0.5)
+      proc = described_class.new(replace: false) # tolerance 1.0: |-2.0| used to pass the old check
+      allow(proc).to receive(:analyze_loudness_for_path).and_return(m)
+      expect(proc).not_to receive(:normalize_file_with_paths)
+
+      expect(proc.send(:process_file_two_pass, path, path, nil)).to include(status: :skipped, reason: :peak_limited)
+    end
+
+    it 'uses --min-gain, not --tolerance, as the floor on a peak-capped gain' do
+      m = measurement(input_i: -26.0, input_tp: -3.0) # +1.5 dB available, 6 LU off target
+      allow(Neutraliser::FFmpegWrapper).to receive(:detect_audio_tracks)
+
+      strict = described_class.new(replace: false, tolerance: 2.0)
+      allow(strict).to receive(:analyze_loudness_for_path).and_return(m)
+      expect(strict.send(:process_file_two_pass, path, path, nil)).to include(reason: :peak_limited)
+
+      lenient = described_class.new(replace: false, tolerance: 2.0, min_gain: 1.0)
+      allow(lenient).to receive(:analyze_loudness_for_path).and_return(m)
+      allow(lenient).to receive(:normalize_file_with_paths).and_return({ normalization_type: 'Linear' })
+      expect(lenient.send(:process_file_two_pass, path, path, nil)).to include(status: :done, reason: :normalized)
+    end
+
+    it 'rejects --limit-db combined with dynamic normalisation' do
+      expect { described_class.new(limit_db: 3.0, allow_dynamic: true) }
+        .to raise_error(ArgumentError, /--limit-db/)
+    end
+
+    it 'lets --limit-db lift a file the plain peak cap would leave alone' do
+      m = measurement(input_i: -26.0, input_tp: -2.0) # plain cap: +0.5 dB -> skipped
+      plain = described_class.new(replace: false)
+      allow(plain).to receive(:analyze_loudness_for_path).and_return(m)
+      expect(plain.send(:process_file_two_pass, path, path, nil)).to include(reason: :peak_limited)
+
+      limited = described_class.new(replace: false, limit_db: 4.0)
+      allow(limited).to receive(:analyze_loudness_for_path).and_return(m)
+      allow(limited).to receive(:normalize_file_with_paths).and_return({ normalization_type: 'Limited' })
+      expect(limited.send(:process_file_two_pass, path, path, nil)).to include(status: :done, normalization_type: 'Limited')
+    end
+
     it 'still processes a file with real achievable gain' do
       m = measurement(input_i: profile_lufs - 6, input_tp: tp - 5)
       proc = described_class.new(replace: false)

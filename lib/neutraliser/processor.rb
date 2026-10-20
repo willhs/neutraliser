@@ -10,11 +10,14 @@ module Neutraliser
     MANIFEST_FILENAME = '.neutraliser-run-manifest.jsonl'.freeze
     FAST_REQUIRES_DYNAMIC_MESSAGE = '--fast is single-pass loudnorm and always compresses dynamics; ' \
                                     'add --allow-dynamic (or use the night profile) to accept that'.freeze
+    LIMIT_NEEDS_CONSTANT_GAIN_MESSAGE = '--limit-db adds a peak limiter to constant gain; ' \
+                                        'it cannot combine with --allow-dynamic, --fast or the night profile'.freeze
     TERMINAL_RESUME_STATES = %w[done skipped].freeze
 
     def initialize(replace: false, target_level: nil, profile: 'livingroom', tolerance: 1.0, cache: true,
                    dry_run: false, fast_verify: true, resume: false, fast: false, local_stage: false,
-                   allow_dynamic: false, allow_object_audio_loss: false, keep_original_audio: false)
+                   allow_dynamic: false, allow_object_audio_loss: false, keep_original_audio: false,
+                   limit_db: 0.0, min_gain: nil)
       @replace = replace
       @profile = if target_level
                    Profiles.custom_profile(target_level.to_f)
@@ -33,7 +36,11 @@ module Neutraliser
       @allow_dynamic = allow_dynamic || @profile[:dynamic] == true
       @allow_object_audio_loss = allow_object_audio_loss
       @keep_original_audio = keep_original_audio
+      @limit_db = limit_db.to_f
+      @min_gain = (min_gain || tolerance).to_f
       raise ArgumentError, FAST_REQUIRES_DYNAMIC_MESSAGE if @fast && !@allow_dynamic
+      raise ArgumentError, LIMIT_NEEDS_CONSTANT_GAIN_MESSAGE if @limit_db.positive? && @allow_dynamic
+      raise ArgumentError, '--limit-db cannot be negative' if @limit_db.negative?
 
       @stager = LocalStager.new(enabled: local_stage)
     end
@@ -128,7 +135,7 @@ module Neutraliser
       log(
         "Run summary: queued=#{summary[:queued]}, done=#{summary[:done]}, " \
         "skipped=#{summary[:skipped]}, failed=#{summary[:failed]}, resumed=#{summary[:resumed]}, " \
-        "linear=#{summary[:linear]}, dynamic=#{summary[:dynamic]}"
+        "linear=#{summary[:linear]}, dynamic=#{summary[:dynamic]}, limited=#{summary[:limited]}"
       )
       log_failure_groups(summary)
 
@@ -204,6 +211,7 @@ module Neutraliser
       failed = results.count { |result| result[:status] == :failed }
       linear = results.count { |result| result[:normalization_type] == 'Linear' }
       dynamic = results.count { |result| result[:normalization_type] == 'Dynamic' }
+      limited = results.count { |result| result[:normalization_type] == 'Limited' }
       failures = results.select { |result| result[:status] == :failed }
       not_writable = failures.select { |result| result[:reason] == :not_writable }
 
@@ -216,6 +224,7 @@ module Neutraliser
         failed: failed,
         linear: linear,
         dynamic: dynamic,
+        limited: limited,
         failed_by_reason: failures.map { |result| result[:reason] }.tally,
         not_writable_dirs: not_writable.map { |result| File.dirname(result[:file]) }.uniq.sort,
         manifest_path: manifest_path,
@@ -316,8 +325,8 @@ module Neutraliser
       measurement = analyze_loudness_for_path(working_path, original_path)
 
       if peak_limited?(measurement)
-        log "  Peak-limited: max safe gain #{applied_gain(measurement).round(2)} dB is within " \
-            "tolerance (#{@tolerance}), skipping re-encode"
+        log "  Peak-limited: max useful gain #{gain_plan(measurement).applied.round(2)} dB is under " \
+            "#{@min_gain} dB towards target, skipping re-encode"
         file_result(original_path, status: :skipped, reason: :peak_limited)
       elsif measurement.needs_normalization?(@profile, tolerance: @tolerance)
         if @dry_run
@@ -335,11 +344,12 @@ module Neutraliser
     end
 
     # Constant-gain mode only: a file far from target whose peak ceiling
-    # leaves no real gain to apply. Re-encoding it is pure generation loss.
+    # leaves less than min_gain dB of gain towards it (or none at all, or a
+    # gain the wrong way). Re-encoding it is pure generation loss.
     def peak_limited?(measurement)
       return false if @allow_dynamic || !measurement.needs_normalization?(@profile, tolerance: @tolerance)
 
-      applied_gain(measurement).abs <= @tolerance
+      !gain_plan(measurement).worthwhile?(@min_gain)
     end
 
     # ffmpeg can't encode Atmos/DTS:X object metadata, so re-encoding the
@@ -412,8 +422,8 @@ module Neutraliser
       file_result(file_path, status: :failed, reason: :unsupported_subtitle, message: message)
     end
 
-    def applied_gain(measurement)
-      FFmpegWrapper.capped_linear_gain(measurement, @profile[:lufs], @profile[:tp])
+    def gain_plan(measurement)
+      GainPlan.for(measurement, @profile, limit_db: @limit_db)
     end
 
     def process_file_fast(original_path, working_path, audio_tracks)
@@ -462,7 +472,8 @@ module Neutraliser
       ) do |wp, out, tracks|
         FFmpegWrapper.apply_normalization(wp, out, measurement, @profile, audio_tracks: tracks,
                                                                           allow_dynamic: @allow_dynamic,
-                                                                          keep_original: @keep_original_audio)
+                                                                          keep_original: @keep_original_audio,
+                                                                          limit_db: @limit_db)
       end
     end
 
@@ -552,7 +563,14 @@ module Neutraliser
       log "  Audio: #{source} -> #{target}"
       log "  Normalization: #{decision[:normalization_type]}" if decision[:normalization_type]
       log_dynamic_warning(decision)
+      log_limiter_note(decision)
       log_shortfall(decision)
+    end
+
+    def log_limiter_note(decision)
+      return unless decision[:normalization_type] == 'Limited'
+
+      log "  Note: peaks were held by a limiter (--limit-db #{@limit_db}); this pass changed dynamics slightly"
     end
 
     def log_dynamic_warning(decision)

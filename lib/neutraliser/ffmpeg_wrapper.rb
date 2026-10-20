@@ -232,23 +232,24 @@ module Neutraliser
       primary_audio_track(detect_audio_tracks(input_path))[:index]
     end
 
-    def self.apply_normalization(input_path, output_path, measured_data, profile, audio_tracks: nil, allow_dynamic: false, keep_original: false)
+    def self.apply_normalization(input_path, output_path, measured_data, profile, audio_tracks: nil, allow_dynamic: false,
+                                 keep_original: false, limit_db: 0.0)
       audio_tracks ||= detect_audio_tracks(input_path)
       primary_track = primary_audio_track(audio_tracks)
 
       codec_decision = select_output_codec(primary_track, output_path, input_path)
       codec_args = build_codec_args(codec_decision, primary_track[:index])
 
-      audio_filter, forced_normalization_type = build_audio_filter(
-        measured_data, profile[:lufs], profile[:tp], profile[:lra], primary_track[:sample_rate], allow_dynamic: allow_dynamic
-      )
+      plan = GainPlan.for(measured_data, profile, limit_db: limit_db) unless allow_dynamic
+      audio_filter = build_audio_filter(measured_data, profile, primary_track[:sample_rate], plan: plan)
+      forced_normalization_type = plan&.mode&.capitalize
 
       # Tags go into the same encode, so loudnorm's Linear/Dynamic choice has
       # to be predicted up front; its summary afterwards is the truth.
       predicted_type = forced_normalization_type || predict_loudnorm_type(measured_data, profile)
       stamp_for = lambda do |type|
-        gain = if forced_normalization_type
-                 capped_linear_gain(measured_data, profile[:lufs], profile[:tp])
+        gain = if plan
+                 plan.applied
                elsif type == 'Linear'
                  profile[:lufs] - measured_data.input_i
                end
@@ -272,8 +273,7 @@ module Neutraliser
       codec_decision = codec_decision.merge(normalization_type: normalization_type)
       return codec_decision unless forced_normalization_type
 
-      shortfall = linear_shortfall(measured_data, profile[:lufs], profile[:tp])
-      shortfall.positive? ? codec_decision.merge(shortfall_lu: shortfall) : codec_decision
+      plan.shortfall.positive? ? codec_decision.merge(shortfall_lu: plan.shortfall) : codec_decision
     end
 
     def self.apply_normalization_single_pass(input_path, output_path, audio_tracks, profile, keep_original: false)
@@ -660,48 +660,15 @@ module Neutraliser
         ':linear=true:print_format=summary'
     end
 
-    # Builds the audio filter chain to apply during the normalization pass.
-    #
-    # Returns [filter_string, forced_normalization_type]. forced_normalization_type
-    # is nil when the filter is loudnorm (its actual Linear/Dynamic behavior can
-    # only be known after ffmpeg runs, by parsing its summary output) and 'Linear'
-    # by default (a plain gain filter that can never engage dynamic compression);
-    # loudnorm is only used when the caller opts in with allow_dynamic.
-    def self.build_audio_filter(measured, target_i, target_tp, target_lra, source_sample_rate, allow_dynamic:)
-      if allow_dynamic
-        filter = build_loudnorm_filter(measured, target_i, target_tp, target_lra)
-        forced_normalization_type = nil
-      else
-        filter = build_volume_gain_filter(measured, target_i, target_tp)
-        forced_normalization_type = 'Linear'
-      end
-
+    # Builds the audio filter chain to apply during the normalization pass:
+    # the plan's constant-gain filter (plus limiter when it needs one), or
+    # loudnorm when the caller opted into dynamic (no plan). A plan can never
+    # engage dynamic compression the way loudnorm's linear mode can fall back
+    # to; quiet-but-peaky sources land shy of target instead of being squashed.
+    def self.build_audio_filter(measured, profile, source_sample_rate, plan:)
+      filter = plan ? plan.filter : build_loudnorm_filter(measured, profile[:lufs], profile[:tp], profile[:lra])
       filter += ",aresample=#{source_sample_rate}" if source_sample_rate
-
-      [filter, forced_normalization_type]
-    end
-
-    # A constant-gain volume adjustment, capped so the output true peak never
-    # exceeds target_tp. This guarantees zero dynamic-range change — unlike
-    # loudnorm's linear mode, it cannot silently fall back to dynamic
-    # (per-frame) compression. Quiet-but-peaky sources land shy of target_i
-    # rather than being squashed.
-    def self.build_volume_gain_filter(measured, target_i, target_tp)
-      gain = capped_linear_gain(measured, target_i, target_tp)
-      "volume=#{format('%.2f', gain)}dB"
-    end
-
-    def self.capped_linear_gain(measured, target_i, target_tp)
-      desired_gain = target_i - measured.input_i
-      max_safe_gain = target_tp - measured.input_tp
-      [desired_gain, max_safe_gain].min
-    end
-
-    # How many LU the peak cap leaves the output short of target_i (0 when the
-    # full gain fits under the true-peak ceiling).
-    def self.linear_shortfall(measured, target_i, target_tp)
-      desired_gain = target_i - measured.input_i
-      (desired_gain - capped_linear_gain(measured, target_i, target_tp)).round(2)
+      filter
     end
 
     # loudnorm's own linear-mode rule (af_loudnorm.c init): valid measured
@@ -874,8 +841,6 @@ module Neutraliser
                          :build_codec_args,
                          :build_loudnorm_filter,
                          :build_audio_filter,
-                         :build_volume_gain_filter,
-                         :linear_shortfall,
                          :parse_normalization_type,
                          :predict_loudnorm_type,
                          :build_stamp,

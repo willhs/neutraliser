@@ -7,8 +7,9 @@ module Neutraliser
   # record. This is the ONE place that knows the tag names and their string
   # encoding (both directions). Schema: docs/ops/data_contracts.md.
   #
-  # mode is 'linear' (constant gain) or 'dynamic' (loudnorm compressed the
-  # dynamic range). gain_db is only meaningful for linear; measured_* are the
+  # mode is 'linear' (constant gain), 'limited' (constant gain plus a peak
+  # limiter, --limit-db) or 'dynamic' (loudnorm compressed the dynamic range).
+  # gain_db is only meaningful for linear and limited; measured_* are the
   # pre-normalisation loudnorm values, absent in --fast mode (no analysis).
   Stamp = Data.define(:version, :profile, :mode, :gain_db, :source_codec, :source_bitrate,
                       :measured_i, :measured_tp, :measured_lra, :date)
@@ -52,6 +53,7 @@ module Neutraliser
     end
 
     def linear? = mode == 'linear'
+    def limited? = mode == 'limited'
     def dynamic? = mode == 'dynamic'
   end
 end

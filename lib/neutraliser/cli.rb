@@ -90,6 +90,10 @@ module Neutraliser
                                      desc: 'Re-encode Atmos / DTS:X tracks anyway, losing the objects'
     option :keep_original_audio, type: :boolean, default: false,
                                  desc: 'Keep the untouched original audio as an extra non-default track (reversible)'
+    option :limit_db, type: :numeric, default: 0.0,
+                      desc: 'Let a peak limiter take up to N dB off overshooting peaks so quiet-but-peaky files can reach target (0 = off, strict constant gain)'
+    option :min_gain, type: :numeric,
+                      desc: 'Skip a peak-capped file when the gain towards target would be under N dB (default: --tolerance)'
     option :linear_only, type: :boolean, default: false,
                          desc: 'Deprecated no-op: constant gain is now the default'
     def process(path)
@@ -108,7 +112,9 @@ module Neutraliser
         local_stage: options[:local_stage],
         allow_dynamic: options[:allow_dynamic],
         allow_object_audio_loss: options[:allow_object_audio_loss],
-        keep_original_audio: options[:keep_original_audio]
+        keep_original_audio: options[:keep_original_audio],
+        limit_db: options[:limit_db],
+        min_gain: options[:min_gain]
       )
 
       summary = processor.process(path)
@@ -117,7 +123,7 @@ module Neutraliser
 
       puts "Summary: found=#{summary[:found]}, queued=#{summary[:queued]}, resumed=#{summary[:resumed]}, " \
            "done=#{summary[:done]}, skipped=#{summary[:skipped]}, failed=#{summary[:failed]}, " \
-           "linear=#{summary[:linear]}, dynamic=#{summary[:dynamic]}"
+           "linear=#{summary[:linear]}, dynamic=#{summary[:dynamic]}, limited=#{summary[:limited]}"
       if summary[:failed_by_reason]&.any?
         puts "Failed by reason: #{summary[:failed_by_reason].map { |reason, count| "#{reason}=#{count}" }.join(', ')}"
       end

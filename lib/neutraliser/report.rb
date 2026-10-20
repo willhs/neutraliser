@@ -8,7 +8,7 @@ module Neutraliser
     FORMATS = %w[summary tsv json].freeze
     TSV_FIELDS = %i[profile gain_db source_codec source_bitrate measured_i measured_tp measured_lra version date].freeze
 
-    # state is the stamp's mode ('linear' / 'dynamic'), or 'untouched' when
+    # state is the stamp's mode ('linear' / 'limited' / 'dynamic'), or 'untouched' when
     # the file carries no record.
     Row = Data.define(:file, :stamp) do
       def state = stamp ? (stamp.mode || 'unknown') : 'untouched'
@@ -25,6 +25,7 @@ module Neutraliser
       {
         total: rows.length,
         linear: states.fetch('linear', 0),
+        limited: states.fetch('limited', 0),
         dynamic: states.fetch('dynamic', 0),
         untouched: states.fetch('untouched', 0),
         profiles: rows.filter_map { |row| row.stamp&.profile }.tally.sort.to_h
@@ -35,6 +36,7 @@ module Neutraliser
       c = counts
       lines = ["Files: #{c[:total]}",
                "  normalised linear:  #{c[:linear]}",
+               "  normalised limited: #{c[:limited]}",
                "  normalised dynamic: #{c[:dynamic]}",
                "  untouched:          #{c[:untouched]}"]
       lines << "Profiles: #{c[:profiles].map { |name, n| "#{name}=#{n}" }.join(', ')}" if c[:profiles].any?
