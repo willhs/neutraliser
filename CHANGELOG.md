@@ -8,6 +8,8 @@ All notable changes to this project are documented here. The format follows
 
 ### Added
 
+- A `Dockerfile` (Ruby 3.2, FFmpeg 7.1+) and a GitHub Actions workflow publishing
+  `ghcr.io/willhs/neutraliser`; README "Run with Docker" section.
 - Normalised files now record what was done to them as `NEUTRALISER_*` tags
   (profile, linear/dynamic, gain, source codec/bitrate, measured loudness, date)
   on the audio track and container. A file tagged for the same profile is skipped

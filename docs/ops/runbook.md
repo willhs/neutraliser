@@ -34,6 +34,9 @@ Subtitles are always copied, never dropped. A stream ffmpeg can't identify (`Sub
 
 PGS (`hdmv_pgs_subtitle`) tracks log `Could not find codec parameters … unspecified size` when the probe window holds no subtitle packets. That is a probe warning, not by itself a failure: the codec is known, so the preflight lets it through. Not reproduced locally (ffmpeg can't encode a PGS fixture); if a PGS file does fail, the manifest's one-line message now shows the real cause instead of the warning buried in a dump.
 
+### Container image
+The `neutraliser-movies` container (wedged 2026-02-15) and its image were removed from the NAS on 2026-07-14, and no Dockerfile for it ever existed in this repo, so it is retired. The repo `Dockerfile` (FFmpeg 7.1+ checked at build) publishes `ghcr.io/willhs/neutraliser`; see README "Run with Docker". The check-prod skill's container name will only apply once a run uses that image under a new name.
+
 ### ffmpeg version
 FFmpeg 4.2+ works; 7.1+ is needed for Atmos/DTS:X detection (see `docs/research/object-audio-detection.md`). The Aug 2026 library run most likely used the MacBook's Homebrew ffmpeg 7.1.1 against the NAS over SMB (commit 875880e describes it as an SMB run; there is no neutraliser container in the repo or `media-server`); the NAS's own `/usr/local/bin/ffmpeg` was only used for ad-hoc measurement.
 

@@ -1,0 +1,9 @@
+.git
+.env
+.claude
+.gent
+coverage
+spec
+benchmark
+demo
+docs

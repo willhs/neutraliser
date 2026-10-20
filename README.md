@@ -110,6 +110,20 @@ neutraliser --help
 
 </details>
 
+### Run with Docker
+
+No Ruby needed. The image bundles Ruby 3.2 and FFmpeg 7.1+ (required for Atmos/DTS:X detection) and is published to GHCR on every push to `main`:
+
+```bash
+docker run --rm -v /path/to/media:/media ghcr.io/willhs/neutraliser:latest \
+  process --replace --resume /media/movies
+```
+
+- **Media volume**: mount your library at `/media`; the working directory is `/media`, and sidecars and the `.neutraliser-run-manifest.jsonl` are written next to the files, so the mount must be writable.
+- **`--resume`**: skips files already completed in the manifest, so a stopped container can be re-run with the same command.
+- **Timeouts**: pass `-e NEUTRALISER_ANALYSIS_TIMEOUT=3600` (also `NEUTRALISER_NORMALIZATION_TIMEOUT`, `NEUTRALISER_QUICK_TIMEOUT`, `NEUTRALISER_PROBE_TIMEOUT`, in seconds) for slow storage such as NAS disks.
+- **Build it yourself**: `docker build -t neutraliser .`
+
 A RubyGems release (and possibly a Homebrew tap) will follow once v0.1 has had some real-world mileage — see [CHANGELOG.md](CHANGELOG.md).
 
 ## Quick start
