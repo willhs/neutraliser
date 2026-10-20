@@ -16,8 +16,11 @@ A Ruby CLI tool that normalises audio volume in video files using industry-stand
 - **`Processor`**: Main orchestration class handling file/directory processing
 - **`SkipDecider`**: Single authority for "already normalised?" — the in-file `NEUTRALISER_*` stamp for the same profile, cached in one `.neutraliser` sidecar (size+mtime+profile), quick LUFS sampling as an internal fallback
 - **`Stamp`**: Value object for the `NEUTRALISER_*` tags written on the normalised track and container (schema: `docs/ops/data_contracts.md`)
+- **`GainPlan`**: The constant-gain decision for one measurement — applied gain, shortfall, whether a limiter is needed (`--limit-db`), `worthwhile?(min_gain)` direction-aware skip
+- **`DiskGuard`** / **`RunLock`**: `--min-free-gb`/`--abort-free-gb` floors; `--lock-file` flock run lock
+- **`ManifestImport`**: `neutraliser import-manifest` — carries the retired `neutralise.sh` manifest into `.neutraliser` sidecars
 - **`Report`**: `neutraliser report PATH` — reads stamps, counts linear/dynamic/untouched and profiles
-- **`FFmpegWrapper`**: Two-pass loudnorm implementation, ffprobe, source-matched codec selection; the primary track is the default-disposition audio track (else a:0), normalised in place and measured by the same index
+- **`FFmpegWrapper`**: Two-pass loudnorm implementation, ffprobe, source-matched codec selection; the primary track is the default-disposition audio track (else the first `eng` one, else a:0), normalised in place and measured by the same index
 - **`ObjectAudio`**: Detects Atmos / DTS:X on the primary track (ffprobe profile, name-hinted mid-file probe) so it is skipped, not silently flattened
 - **`AudioAnalyser`**: Full loudnorm measurement coordination with sidecar caching
 - **`Measurement`**: Value object for loudnorm measurement results
@@ -60,6 +63,7 @@ A Ruby CLI tool that normalises audio volume in video files using industry-stand
 ### Primary Commands
 - `neutraliser process PATH` - Main processing command
 - `neutraliser report PATH [--format summary|tsv|json]` - What was done to each file, from its tags
+- `neutraliser import-manifest MANIFEST --root DIR` - Mark files a `neutralise.sh` manifest recorded as done as already processed
 - `neutraliser profiles` - List normalization profiles
 - `neutraliser analyze-plex` - Plex library analysis
 - `neutraliser cache stats/clean` - Cache management
@@ -75,6 +79,10 @@ A Ruby CLI tool that normalises audio volume in video files using industry-stand
 - `--resume` - Resume a prior directory run, skipping completed files
 - `--allow-object-audio-loss` - Process Atmos / DTS:X primary tracks anyway (skipped by default; re-encoding drops the objects)
 - `--allow-dynamic` - Opt in to loudnorm two-pass, which may go dynamic (default is constant gain, peak-capped)
+- `--min-gain N` - Peak-capped files are re-encoded only if the gain towards target is at least N dB (default: `--tolerance`)
+- `--limit-db N` - Opt-in peak limiter: gain may exceed the peak headroom by N dB (stamped `limited`)
+- `--allow-codec-change` - Process DTS/TrueHD/etc. (codec can't be kept); skipped by default
+- `--min-free-gb N` / `--abort-free-gb N` - Disk floors (skip file / stop run, exit 4); `--lock-file PATH` - one run at a time (exit 3)
 - `--linear-only` - Deprecated no-op alias (constant gain is the default)
 
 ## Testing Strategy ✅ COMPLETED

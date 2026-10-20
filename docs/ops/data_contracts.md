@@ -23,8 +23,8 @@ Every file neutraliser writes carries a record of what was done to it. `Neutrali
 |---|---|---|
 | `NEUTRALISER_VERSION` | `0.1.0` | neutraliser version that wrote it |
 | `NEUTRALISER_PROFILE` | `livingroom` | Profile name (`reference`, `livingroom`, `night`, or `custom` for `--target-level`). **Its presence is what marks a file as processed.** |
-| `NEUTRALISER_MODE` | `linear` | `linear` (constant gain, dynamics untouched) or `dynamic` (loudnorm compressed the dynamic range) |
-| `NEUTRALISER_GAIN_DB` | `-1.50` | Constant gain applied, in dB. Empty for `dynamic` |
+| `NEUTRALISER_MODE` | `linear` | `linear` (constant gain, dynamics untouched), `limited` (constant gain plus a peak limiter, `--limit-db`) or `dynamic` (loudnorm compressed the dynamic range) |
+| `NEUTRALISER_GAIN_DB` | `-1.50` | Constant gain applied, in dB (before the limiter, for `limited`). Empty for `dynamic` |
 | `NEUTRALISER_SOURCE_CODEC` | `eac3` | Primary audio codec before re-encoding |
 | `NEUTRALISER_SOURCE_BITRATE` | `640000` | Source bitrate in bit/s (probed or estimated). Empty if unknown |
 | `NEUTRALISER_MEASURED_I` | `-23.10` | Integrated loudness before, LUFS. Empty in `--fast` mode (no analysis pass) |
@@ -51,11 +51,13 @@ Where the tags live:
 
 ### Sidecar cache: `.neutraliser`
 
-JSON in the run's root directory, mapping each file's path (relative to that root) to `{size, mtime, profile, processed_at}`. It is a cache in front of the tag check. A file counts as processed when size, mtime and profile all match. A tag hit refreshes the entry.
+JSON in the run's root directory, mapping each file's path (relative to that root) to `{size, mtime, profile, processed_at}`. It is a cache in front of the tag check. A file counts as processed when size, mtime and profile all match. A tag hit refreshes the entry. A sidecar in the file's own folder also counts for a run started above it; `neutraliser import-manifest` writes there.
 
 ### Run manifest: `.neutraliser-run-manifest.jsonl`
 
-One JSON line per file event: `timestamp`, `file` (absolute), `status` (`queued`/`done`/`skipped`/`failed`), `profile`, `target_lufs`, plus `reason`, `message` and `normalization_type` (`Linear`/`Dynamic`) when known. `--resume` reads it.
+One JSON line per file event: `timestamp`, `file` (absolute), `status` (`queued`/`done`/`skipped`/`failed`), `profile`, `target_lufs`, plus `reason`, `message` and `normalization_type` (`Linear`/`Limited`/`Dynamic`) when known. `--resume` reads it.
+
+Skip `reason`s worth knowing (`status` `skipped`): `already_processed`, `within_tolerance`, `peak_limited` (the peak cap leaves under `--min-gain` dB of gain towards target), `object_audio`, `codec_change` (codec can't be kept; `--allow-codec-change`), `low_disk` (`--min-free-gb`; retried next run), `no_audio_track`, `unsupported_format`.
 
 A failed entry's `message` is one line: what failed plus the last stderr line that says why (e.g. `Normalization failed (exit 1): Error opening output files: Permission denied`), never the ffmpeg banner. Failure `reason`s:
 
@@ -64,7 +66,7 @@ A failed entry's `message` is one line: what failed plus the last stderr line th
 | `not_writable` | The file's folder won't take a new file (preflight, before analysis) | after fixing folder permissions |
 | `unsupported_subtitle` | A subtitle stream this ffmpeg can't identify, so it can't be copied (preflight, or recognised in the encode's stderr) | after remuxing/removing that track |
 | `timeout` | A subprocess ran out of time | yes, with a bigger `NEUTRALISER_*_TIMEOUT` |
-| `output_verification_failed` | The output looked corrupt; the original is untouched | investigate |
+| `output_verification_failed` | The output looked corrupt, or its duration (±1 s) or audio stream count differs from the source; the original is untouched | investigate |
 | `ffmpeg_error` | Any other ffmpeg/ffprobe failure | investigate |
 | `file_manager_error`, `processing_error`, `invalid_result` | Failures outside ffmpeg | investigate |
 
@@ -79,6 +81,7 @@ The record lives in the file because the sidecar is tied to the run's root direc
 - docs/ops/runbook.md
 
 ### Change Log
+- 2026-10-20 (agent:prod-parity): Added `limited` mode, `codec_change`/`low_disk`/`peak_limited` skip reasons, output-match verification, sidecar-in-own-folder rule
 - 2026-10-15 (agent:preflight-failures): Documented failure reasons and the one-line failure message
 - 2026-10-15 (agent:record-what-was-done): Added the NEUTRALISER_* tag schema, sidecar and run-manifest contracts
 - 2025-09-24 (agent:create-project): Created data contracts placeholder

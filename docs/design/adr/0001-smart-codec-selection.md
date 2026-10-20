@@ -58,3 +58,4 @@ Quality floors and caps are defined per encoder and channel count to prevent enc
 
 ### Change Log
 - 2026-03-07 (agent:implement-plan): created
+- 2026-10-20 (agent:prod-parity): Steps 2-3 (lossless preservation, surround fallback) now run only under `--allow-codec-change`; by default a primary track whose codec can't be re-encoded to itself is skipped (`codec_change`), matching production's `skip_codec` and the vision's "keeps the source codec". See docs/research/prod-parity-audit-2026-10.md.

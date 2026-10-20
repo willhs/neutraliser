@@ -249,13 +249,21 @@ Normalise a file or every video under a directory.
 | `--allow-dynamic` | `false` | Let `loudnorm` compress dynamics when it needs to. Default is constant gain only. Implied by the `night` profile |
 | `--keep-original-audio` | `false` | Keep the untouched original primary audio as an extra, non-default track titled `<title> (original, not normalised)`, after the normalised one. Costs file size; makes processing reversible. A re-run never adds a second copy |
 | `--allow-object-audio-loss` | `false` | Process files whose primary track is Atmos / DTS:X anyway. Re-encoding drops the object audio (plain 5.1/7.1 out); each such file logs a warning. Default skips them with reason `object_audio` |
+| `--min-gain` | `--tolerance` | A peak-capped file is re-encoded only if the gain **towards** target is at least this many dB; otherwise skipped (`peak_limited`) |
+| `--limit-db` | `0` | Let a peak limiter take up to N dB off overshooting peaks so quiet-but-peaky files can reach target. Off = strict constant gain. Such files are stamped `limited` and reported; not combinable with `--allow-dynamic`/`--fast`/`night` |
+| `--allow-codec-change` | `false` | Process files whose codec can't be re-encoded to itself (DTS, TrueHD ... become FLAC/E-AC3). Default skips them with reason `codec_change` |
+| `--min-free-gb` | off | Skip a file while the output volume has less than N GiB free (or less than the file's size); reason `low_disk` |
+| `--abort-free-gb` | off | Stop the run, exit `4`, when the output volume has less than N GiB free |
+| `--lock-file` | off | One run at a time per lock file; exit `3` if another run holds it |
 | `--fast` | `false` | Single-pass normalisation — quicker, always dynamic, so it errors unless `--allow-dynamic` or `night` is set |
 | `--local-stage` | `false` | Copy to local disk before processing; helps on slow mounts |
 | `--linear-only` | `false` | Deprecated no-op (constant gain is now the default); prints a warning |
 
-The run summary reports `linear=N, dynamic=N` counts; each file that went Dynamic logs a warning, and each peak-capped file logs how many LU it landed short of target.
+The run summary reports `linear=N, dynamic=N, limited=N` counts; each file that went Dynamic logs a warning, and each peak-capped file logs how many LU it landed short of target.
 
-Exits `1` if any file fails, so batch runners can detect partial failure.
+Exits `1` if any file fails, so batch runners can detect partial failure, `3` if `--lock-file` is held by another run, and `4` if the run stopped on `--abort-free-gb`.
+
+`neutraliser import-manifest MANIFEST --root DIR` marks files that the retired `neutralise.sh` already leveled (its `manifest.jsonl`) as processed, so a first run doesn't re-measure them. See the [parity audit](docs/research/prod-parity-audit-2026-10.md).
 
 **Large files on slow mounts.** Measuring and normalising each decode the whole
 audio stream, and both are allowed 30 minutes by default. If you hit

@@ -78,9 +78,24 @@ module Neutraliser
 
     private
 
+    # The run's own sidecar first, then (when the run started above the file's
+    # folder) the sidecar in the file's own folder, where `import-manifest`
+    # writes: a record must not depend on how big a run it was made in.
     def sidecar_hit?(file_path, profile)
-      key = tracker_key(file_path)
-      entry = @entries[key]
+      entry_matches?(@entries[tracker_key(file_path)], file_path, profile) ||
+        entry_matches?(neighbour_entry(file_path), file_path, profile)
+    end
+
+    def neighbour_entry(file_path)
+      dir = File.dirname(File.expand_path(file_path))
+      return nil if dir == File.expand_path(File.dirname(@path))
+
+      @neighbours ||= {}
+      @neighbours[dir] ||= load_entries(File.join(dir, FILENAME))
+      @neighbours[dir][File.basename(file_path)]
+    end
+
+    def entry_matches?(entry, file_path, profile)
       return false unless entry
 
       return false unless File.exist?(file_path)
@@ -115,10 +130,12 @@ module Neutraliser
       Pathname.new(File.expand_path(file_path)).relative_path_from(Pathname.new(root)).to_s
     end
 
-    def load
-      return {} unless File.exist?(@path)
+    def load = load_entries(@path)
 
-      JSON.parse(File.read(@path))
+    def load_entries(path)
+      return {} unless File.exist?(path)
+
+      JSON.parse(File.read(path))
     rescue StandardError => e
       # Sidecars are an optimisation. Permission errors and transient network
       # filesystem failures should trigger normal analysis, not abort a run.

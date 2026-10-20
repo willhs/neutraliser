@@ -95,6 +95,9 @@ Both flags are independent and can be combined.
 | CacheManager | `lib/neutraliser/cache_manager.rb` | Sidecar `.loudnorm_{profile}.json` analysis cache read/write |
 | SkipDecider | `lib/neutraliser/skip_decider.rb` | Single authority for "already normalised?" — the in-file Stamp for the same profile, cached in one `.neutraliser` sidecar (size+mtime+profile, never expires), quick LUFS sampling as an internal fallback strategy |
 | Stamp | `lib/neutraliser/stamp.rb` | Value object for the `NEUTRALISER_*` tags: what was done to a file, both directions of the tag encoding |
+| GainPlan | `lib/neutraliser/gain_plan.rb` | The constant-gain decision for a measurement: applied gain capped by the true-peak headroom (plus `--limit-db`), limiter filter, shortfall, direction-aware `worthwhile?` |
+| DiskGuard / RunLock | `lib/neutraliser/disk_guard.rb`, `run_lock.rb` | Free-space floors (skip a file / abort the run) and the flock run lock, for unattended NAS sweeps |
+| ManifestImport | `lib/neutraliser/manifest_import.rb` | Carries the retired `neutralise.sh` manifest into `.neutraliser` sidecars |
 | Report | `lib/neutraliser/report.rb` | `neutraliser report`: reads stamps across a directory, counts and per-file rows |
 | FileManager | `lib/neutraliser/file_manager.rb` | Atomic file replacement, integrity verification |
 | LocalStager | `lib/neutraliser/local_stager.rb` | Stage files to local NVMe for fast processing, copy result back |
@@ -119,6 +122,7 @@ Both flags are independent and can be combined.
 - docs/ops/runbook.md
 
 ### Change Log
+- 2026-10-20 (agent:prod-parity): Added GainPlan, DiskGuard/RunLock and ManifestImport components
 
 - 2026-10-15 (agent:record-what-was-done): Added the Stamp section (in-file NEUTRALISER_* tags), Stamp and Report components, tag-first skip decision
 - 2026-10-15 (agent:object-audio): Added object-audio skip section, ObjectAudio component, profile in probe

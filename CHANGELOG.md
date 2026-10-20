@@ -17,7 +17,25 @@ All notable changes to this project are documented here. The format follows
 - `neutraliser report PATH [--format summary|tsv|json]` reads those tags and counts
   linear, dynamic and untouched files and the profile mix.
 
+- Parity with the NAS's `neutralise.sh`: `--limit-db` (opt-in peak limiter, stamped
+  `limited`), `--min-gain`, `--allow-codec-change`, `--min-free-gb` / `--abort-free-gb`
+  (exit 4), `--lock-file` (exit 3), and `neutraliser import-manifest` for its history.
+  See `docs/research/prod-parity-audit-2026-10.md`.
+
+### Changed
+
+- Files whose codec can't be re-encoded to itself (DTS, TrueHD ...) are skipped by
+  default (`codec_change`); `--allow-codec-change` restores the FLAC/E-AC-3 fallback.
+- With no default-flagged audio track, the first English track is normalised, not a:0.
+- Output is checked against the source (duration, audio stream count) before it
+  replaces the original; the new file keeps the original's owner when permitted.
+
 ### Fixed
+
+- A quiet file whose peaks sat over the ceiling was re-encoded quieter (negative
+  capped gain passed the tolerance check). Peak-capped files now need a gain
+  towards target of at least `--min-gain`.
+- MP4 data named `.mkv` failed on `mov_text` subtitles; the real container is now used.
 
 - Analysis no longer times out on large files. `ANALYSIS_TIMEOUT` was 300s while
   normalisation had 1800s, despite both decoding the whole audio stream — so any

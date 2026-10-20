@@ -204,6 +204,25 @@ module Neutraliser
       end
     end
 
+    desc 'import-manifest MANIFEST', "Mark files recorded as done in a retired neutralise.sh manifest.jsonl as already processed"
+    option :root, type: :string, required: true, desc: "Directory the manifest's relative paths hang off (e.g. /volume1/media)"
+    option :profile, type: :string, default: 'livingroom', desc: 'Profile those runs were equivalent to'
+    option :trust_legacy, type: :boolean, default: false,
+                          desc: 'Also accept old entries that recorded no size/mtime (cannot be checked against the file)'
+    option :dry_run, type: :boolean, default: false, desc: 'Count what would be imported, write nothing'
+    def import_manifest(manifest)
+      raise Thor::Error, "Error: '#{manifest}' does not exist" unless File.file?(manifest)
+      raise Thor::Error, "Error: '#{options[:root]}' is not a directory" unless File.directory?(options[:root])
+
+      result = ManifestImport.new(
+        manifest, root: options[:root], profile: Profiles.get_profile(options[:profile]),
+                  trust_legacy: options[:trust_legacy], dry_run: options[:dry_run]
+      ).run
+      puts "#{options[:dry_run] ? 'Would import' : 'Imported'}: #{result.imported}"
+      puts "Not imported: changed since=#{result.changed}, missing=#{result.missing}, " \
+           "legacy (no size/mtime)=#{result.legacy}, other statuses=#{result.ignored}"
+    end
+
     desc 'profiles', 'List available normalization profiles'
     option :verbose, type: :boolean, aliases: ['-v'], default: false, desc: 'Show detailed profile descriptions'
     def profiles

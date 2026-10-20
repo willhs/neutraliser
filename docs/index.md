@@ -35,6 +35,7 @@ Entry point and navigation map for the neutraliser documentation set. Neutralise
 - [`research/landscape.md`](research/landscape.md) — Market and prior-art survey
 - [`research/object-audio-detection.md`](research/object-audio-detection.md) — How ffprobe reports Atmos/DTS:X (decoder-set profile), FATE-sample tests, and the detect-and-skip approach
 - [`research/library-validation-2026-08.md`](research/library-validation-2026-08.md) — Pre-release validation run over a real NAS/Plex library slice; found and fixed a video/subtitle metadata-preservation bug
+- [`research/prod-parity-audit-2026-10.md`](research/prod-parity-audit-2026-10.md) — Audit of media-server's neutralise.sh against the CLI: already there, ported, or dropped; the manifest migration; the driver call
 
 ## Tasks
 - [`tasks/0001-plex-library-analysis/task.md`](tasks/0001-plex-library-analysis/task.md) — Plex library audio analysis command (complete)
@@ -46,11 +47,13 @@ Entry point and navigation map for the neutraliser documentation set. Neutralise
 - [`tasks/0004-preserve-audio-quality/plan.md`](tasks/0004-preserve-audio-quality/plan.md) — Implementation plan for smart codec selection
 - [`tasks/0005-local-staging-and-fast-mode/task.md`](tasks/0005-local-staging-and-fast-mode/task.md) — Local NVMe staging and single-pass fast mode (complete)
 - [`tasks/0005-local-staging-and-fast-mode/plan.md`](tasks/0005-local-staging-and-fast-mode/plan.md) — Implementation plan for staging and fast mode
+- [`tasks/0006-prod-parity-with-neutralise-sh/task.md`](tasks/0006-prod-parity-with-neutralise-sh/task.md) — Port what prod's neutralise.sh does that the CLI didn't (complete)
 
 ## Doc Schema
 - [`front-matter-schema.json`](front-matter-schema.json) — JSON Schema for validating doc frontmatter
 
 ### Change Log
+- 2026-10-20 (agent:prod-parity): Added prod-parity audit and task 0006
 - 2025-09-24 (agent:create-project): Created initial documentation index scaffold
 - 2026-04-12 (agent:docs-lint): Rebuilt with agent notice, linked entries, orphaned files added, broken links removed
 - 2026-08-09 (agent:validation-run): Added library-validation-2026-08.md; linked new research entry

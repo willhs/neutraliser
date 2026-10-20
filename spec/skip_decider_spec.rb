@@ -60,6 +60,30 @@ RSpec.describe Neutraliser::SkipDecider do
     end
   end
 
+  describe 'a sidecar in the file\'s own folder (written by import-manifest)' do
+    it 'counts for a run started higher up, whatever the run root' do
+      season = File.join(temp_dir, 'show', 'season1')
+      FileUtils.mkdir_p(season)
+      episode = File.join(season, 'e1.mkv')
+      File.write(episode, 'x' * 50)
+      described_class.new(season).mark_processed(episode, profile)
+
+      expect(described_class.new(temp_dir).already_processed?(episode, profile)).to be true
+    end
+
+    it 'still checks size, mtime and profile' do
+      season = File.join(temp_dir, 'season1')
+      FileUtils.mkdir_p(season)
+      episode = File.join(season, 'e1.mkv')
+      File.write(episode, 'x' * 50)
+      described_class.new(season).mark_processed(episode, profile)
+      File.write(episode, 'replaced with something else')
+
+      expect(described_class.new(temp_dir).already_processed?(episode, profile)).to be false
+      expect(described_class.new(temp_dir).already_processed?(episode, profile.merge(name: 'night'))).to be false
+    end
+  end
+
   describe 'the in-file NEUTRALISER_* stamp' do
     def stamped(profile_name)
       Neutraliser::Stamp.now(profile: profile_name, mode: 'linear', gain_db: 1.0, source_codec: 'aac',
