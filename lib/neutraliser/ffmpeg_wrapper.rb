@@ -221,10 +221,12 @@ module Neutraliser
     end
 
     # The track that gets measured and normalised: the one flagged default,
-    # else the first. Players pick the default track, so that is the one whose
-    # level the viewer hears.
+    # else the first English one, else the first. Players pick the default
+    # track, so that is the one whose level the viewer hears; with no flag,
+    # multi-language releases (Spanish first, English second) are heard in
+    # English, not in whichever stream happens to come first.
     def self.primary_audio_track(tracks)
-      tracks.find { |t| t[:default] } || tracks.first || UNKNOWN_AUDIO_TRACK
+      tracks.find { |t| t[:default] } || tracks.find { |t| t[:language] == 'eng' } || tracks.first || UNKNOWN_AUDIO_TRACK
     end
 
     # Index (among audio streams) of the primary track, for `0:a:N` maps.
@@ -232,12 +234,59 @@ module Neutraliser
       primary_audio_track(detect_audio_tracks(input_path))[:index]
     end
 
+    # The container the output is really written in. A release can be MP4
+    # bytes named .mkv (Lost S01 "MULTi"); trusting the extension then picks
+    # the wrong codec table and muxes mov_text subtitles into Matroska, which
+    # fails. Only the MP4 family is sniffed: it is the one the extension has
+    # been seen to lie about.
+    def self.output_container(input_path, output_path)
+      ext = File.extname(output_path).downcase
+      return ext if MP4_FAMILY.include?(ext)
+
+      cmd = ['ffprobe', '-v', 'error', '-show_entries', 'format=format_name', '-of', 'csv=p=0', input_path]
+      stdout, _stderr, status = execute_with_timeout(cmd, PROBE_TIMEOUT, 'Container probe')
+      status.success? && stdout.include?('mp4') ? '.mp4' : ext
+    rescue FFmpegTimeoutError
+      raise
+    rescue StandardError
+      ext
+    end
+
+    # The encoder that would replace the track's own codec, or nil when it can
+    # be re-encoded to itself. Changing codec (DTS/TrueHD to FLAC or E-AC3)
+    # drops what the original was: a bitstream an AVR can decode, or lossless
+    # turned lossy.
+    def self.codec_change(track, output_path, input_path = nil)
+      return nil if track[:unknown]
+
+      source = track[:codec].to_s.downcase
+      container = output_container(input_path, output_path)
+      allowed = CONTAINER_CODECS.fetch(container, CONTAINER_CODECS['.mkv'])
+      direct = ENCODABLE_CODECS[source]
+      return nil if direct && allowed.include?(direct)
+
+      resolve_encoder(source, allowed, container, track[:channels].to_i.then { |n| n.zero? ? 2 : n })
+    end
+
+    # Audio streams the output should have: every source stream, plus the kept
+    # original unless an earlier run already left one.
+    def self.output_audio_count(audio_tracks, keep_original:)
+      keep_original &&= audio_tracks.none? { |track| original_copy?(track) }
+      audio_tracks.length + (keep_original ? 1 : 0)
+    end
+
+    # `-f` for an output whose extension doesn't say its container.
+    def self.container_args(container, output_path)
+      container == File.extname(output_path).downcase ? [] : ['-f', container.delete_prefix('.')]
+    end
+
     def self.apply_normalization(input_path, output_path, measured_data, profile, audio_tracks: nil, allow_dynamic: false,
                                  keep_original: false, limit_db: 0.0)
       audio_tracks ||= detect_audio_tracks(input_path)
       primary_track = primary_audio_track(audio_tracks)
 
-      codec_decision = select_output_codec(primary_track, output_path, input_path)
+      container = output_container(input_path, output_path)
+      codec_decision = select_output_codec(primary_track, output_path, input_path, container: container)
       codec_args = build_codec_args(codec_decision, primary_track[:index])
 
       plan = GainPlan.for(measured_data, profile, limit_db: limit_db) unless allow_dynamic
@@ -255,11 +304,13 @@ module Neutraliser
                end
         build_stamp(profile, type, codec_decision, gain: gain, measured: measured_data)
       end
+      container_opts = container_args(container, output_path)
 
       cmd = build_complete_ffmpeg_command(
         input_path, output_path, audio_filter,
         codec_args, audio_tracks, stream_counts(input_path),
-        tags: stamp_args(stamp_for.call(predicted_type), output_path, primary_track[:index]), keep_original: keep_original
+        tags: stamp_args(stamp_for.call(predicted_type), container, primary_track[:index]),
+        keep_original: keep_original, container_opts: container_opts
       )
 
       ffmpeg_output = execute_with_progress(cmd)
@@ -267,7 +318,7 @@ module Neutraliser
       # Rare: loudnorm disagreed with the prediction. A stream-copy remux
       # corrects the record rather than leave a tag that lies.
       if %w[Linear Dynamic].include?(normalization_type) && normalization_type != predicted_type
-        restamp(output_path, stamp_for.call(normalization_type))
+        restamp(output_path, stamp_for.call(normalization_type), container)
       end
 
       codec_decision = codec_decision.merge(normalization_type: normalization_type)
@@ -280,7 +331,8 @@ module Neutraliser
       audio_tracks ||= detect_audio_tracks(input_path)
       primary_track = primary_audio_track(audio_tracks)
 
-      codec_decision = select_output_codec(primary_track, output_path, input_path)
+      container = output_container(input_path, output_path)
+      codec_decision = select_output_codec(primary_track, output_path, input_path, container: container)
       codec_args = build_codec_args(codec_decision, primary_track[:index])
 
       loudnorm_filter = "loudnorm=I=#{profile[:lufs]}:TP=#{profile[:tp]}:LRA=#{profile[:lra]}:print_format=summary"
@@ -293,7 +345,8 @@ module Neutraliser
       cmd = build_complete_ffmpeg_command(
         input_path, output_path, loudnorm_filter,
         codec_args, audio_tracks, stream_counts(input_path),
-        tags: stamp_args(stamp, output_path, primary_track[:index]), keep_original: keep_original
+        tags: stamp_args(stamp, container, primary_track[:index]),
+        keep_original: keep_original, container_opts: container_args(container, output_path)
       )
 
       ffmpeg_output = execute_with_progress(cmd)
@@ -387,7 +440,7 @@ module Neutraliser
     def self.detect_audio_tracks(input_path)
       cmd = [
         'ffprobe', '-v', 'error', '-select_streams', 'a',
-        '-show_entries', 'stream=index,codec_name,profile,sample_rate,channels,bit_rate:stream_tags=title:stream_disposition=default',
+        '-show_entries', 'stream=index,codec_name,profile,sample_rate,channels,bit_rate:stream_tags=title,language:stream_disposition=default',
         '-of', 'json', input_path
       ]
 
@@ -421,6 +474,7 @@ module Neutraliser
           codec: stream['codec_name'] || 'unknown',
           profile: parse_profile(stream['profile']),
           title: stream.dig('tags', 'title'),
+          language: stream.dig('tags', 'language')&.downcase,
           default: stream.dig('disposition', 'default') == 1,
           bit_rate: parse_bit_rate(stream['bit_rate']),
           sample_rate: stream['sample_rate']&.to_i
@@ -523,12 +577,12 @@ module Neutraliser
       raise FFmpegError, "Failed to parse loudnorm JSON: #{e.message}"
     end
 
-    def self.select_output_codec(track, output_path, input_path = nil)
+    def self.select_output_codec(track, output_path, input_path = nil, container: nil)
       source_codec = track[:codec]&.downcase || 'unknown'
       channels = track[:channels].to_i
       channels = 2 if channels == 0
       source_bitrate = track[:bit_rate].to_i
-      container = File.extname(output_path).downcase
+      container ||= File.extname(output_path).downcase
 
       allowed = CONTAINER_CODECS.fetch(container, CONTAINER_CODECS['.mkv'])
 
@@ -694,22 +748,23 @@ module Neutraliser
     # The stamp goes on the normalised audio stream and on the container.
     # MP4/MOV only keep arbitrary keys at container level, and only with
     # use_metadata_tags; their stream-level copy is silently dropped.
-    def self.stamp_args(stamp, output_path, output_index = 0)
+    def self.stamp_args(stamp, container, output_index = 0)
       args = stamp.to_tags.flat_map do |key, value|
         ["-metadata:s:a:#{output_index}", "#{key}=#{value}", '-metadata', "#{key}=#{value}"]
       end
-      args += ['-movflags', '+use_metadata_tags'] if MP4_FAMILY.include?(File.extname(output_path).downcase)
+      args += ['-movflags', '+use_metadata_tags'] if MP4_FAMILY.include?(container)
       args
     end
 
     # Rewrites only the stamp, stream-copying everything else. No
     # stream-scoped -map_metadata here, so ffmpeg's default per-stream
     # metadata copy stays on.
-    def self.restamp(path, stamp)
+    def self.restamp(path, stamp, container = File.extname(path).downcase)
       temp = File.join(File.dirname(path), ".restamp-#{File.basename(path)}")
       cmd = [
         'ffmpeg', '-hide_banner', '-v', 'error', '-y', '-i', path,
-        '-map', '0', '-c', 'copy', '-map_metadata', '0', *stamp_args(stamp, path), temp
+        '-map', '0', '-c', 'copy', '-map_metadata', '0', *stamp_args(stamp, container),
+        *container_args(container, temp), temp
       ]
       _, stderr, status = execute_with_timeout(cmd, NORMALIZATION_TIMEOUT, 'Restamp')
       raise FFmpegError.from_run('Rewriting the neutraliser tags', stderr, status) unless status.success?
@@ -727,7 +782,8 @@ module Neutraliser
     end
 
     def self.build_complete_ffmpeg_command(input_path, output_path, loudnorm_filter, primary_codec, audio_tracks,
-                                           stream_counts = { video: 0, subtitle: 0 }, tags: [], keep_original: false)
+                                           stream_counts = { video: 0, subtitle: 0 }, tags: [], keep_original: false,
+                                           container_opts: [])
       cmd = [
         'ffmpeg', '-hide_banner', '-y', '-i', input_path,
         # Video stream - always copy
@@ -795,6 +851,7 @@ module Neutraliser
       cmd += [
         '-map', '0:s?', '-c:s', 'copy',
         *tags,
+        *container_opts,
         output_path
       ]
 
@@ -844,6 +901,8 @@ module Neutraliser
                          :parse_normalization_type,
                          :predict_loudnorm_type,
                          :build_stamp,
+                         :container_args,
+                         :output_container,
                          :stamp_args,
                          :restamp,
                          :primary_stream_tags,

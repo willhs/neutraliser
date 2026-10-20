@@ -17,7 +17,7 @@ module Neutraliser
     def initialize(replace: false, target_level: nil, profile: 'livingroom', tolerance: 1.0, cache: true,
                    dry_run: false, fast_verify: true, resume: false, fast: false, local_stage: false,
                    allow_dynamic: false, allow_object_audio_loss: false, keep_original_audio: false,
-                   limit_db: 0.0, min_gain: nil)
+                   limit_db: 0.0, min_gain: nil, allow_codec_change: false, disk_guard: nil)
       @replace = replace
       @profile = if target_level
                    Profiles.custom_profile(target_level.to_f)
@@ -36,6 +36,8 @@ module Neutraliser
       @allow_dynamic = allow_dynamic || @profile[:dynamic] == true
       @allow_object_audio_loss = allow_object_audio_loss
       @keep_original_audio = keep_original_audio
+      @allow_codec_change = allow_codec_change
+      @disk_guard = disk_guard || DiskGuard.new
       @limit_db = limit_db.to_f
       @min_gain = (min_gain || tolerance).to_f
       raise ArgumentError, FAST_REQUIRES_DYNAMIC_MESSAGE if @fast && !@allow_dynamic
@@ -50,13 +52,8 @@ module Neutraliser
         process_directory(path)
       elsif File.file?(path)
         @skip_decider = SkipDecider.new(File.dirname(path), fast_verification: @fast_verify)
-        summarize_results(
-          found: 1,
-          queued: 1,
-          resumed: 0,
-          manifest_path: nil,
-          results: [process_one(path)]
-        )
+        results, aborted = run_files([path])
+        summarize_results(found: 1, queued: 1, resumed: 0, manifest_path: nil, results: results, aborted: aborted)
       else
         log "Error: Path '#{path}' does not exist"
         exit 1
@@ -107,7 +104,7 @@ module Neutraliser
         append_manifest_entry(manifest_path, file: file_path, status: 'queued')
       end
 
-      raw_results = files_to_process.map { |file| process_one(file) }
+      raw_results, aborted = run_files(files_to_process)
 
       results = Array(raw_results).each_with_index.map do |result, index|
         normalize_file_result(result, files_to_process[index])
@@ -129,7 +126,8 @@ module Neutraliser
         queued: files_to_process.length,
         resumed: resumed_count,
         manifest_path: manifest_path,
-        results: results
+        results: results,
+        aborted: aborted
       )
 
       log(
@@ -140,6 +138,17 @@ module Neutraliser
       log_failure_groups(summary)
 
       summary
+    end
+
+    # Runs files in order. A disk-guard abort ends the run: what was done so
+    # far is kept, the rest stays queued for the next run.
+    def run_files(files)
+      results = []
+      files.each { |file| results << process_one(file) }
+      [results, false]
+    rescue DiskGuard::Abort => e
+      log "ABORT: #{e.message}"
+      [results, true]
     end
 
     def files_for_run(video_files, manifest_path)
@@ -205,7 +214,7 @@ module Neutraliser
       log "Warning: Could not write run manifest entry (#{e.class}): #{e.message}"
     end
 
-    def summarize_results(found:, queued:, resumed:, manifest_path:, results:)
+    def summarize_results(found:, queued:, resumed:, manifest_path:, results:, aborted: false)
       done = results.count { |result| result[:status] == :done }
       skipped = results.count { |result| result[:status] == :skipped }
       failed = results.count { |result| result[:status] == :failed }
@@ -225,6 +234,7 @@ module Neutraliser
         linear: linear,
         dynamic: dynamic,
         limited: limited,
+        aborted: aborted,
         failed_by_reason: failures.map { |result| result[:reason] }.tally,
         not_writable_dirs: not_writable.map { |result| File.dirname(result[:file]) }.uniq.sort,
         manifest_path: manifest_path,
@@ -260,6 +270,9 @@ module Neutraliser
       preflight_failure = check_writable(file_path)
       return preflight_failure if preflight_failure
 
+      disk_skip = check_disk_space(file_path)
+      return disk_skip if disk_skip
+
       begin
         subtitle_failure = check_subtitles(file_path)
         return subtitle_failure if subtitle_failure
@@ -277,6 +290,9 @@ module Neutraliser
           # (or an ffmpeg that can keep the objects) must still see the file.
           object_audio_skip = check_object_audio(file_path, working_path, FFmpegWrapper.primary_audio_track(audio_tracks))
           next object_audio_skip if object_audio_skip
+
+          codec_skip = check_codec_change(file_path, working_path, FFmpegWrapper.primary_audio_track(audio_tracks))
+          next codec_skip if codec_skip
 
           result = if @fast
                      process_file_fast(file_path, working_path, audio_tracks)
@@ -374,6 +390,32 @@ module Neutraliser
       log "  Object audio (#{verdict.profile}): re-encoding would strip it, skipping " \
           '(--allow-object-audio-loss to process anyway)'
       file_result(original_path, status: :skipped, reason: :object_audio, message: verdict.profile)
+    end
+
+    # Re-encoding to a different codec isn't leveling the volume, it's
+    # converting the track. Skipped unless the user accepts it.
+    def check_codec_change(original_path, working_path, primary_track)
+      return nil if @allow_codec_change
+
+      encoder = FFmpegWrapper.codec_change(primary_track, original_path, working_path)
+      return nil unless encoder
+
+      message = "#{primary_track[:codec]} would be re-encoded as #{encoder}"
+      log "  Codec change (#{message}), skipping (--allow-codec-change to process anyway)"
+      file_result(original_path, status: :skipped, reason: :codec_change, message: message)
+    end
+
+    # Low space skips this file (a smaller one may still fit); critically low
+    # space stops the run. Nothing is recorded, so a later run retries.
+    def check_disk_space(file_path)
+      return nil if @dry_run || !@disk_guard.enabled?
+
+      case @disk_guard.verdict(File.dirname(File.expand_path(file_path)), File.size(file_path))
+      when :abort then raise DiskGuard::Abort, "free space on #{File.dirname(File.expand_path(file_path))} is below the abort floor"
+      when :skip
+        log '  Not enough free space for this file, skipping'
+        file_result(file_path, status: :skipped, reason: :low_disk)
+      end
     end
 
     # The output lands beside the original (temp + rename with --replace, a
@@ -501,6 +543,12 @@ module Neutraliser
       unless FileManager.verify_file_integrity(output_path)
         raise OutputVerificationError, 'Output file verification failed - processing aborted'
       end
+
+      mismatch = FileManager.output_mismatch(
+        working_path, output_path,
+        expected_audio_streams: FFmpegWrapper.output_audio_count(audio_tracks, keep_original: @keep_original_audio)
+      )
+      raise OutputVerificationError, "Output does not match the source: #{mismatch}" if mismatch
 
       commit_output(original_path, output_path)
       committed = true

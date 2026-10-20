@@ -101,7 +101,9 @@ RSpec.describe Neutraliser::FFmpegWrapper do
         :primary_audio_index,
         :probe_audio_profile_mid_file,
         :stream_counts,
-        :unsupported_subtitles
+        :unsupported_subtitles,
+        :codec_change,
+        :output_audio_count
       )
     end
   end
@@ -121,6 +123,7 @@ RSpec.describe Neutraliser::FFmpegWrapper do
 
     before do
       allow(described_class).to receive(:stream_counts).and_return(video: 0, subtitle: 0)
+      allow(described_class).to receive(:output_container) { |_input, output| File.extname(output).downcase }
     end
 
     it 'uses source-matched codec for primary track and copies additional tracks' do
@@ -516,6 +519,49 @@ RSpec.describe Neutraliser::FFmpegWrapper do
       expect(described_class.primary_audio_track(tracks)).to eq(index: 1, default: true)
       expect(described_class.primary_audio_track([{ index: 0 }, { index: 1 }])).to eq(index: 0)
     end
+
+    it 'prefers the first English track over the first track when none is flagged default' do
+      tracks = [{ index: 0, language: 'spa' }, { index: 1, language: 'fra' }, { index: 2, language: 'eng' }]
+      expect(described_class.primary_audio_track(tracks)).to eq(index: 2, language: 'eng')
+    end
+
+    it 'lets the default flag beat the English fallback' do
+      tracks = [{ index: 0, language: 'spa', default: true }, { index: 1, language: 'eng' }]
+      expect(described_class.primary_audio_track(tracks)).to include(index: 0)
+    end
+  end
+
+  describe '.codec_change' do
+    def change(codec, out, **track)
+      described_class.codec_change({ codec: codec, channels: 6, **track }, out)
+    end
+
+    it 'is nil when the codec re-encodes to itself in the container' do
+      expect(change('aac', 'a.mkv')).to be_nil
+      expect(change('eac3', 'a.mp4')).to be_nil
+      expect(change('mp3', 'a.mkv')).to be_nil
+    end
+
+    it 'names the replacement encoder when the codec cannot be kept' do
+      expect(change('dts', 'a.mkv')).to eq('flac')
+      expect(change('truehd', 'a.mkv')).to eq('flac')
+      expect(change('dts', 'a.mp4')).to eq('eac3')
+      expect(change('flac', 'a.mp4')).to eq('eac3') # flac has no home in MP4
+    end
+
+    it 'does not judge a track whose format could not be read' do
+      expect(change('unknown', 'a.mkv', unknown: true)).to be_nil
+    end
+  end
+
+  describe '.output_audio_count' do
+    it 'adds the kept original unless one is already there' do
+      tracks = [{ title: 'English' }, { title: 'French' }]
+      expect(described_class.output_audio_count(tracks, keep_original: false)).to eq(2)
+      expect(described_class.output_audio_count(tracks, keep_original: true)).to eq(3)
+      kept = tracks + [{ title: 'English (original, not normalised)' }]
+      expect(described_class.output_audio_count(kept, keep_original: true)).to eq(3)
+    end
   end
 
   describe '.measure_loudness audio_index' do
@@ -544,9 +590,9 @@ RSpec.describe Neutraliser::FFmpegWrapper do
         array_including('-of', 'json'), described_class::PROBE_TIMEOUT, 'Audio track detection'
       )
       expect(result).to eq([
-                             { index: 0, stream_index: 1, channels: 6, codec: 'ac3', profile: nil, title: nil, default: false, bit_rate: 640_000,
+                             { index: 0, stream_index: 1, channels: 6, codec: 'ac3', profile: nil, title: nil, language: nil, default: false, bit_rate: 640_000,
                                sample_rate: 48_000 },
-                             { index: 1, stream_index: 2, channels: 2, codec: 'aac', profile: nil, title: nil, default: false, bit_rate: 256_000,
+                             { index: 1, stream_index: 2, channels: 2, codec: 'aac', profile: nil, title: nil, language: nil, default: false, bit_rate: 256_000,
                                sample_rate: 44_100 }
                            ])
     end
@@ -1058,6 +1104,46 @@ RSpec.describe 'Neutraliser::FFmpegWrapper timeouts' do
       ['0', '-5', 'abc', ''].each do |bad|
         ENV['NEUTRALISER_ANALYSIS_TIMEOUT'] = bad
         expect(Neutraliser::FFmpegWrapper.send(:env_timeout, 'ANALYSIS', 1800)).to eq(1800)
+      end
+    end
+  end
+
+  describe 'container sniffing: MP4 bytes named .mkv' do
+    before do
+      unless system('which ffmpeg > /dev/null 2>&1') && system('which ffprobe > /dev/null 2>&1')
+        skip 'ffmpeg/ffprobe not available on PATH'
+      end
+    end
+
+    let(:profile) { Neutraliser::Profiles::LIVING_ROOM }
+
+    def make_mp4_named_mkv(dir)
+      srt = File.join(dir, 's.srt')
+      File.write(srt, "1\n00:00:00,000 --> 00:00:02,000\nhi\n")
+      path = File.join(dir, 'fake.mkv')
+      system('ffmpeg', '-hide_banner', '-loglevel', 'error', '-y',
+             '-f', 'lavfi', '-i', 'color=c=blue:size=64x64:duration=4',
+             '-f', 'lavfi', '-i', 'anoisesrc=color=pink:duration=4:sample_rate=48000:amplitude=0.05',
+             '-i', srt, '-map', '0', '-map', '1', '-map', '2',
+             '-c:v', 'libx264', '-preset', 'ultrafast', '-c:a', 'aac', '-b:a', '128k', '-c:s', 'mov_text',
+             '-f', 'mp4', path, exception: true)
+      path
+    end
+
+    it 'writes MP4 with the subtitles intact and a readable stamp, instead of failing to mux into Matroska' do
+      Dir.mktmpdir do |dir|
+        input = make_mp4_named_mkv(dir)
+        output = File.join(dir, 'out.mkv')
+        measured = Neutraliser::FFmpegWrapper.measure_loudness(input, target_i: profile[:lufs])
+
+        decision = Neutraliser::FFmpegWrapper.apply_normalization(input, output, measured, profile)
+
+        format = `ffprobe -v error -show_entries format=format_name -of csv=p=0 #{output.shellescape}`
+        subs = `ffprobe -v error -select_streams s -show_entries stream=codec_name -of csv=p=0 #{output.shellescape}`
+        expect(format).to include('mp4')
+        expect(subs.strip).to eq('mov_text')
+        expect(decision[:encoder]).to eq('aac')
+        expect(Neutraliser::FFmpegWrapper.read_stamp(output)).to have_attributes(profile: 'livingroom', mode: 'linear')
       end
     end
   end

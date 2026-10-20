@@ -32,8 +32,9 @@ module Neutraliser
         # becomes the destination's mode. Preserve the original permissions
         # rather than accidentally making a private media file world-readable
         # according to the process umask.
-        target_mode = File.stat(target_path).mode & 0o7777
-        File.chmod(target_mode, source_path)
+        target_stat = File.stat(target_path)
+        File.chmod(target_stat.mode & 0o7777, source_path)
+        keep_owner(source_path, target_stat)
         File.rename(source_path, target_path)
       rescue Errno::EXDEV => e
         # source_path and target_path are on different filesystems - rename(2)
@@ -46,6 +47,15 @@ module Neutraliser
       rescue StandardError => e
         raise FileManagerError, "Atomic replacement failed: #{e.message}"
       end
+    end
+
+    # The new file is created by whoever runs ffmpeg (root, in a container),
+    # but the library's owner (Plex, the *arrs) must still be able to manage
+    # it. Best effort: only a privileged process can hand a file to another user.
+    def self.keep_owner(path, stat)
+      File.chown(stat.uid, stat.gid, path)
+    rescue Errno::EPERM, Errno::EINVAL
+      nil
     end
 
     # Writes content to path without ever leaving a truncated/corrupt file
@@ -70,20 +80,37 @@ module Neutraliser
     # destination untouched.
     def self.atomic_copy(source_path, destination_path)
       temp_path = safe_temp_path(destination_path)
-      mode = if File.exist?(destination_path)
-               File.stat(destination_path).mode & 0o7777
-             else
-               File.stat(source_path).mode & 0o7777
-             end
+      existing = File.stat(destination_path) if File.exist?(destination_path)
+      mode = (existing || File.stat(source_path)).mode & 0o7777
 
       File.open(temp_path, File::WRONLY | File::CREAT | File::EXCL, mode) do |destination|
         File.open(source_path, 'rb') do |source|
           IO.copy_stream(source, destination)
         end
       end
+      keep_owner(temp_path, existing) if existing
       File.rename(temp_path, destination_path)
     ensure
       FileUtils.rm_f(temp_path) if temp_path
+    end
+
+    DURATION_TOLERANCE_S = 1.0
+
+    # nil when the output is a faithful rewrite of the source (same duration
+    # within a second, expected number of audio streams), else what is wrong.
+    # ffmpeg can exit 0 on a short or stream-dropping write; a probe that merely
+    # parses (verify_file_integrity) would pass that, and then the original goes.
+    def self.output_mismatch(source_path, output_path, expected_audio_streams:)
+      source_duration = FFmpegWrapper.probe_duration(source_path)
+      output_duration = FFmpegWrapper.probe_duration(output_path)
+      if source_duration && output_duration && (source_duration - output_duration).abs >= DURATION_TOLERANCE_S
+        return "output is #{output_duration.round(1)}s long, source is #{source_duration.round(1)}s"
+      end
+
+      actual = FFmpegWrapper.detect_audio_tracks(output_path).count { |track| !track[:unknown] }
+      return nil if actual == expected_audio_streams
+
+      "output has #{actual} audio stream(s), expected #{expected_audio_streams}"
     end
 
     def self.safe_temp_path(original_path)

@@ -214,4 +214,50 @@ RSpec.describe Neutraliser::FileManager do
       expect(described_class.verify_file_integrity(File.join(temp_dir, 'missing.mp4'))).to be(false)
     end
   end
+
+  describe '.output_mismatch' do
+    before do
+      allow(Neutraliser::FFmpegWrapper).to receive(:probe_duration) { |path| path.include?('short') ? 3.0 : 60.0 }
+      allow(Neutraliser::FFmpegWrapper).to receive(:detect_audio_tracks).and_return([{ index: 0 }, { index: 1 }])
+    end
+
+    it 'is nil for a faithful rewrite' do
+      expect(described_class.output_mismatch('in.mkv', 'out.mkv', expected_audio_streams: 2)).to be_nil
+    end
+
+    it 'flags a truncated output' do
+      expect(described_class.output_mismatch('in.mkv', 'short.mkv', expected_audio_streams: 2))
+        .to eq('output is 3.0s long, source is 60.0s')
+    end
+
+    it 'flags a dropped audio stream' do
+      expect(described_class.output_mismatch('in.mkv', 'out.mkv', expected_audio_streams: 3))
+        .to eq('output has 2 audio stream(s), expected 3')
+    end
+
+    it 'does not count the placeholder track ffprobe yields for no audio' do
+      allow(Neutraliser::FFmpegWrapper).to receive(:detect_audio_tracks)
+        .and_return([Neutraliser::FFmpegWrapper::UNKNOWN_AUDIO_TRACK])
+
+      expect(described_class.output_mismatch('in.mkv', 'out.mkv', expected_audio_streams: 1))
+        .to eq('output has 0 audio stream(s), expected 1')
+    end
+  end
+
+  describe 'owner on replace' do
+    it 'asks for the original owner on the new file, and carries on when not permitted' do
+      Dir.mktmpdir do |dir|
+        target = File.join(dir, 'a.mkv')
+        source = File.join(dir, 'b.mkv')
+        File.write(target, 'old')
+        File.write(source, 'new')
+        stat = File.stat(target)
+        expect(File).to receive(:chown).with(stat.uid, stat.gid, source).and_raise(Errno::EPERM)
+
+        described_class.atomic_replace(source, target)
+
+        expect(File.read(target)).to eq('new')
+      end
+    end
+  end
 end

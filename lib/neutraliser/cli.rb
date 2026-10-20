@@ -73,6 +73,9 @@ module Neutraliser
   end
 
   class CLI < Thor
+    EXIT_LOCK_BUSY = 3
+    EXIT_DISK_ABORT = 4
+
     desc 'process PATH', 'Process video file(s) at PATH'
     option :replace, type: :boolean, default: false, desc: 'Replace original files instead of creating copies'
     option :target_level, type: :numeric, desc: 'Target LUFS level for normalisation (overrides profile)'
@@ -94,11 +97,20 @@ module Neutraliser
                       desc: 'Let a peak limiter take up to N dB off overshooting peaks so quiet-but-peaky files can reach target (0 = off, strict constant gain)'
     option :min_gain, type: :numeric,
                       desc: 'Skip a peak-capped file when the gain towards target would be under N dB (default: --tolerance)'
+    option :allow_codec_change, type: :boolean, default: false,
+                                desc: 'Process tracks whose codec cannot be re-encoded to itself (DTS, TrueHD ... become FLAC/E-AC3)'
+    option :min_free_gb, type: :numeric,
+                         desc: 'Skip files while the output volume has less than N GiB free (or less than the file size)'
+    option :abort_free_gb, type: :numeric,
+                           desc: 'Stop the run (exit 4) when the output volume has less than N GiB free'
+    option :lock_file, type: :string,
+                       desc: 'Only one run at a time per lock file; exit 3 when another run holds it'
     option :linear_only, type: :boolean, default: false,
                          desc: 'Deprecated no-op: constant gain is now the default'
     def process(path)
       warn 'Warning: --linear-only is now the default and has no effect' if options[:linear_only]
 
+      guard = DiskGuard.new(min_free: gib(options[:min_free_gb]), abort_free: gib(options[:abort_free_gb]))
       processor = Processor.new(
         replace: options[:replace],
         target_level: options[:target_level],
@@ -114,10 +126,12 @@ module Neutraliser
         allow_object_audio_loss: options[:allow_object_audio_loss],
         keep_original_audio: options[:keep_original_audio],
         limit_db: options[:limit_db],
-        min_gain: options[:min_gain]
+        min_gain: options[:min_gain],
+        allow_codec_change: options[:allow_codec_change],
+        disk_guard: guard
       )
 
-      summary = processor.process(path)
+      summary = run_locked(options[:lock_file]) { processor.process(path) }
 
       return unless summary.is_a?(Hash)
 
@@ -128,10 +142,24 @@ module Neutraliser
         puts "Failed by reason: #{summary[:failed_by_reason].map { |reason, count| "#{reason}=#{count}" }.join(', ')}"
       end
       puts "Manifest: #{summary[:manifest_path]}" if summary[:manifest_path]
+      exit EXIT_DISK_ABORT if summary[:aborted]
       exit 1 if summary[:failed].to_i.positive?
     rescue ArgumentError => e
       # Invalid option combinations (e.g. --fast without --allow-dynamic)
       raise Thor::Error, "Error: #{e.message}"
+    end
+
+    no_commands do
+      def gib(value) = value && (value * DiskGuard::GIB).to_i
+
+      def run_locked(lock_file, &block)
+        return yield unless lock_file
+
+        RunLock.hold(lock_file, &block)
+      rescue RunLock::Busy => e
+        warn "Error: #{e.message}"
+        exit EXIT_LOCK_BUSY
+      end
     end
 
     desc 'analyze-plex', 'Analyze Plex library audio levels'

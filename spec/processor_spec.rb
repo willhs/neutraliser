@@ -795,4 +795,125 @@ RSpec.describe Neutraliser::Processor do
       expect(result).to include(status: :done, reason: :normalized)
     end
   end
+
+  describe 'prod-parity guards' do
+    let(:video_file) { File.join(temp_dir, 'movie.mkv') }
+    let(:dts_track) { { index: 0, channels: 6, codec: 'dts', bit_rate: 1_509_000, sample_rate: 48_000 } }
+    let(:skip_decider) { instance_double(Neutraliser::SkipDecider, already_processed?: false, mark_processed: nil) }
+    let(:measured) do
+      Neutraliser::Measurement.new(input_i: -26.0, input_tp: -12.0, input_lra: 8.0, input_thresh: -36.0,
+                                   target_offset: 0.0)
+    end
+
+    before do
+      File.write(video_file, 'x')
+      allow(FFMPEG::Movie).to receive(:new).and_return(instance_double(FFMPEG::Movie, audio_stream: true))
+      allow(Neutraliser::FFmpegWrapper).to receive(:detect_audio_tracks).and_return([dts_track])
+      allow(Neutraliser::FFmpegWrapper).to receive(:output_container) { |_in, out| File.extname(out).downcase }
+      allow(Neutraliser::ObjectAudio).to receive(:detect).and_return(Neutraliser::ObjectAudio::Verdict.new(status: :none, profile: nil))
+    end
+
+    def run(processor)
+      processor.instance_variable_set(:@skip_decider, skip_decider)
+      processor.send(:process_file, video_file)
+    end
+
+    describe 'codec change' do
+      it 'skips a DTS track before measuring, without stamping the sidecar' do
+        processor = described_class.new
+        expect(processor).not_to receive(:analyze_loudness_for_path)
+
+        result = nil
+        expect { result = run(processor) }.to output(/Codec change.*--allow-codec-change/).to_stdout
+
+        expect(result).to include(status: :skipped, reason: :codec_change, message: 'dts would be re-encoded as flac')
+        expect(skip_decider).not_to have_received(:mark_processed)
+      end
+
+      it 'processes it under --allow-codec-change' do
+        processor = described_class.new(allow_codec_change: true)
+        allow(processor).to receive(:analyze_loudness_for_path).and_return(measured)
+        allow(processor).to receive(:normalize_file_with_paths).and_return({ normalization_type: 'Linear' })
+
+        expect(run(processor)).to include(status: :done)
+      end
+    end
+
+    describe 'disk guard' do
+      let(:aac_track) { dts_track.merge(codec: 'aac') }
+
+      before { allow(Neutraliser::FFmpegWrapper).to receive(:detect_audio_tracks).and_return([aac_track]) }
+
+      def guarded(verdict)
+        guard = Neutraliser::DiskGuard.new(min_free: 1)
+        allow(guard).to receive(:verdict).and_return(verdict)
+        described_class.new(disk_guard: guard)
+      end
+
+      it 'skips a file when space is short, before measuring' do
+        processor = guarded(:skip)
+        expect(processor).not_to receive(:analyze_loudness_for_path)
+
+        expect(run(processor)).to include(status: :skipped, reason: :low_disk)
+        expect(skip_decider).not_to have_received(:mark_processed)
+      end
+
+      it 'raises an abort for the run when space is critically low' do
+        expect { run(guarded(:abort)) }.to raise_error(Neutraliser::DiskGuard::Abort)
+      end
+
+      it 'stops a directory run at the abort, keeping what was done and flagging it' do
+        File.write(File.join(temp_dir, 'b.mkv'), 'x')
+        processor = guarded(:ok)
+        done = { file: video_file, status: :done, reason: :normalized }
+        calls = 0
+        allow(processor).to receive(:process_one) do
+          calls += 1
+          calls == 1 ? done : raise(Neutraliser::DiskGuard::Abort, 'low')
+        end
+
+        summary = processor.process(temp_dir)
+
+        expect(summary).to include(aborted: true, done: 1)
+      end
+
+      it 'does nothing in a dry run' do
+        guard = Neutraliser::DiskGuard.new(abort_free: 1)
+        expect(guard).not_to receive(:verdict)
+        processor = described_class.new(dry_run: true, disk_guard: guard)
+        allow(processor).to receive(:analyze_loudness_for_path).and_return(measured)
+
+        expect(run(processor)).to include(status: :done, reason: :dry_run)
+      end
+    end
+
+    describe 'output verification' do
+      let(:aac_track) { dts_track.merge(codec: 'aac') }
+
+      def render(processor, mismatch)
+        allow(Neutraliser::FileManager).to receive(:verify_file_integrity).and_return(true)
+        allow(Neutraliser::FileManager).to receive(:output_mismatch).and_return(mismatch)
+        processor.send(:render_normalization, video_file, video_file, [aac_track], log_message: 'x') do |_wp, out, _t|
+          File.write(out, 'y')
+          { encoder: 'aac' }
+        end
+      end
+
+      it 'refuses to replace the original when the output does not match the source' do
+        processor = described_class.new(replace: false)
+
+        expect { render(processor, 'output is 3.0s long, source is 60.0s') }
+          .to raise_error(Neutraliser::OutputVerificationError, /does not match the source: output is 3.0s long/)
+        expect(Dir.children(temp_dir)).to eq(['movie.mkv'])
+      end
+
+      it 'passes the expected audio stream count, including a kept original' do
+        processor = described_class.new(replace: false, keep_original_audio: true)
+        render(processor, nil)
+
+        expect(Neutraliser::FileManager).to have_received(:output_mismatch)
+          .with(video_file, anything, expected_audio_streams: 2)
+      end
+    end
+  end
 end

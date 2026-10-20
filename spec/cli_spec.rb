@@ -64,6 +64,41 @@ RSpec.describe Neutraliser::CLI do
       end.to output(/linear=0, dynamic=1/).to_stdout
     end
 
+    it 'passes the new guards and limiter options to Processor' do
+      processor = instance_double(Neutraliser::Processor, process: { found: 0, queued: 0, resumed: 0, done: 0, skipped: 0, failed: 0 })
+      seen = nil
+      allow(Neutraliser::Processor).to receive(:new) do |**kwargs|
+        seen = kwargs
+        processor
+      end
+
+      described_class.start(['process', '--limit-db', '3', '--min-gain', '0.5', '--allow-codec-change',
+                             '--min-free-gb', '40', '--abort-free-gb', '20', '/tmp/library'])
+
+      expect(seen).to include(limit_db: 3, min_gain: 0.5, allow_codec_change: true)
+      expect(seen[:disk_guard]).to be_enabled
+    end
+
+    it 'exits 4 when the run was aborted by the disk guard' do
+      processor = instance_double(Neutraliser::Processor, process: { found: 2, queued: 2, done: 1, skipped: 0, failed: 0, aborted: true })
+      allow(Neutraliser::Processor).to receive(:new).and_return(processor)
+
+      expect { described_class.start(['process', '/tmp/library']) }
+        .to output(/Summary/).to_stdout.and raise_error(SystemExit) { |e| expect(e.status).to eq(4) }
+    end
+
+    it 'exits 3 without processing when another run holds --lock-file' do
+      lock = File.join(Dir.mktmpdir, 'run.lock')
+      processor = instance_double(Neutraliser::Processor)
+      allow(Neutraliser::Processor).to receive(:new).and_return(processor)
+      expect(processor).not_to receive(:process)
+
+      Neutraliser::RunLock.hold(lock) do
+        expect { described_class.start(['process', '--lock-file', lock, '/tmp/library']) }
+          .to output(/another run holds/).to_stderr.and raise_error(SystemExit) { |e| expect(e.status).to eq(3) }
+      end
+    end
+
     it 'passes --allow-object-audio-loss to Processor initialization, off by default' do
       processor = instance_double(Neutraliser::Processor)
       allow(processor).to receive(:process).and_return(found: 0, queued: 0, resumed: 0, done: 0, skipped: 0, failed: 0)
