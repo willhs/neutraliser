@@ -83,3 +83,6 @@ The `.neutraliser` sidecar lives in whichever root a run started from, so a move
 
 ## [2026-10-20] synthesise | Prod parity audit: media-server's neutralise.sh vs the CLI
 Compared `neutralise.sh` and its driver with the CLI behaviour by behaviour (docs/research/prod-parity-audit-2026-10.md, task 0006). Found and fixed a CLI bug: the peak-cap skip had no direction, so a quiet file with hot peaks was re-encoded quieter. Ported: direction-aware `--min-gain` (new `GainPlan`), opt-in `--limit-db` peak limiter (mode `limited`), first-`eng` track fallback, MP4-named-.mkv container sniffing, skip-by-default on codec change (`--allow-codec-change`), duration + stream-count output verification, `--min-free-gb`/`--abort-free-gb` (exit 4), flock `--lock-file` (exit 3), owner kept on replace, and `import-manifest` to carry the shell manifest's history over. Dropped: `.bak` swap and rollback, KEEP_ORIG (use `--keep-original-audio`), `invalidate`, 640k bitrate fallback. Left as follow-ups: the Docker image and the media-server driver switch.
+
+## [2026-10-22] update | runbook: where production runs
+agent-experience tick: runbook names media-server's NAS driver as production and drops the unsupported MacBook claim; check-prod skill rewritten for the driver and now tracked in git; AGENTS.md gains test commands, the rbenv PATH line and `--keep-original-audio`.

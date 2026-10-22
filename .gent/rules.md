@@ -1,5 +1,7 @@
 # Neutraliser - Video Audio Volume Normalisation CLI
 
+> `AGENTS.md` is a symlink to `.gent/rules.md`: edit `.gent/rules.md` (BSD `sed -i` refuses the symlink).
+
 ## Project Overview
 A Ruby CLI tool that normalises audio volume in video files using industry-standard EBU R128 loudness normalization to create consistent playback levels throughout your video library.
 
@@ -79,6 +81,7 @@ A Ruby CLI tool that normalises audio volume in video files using industry-stand
 - `--resume` - Resume a prior directory run, skipping completed files
 - `--allow-object-audio-loss` - Process Atmos / DTS:X primary tracks anyway (skipped by default; re-encoding drops the objects)
 - `--allow-dynamic` - Opt in to loudnorm two-pass, which may go dynamic (default is constant gain, peak-capped)
+- `--keep-original-audio` - Also keep the untouched original track (stream copy, not default) so processing is reversible
 - `--min-gain N` - Peak-capped files are re-encoded only if the gain towards target is at least N dB (default: `--tolerance`)
 - `--limit-db N` - Opt-in peak limiter: gain may exceed the peak headroom by N dB (stamped `limited`)
 - `--allow-codec-change` - Process DTS/TrueHD/etc. (codec can't be kept); skipped by default
@@ -108,6 +111,10 @@ A Ruby CLI tool that normalises audio volume in video files using industry-stand
 - **Within-file compression**: Minimal and content-appropriate
 - **Cache effectiveness**: 10-50x speedup on repeat analysis
 - **Resource usage**: Stable memory, proper cleanup
+
+## Running tests
+- `bundle exec rspec` (about 5 s) and `bundle exec rubocop`. Ruby is rbenv 3.2.3.
+- Manager job shells may not have rbenv's shims on PATH, so `ruby`/`bundle` resolve to macOS system Ruby 2.6 (`RubyGems version (3.0.3.1) has a bug`, `LoadError thor`). Run `export PATH="$HOME/.rbenv/shims:$PATH" LANG=en_US.UTF-8` first; don't hunt through `~/.rbenv/versions` or Homebrew Ruby.
 
 ## Development Guidelines
 - **Architecture**: Modular design with clear separation of concerns

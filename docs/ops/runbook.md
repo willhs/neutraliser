@@ -3,7 +3,7 @@ type: runbook
 status: draft
 owner: will
 contributors: []
-updated: 2026-10-15
+updated: 2026-10-22
 review_cycle: 30d
 agent_write: false
 links: []
@@ -34,11 +34,14 @@ Subtitles are always copied, never dropped. A stream ffmpeg can't identify (`Sub
 
 PGS (`hdmv_pgs_subtitle`) tracks log `Could not find codec parameters … unspecified size` when the probe window holds no subtitle packets. That is a probe warning, not by itself a failure: the codec is known, so the preflight lets it through. Not reproduced locally (ffmpeg can't encode a PGS fixture); if a PGS file does fail, the manifest's one-line message now shows the real cause instead of the warning buried in a dump.
 
+### Where production runs
+Production does not run this CLI yet. New media is normalised on the NAS by media-server's shell fork: Sonarr/Radarr import -> `scripts/neutralise-enqueue.sh` -> `neutralise-driver.sh` -> `neutralise.sh`, plus a weekly sweep kicked hourly from the Mac. Its state (`driver.status`, `driver.log`, `manifest.jsonl`, the import queue) is in `/volume2/neutraliser-stage/`; the `check-prod` skill reads it. Moving the driver onto this CLI is goal 9c9e4d8c ([parity audit](../research/prod-parity-audit-2026-10.md)).
+
 ### Container image
-The `neutraliser-movies` container (wedged 2026-02-15) and its image were removed from the NAS on 2026-07-14, and no Dockerfile for it ever existed in this repo, so it is retired. The repo `Dockerfile` (FFmpeg 7.1+ checked at build) publishes `ghcr.io/willhs/neutraliser`; see README "Run with Docker". The check-prod skill's container name will only apply once a run uses that image under a new name.
+The `neutraliser-movies` container (wedged 2026-02-15) and its image were removed from the NAS on 2026-07-14, and no Dockerfile for it ever existed in this repo, so it is retired. The repo `Dockerfile` (FFmpeg 7.1+ checked at build) publishes `ghcr.io/willhs/neutraliser`; see README "Run with Docker". Nothing in production uses that image until the driver switch lands.
 
 ### ffmpeg version
-FFmpeg 4.2+ works; 7.1+ is needed for Atmos/DTS:X detection (see `docs/research/object-audio-detection.md`). The Aug 2026 library run most likely used the MacBook's Homebrew ffmpeg 7.1.1 against the NAS over SMB (commit 875880e describes it as an SMB run; there is no neutraliser container in the repo or `media-server`); the NAS's own `/usr/local/bin/ffmpeg` was only used for ad-hoc measurement.
+FFmpeg 4.2+ works; 7.1+ is needed for Atmos/DTS:X detection (see `docs/research/object-audio-detection.md`). Which host and ffmpeg the Aug 2026 library run used is not recorded: its manifests use `/mnt/nas/media/...` paths, a Linux SMB mount (see task 0005), so it was not the MacBook.
 
 ### Timeouts
 `timeout` failures on large files over a network mount are usually the budget, not the file. Raise `NEUTRALISER_ANALYSIS_TIMEOUT` / `NEUTRALISER_NORMALIZATION_TIMEOUT` (seconds). The 343 Aug 2026 timeouts predate the 2026-08-10 budget fix (analysis 300s → 1800s).
@@ -55,5 +58,6 @@ Preflight checks run before the loudness pass because that pass is the expensive
 - docs/ops/data_contracts.md
 
 ### Change Log
+- 2026-10-22 (agent:agent-experience): Added "Where production runs" (media-server's NAS driver, not this CLI); dropped the unsupported MacBook claim for the Aug run
 - 2026-10-15 (agent:preflight-failures): Added failure triage, permissions, unsupported subtitles, ffmpeg version and timeouts
 - 2025-09-24 (agent:create-project): Created runbook placeholder
