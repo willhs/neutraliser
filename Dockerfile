@@ -2,7 +2,7 @@
 FROM ruby:3.2-slim-trixie
 
 RUN apt-get update \
- && apt-get install -y --no-install-recommends ffmpeg build-essential libsqlite3-dev \
+ && apt-get install -y --no-install-recommends ffmpeg build-essential \
  && rm -rf /var/lib/apt/lists/* \
  && ffmpeg -version | head -1 \
  && ffmpeg -version | grep -Eq 'version (7\.[1-9]|[89]\.|[1-9][0-9]\.)' \

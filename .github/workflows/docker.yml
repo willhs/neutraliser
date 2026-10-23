@@ -30,6 +30,21 @@ jobs:
             type=raw,value=latest,enable={{is_default_branch}}
             type=semver,pattern={{version}}
             type=sha
+      - name: Build amd64 image for smoke test
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          platforms: linux/amd64
+          load: true
+          tags: neutraliser:smoke
+          cache-from: type=gha
+      - name: Smoke test image
+        run: |
+          docker run --rm neutraliser:smoke version
+          docker run --rm --entrypoint ffmpeg -v "$PWD:/media" neutraliser:smoke \
+            -loglevel error -f lavfi -i sine=frequency=440:duration=2 \
+            -f lavfi -i color=c=black:s=64x64:d=2 -c:a aac -c:v libx264 -shortest /media/smoke.mkv
+          docker run --rm -v "$PWD:/media" neutraliser:smoke process /media/smoke.mkv --dry-run
       - uses: docker/build-push-action@v6
         with:
           context: .

@@ -20,7 +20,6 @@ Gem::Specification.new do |spec|
     'changelog_uri' => "#{spec.homepage}/blob/main/CHANGELOG.md",
     'rubygems_mfa_required' => 'true'
   }
-  # Current patched releases of sqlite3 and nokogiri require Ruby 3.2.
   # Keeping Ruby 2.7 compatibility would force known-vulnerable runtime gems.
   spec.required_ruby_version = '>= 3.2.0'
 
@@ -33,7 +32,6 @@ Gem::Specification.new do |spec|
   spec.add_dependency 'json', '>= 2.19.9', '< 3.0'
   spec.add_dependency 'nokogiri', '>= 1.19.4', '< 2.0'
   spec.add_dependency 'plex-ruby', '~> 1.5'
-  spec.add_dependency 'sqlite3', '>= 2.9.5', '< 3.0'
   spec.add_dependency 'streamio-ffmpeg', '~> 3.0'
   spec.add_dependency 'terminal-table', '~> 3.0'
   spec.add_dependency 'thor', '~> 1.2'
