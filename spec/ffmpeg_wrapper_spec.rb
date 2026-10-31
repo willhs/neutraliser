@@ -899,12 +899,12 @@ RSpec.describe Neutraliser::FFmpegWrapper do
       expect(filter).not_to include('aresample')
     end
 
-    it 'pins aresample on the loudnorm (allow_dynamic) path too, to prevent the 192kHz leak' do
+    it 'pins aresample on the loudnorm (allow_dynamic) path too, to prevent the 192kHz leak (via aformat, which ffmpeg 4.2 can negotiate)' do
       measured = Neutraliser::Measurement.from_loudnorm_json('input_i' => '-25.0', 'input_tp' => '-10.0', 'input_lra' => '8.0', 'input_thresh' => '-30.0', 'target_offset' => '0.0')
       filter = described_class.send(:build_audio_filter, measured, profile, 48_000, plan: nil)
 
       expect(filter).to include('loudnorm=')
-      expect(filter).to end_with('aresample=48000')
+      expect(filter).to end_with('aformat=sample_rates=48000')
     end
   end
 

@@ -367,7 +367,7 @@ module Neutraliser
       codec_args = build_codec_args(codec_decision, primary_track[:index])
 
       loudnorm_filter = "loudnorm=I=#{profile[:lufs]}:TP=#{profile[:tp]}:LRA=#{profile[:lra]}:print_format=summary"
-      loudnorm_filter += ",aresample=#{primary_track[:sample_rate]}" if primary_track[:sample_rate]
+      loudnorm_filter += ",#{pin_sample_rate(primary_track[:sample_rate])}" if primary_track[:sample_rate]
 
       # Single-pass loudnorm has no prior measurement pass, so it always
       # behaves as dynamic (per-frame) normalization regardless of the
@@ -771,8 +771,16 @@ module Neutraliser
     # to; quiet-but-peaky sources land shy of target instead of being squashed.
     def self.build_audio_filter(measured, profile, source_sample_rate, plan:)
       filter = plan ? plan.filter : build_loudnorm_filter(measured, profile[:lufs], profile[:tp], profile[:lra])
-      filter += ",aresample=#{source_sample_rate}" if source_sample_rate
+      filter += ",#{plan ? "aresample=#{source_sample_rate}" : pin_sample_rate(source_sample_rate)}" if source_sample_rate
       filter
+    end
+
+    # Pins loudnorm's 192kHz output back to the source rate. After loudnorm,
+    # ffmpeg 4.2 can't negotiate a channel layout through a bare aresample
+    # ("Cannot select channel layout for the link"); aformat can, and still
+    # inserts the resampler. Found by the ffmpeg 4.2 CI job.
+    def self.pin_sample_rate(rate)
+      "aformat=sample_rates=#{rate}"
     end
 
     # loudnorm's own linear-mode rule (af_loudnorm.c init): valid measured
@@ -972,6 +980,7 @@ module Neutraliser
                          :stop_process,
                          :valid_utf8,
                          :timeout_variable,
+                         :pin_sample_rate,
                          :parse_loudnorm_json,
                          :parse_audio_tracks_json,
                          :parse_profile,

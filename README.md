@@ -1,5 +1,7 @@
 # Neutraliser
 
+[![CI](https://github.com/willhs/neutraliser/actions/workflows/ci.yml/badge.svg)](https://github.com/willhs/neutraliser/actions/workflows/ci.yml)
+
 **Stop reaching for the remote between every film.** Neutraliser levels the audio across your whole video library — one CLI, no server, no database, no plugin marketplace.
 
 It measures each file with FFmpeg's EBU R128 `loudnorm` filter and moves it to the same perceived loudness with one constant gain. Video is stream-copied, and only the track being levelled is re-encoded, at the source's own codec and bitrate. Re-encoding lossy audio still costs a generation, so files already close to target are left alone.
@@ -351,6 +353,8 @@ Worth knowing about, because they may fit you better:
 - **[sickbeard_mp4_automator](https://github.com/mdhiggins/sickbeard_mp4_automator)** — Sonarr/Radarr post-processing that standardises containers, codecs, and tags, with normalisation as one feature among many.
 
 ## Development
+
+CI runs RSpec (including real-media round trips) against static FFmpeg 4.2.2 and 7.1 builds on Ruby 3.2, plus RuboCop. Existing lint debt is recorded in `.rubocop_todo.yml`; remove exclusions as it is cleaned up.
 
 ```bash
 git clone https://github.com/willhs/neutraliser.git
