@@ -6,9 +6,9 @@
 <text x="728" y="195.0" font-size="11.5" fill="#6a737d" text-anchor="end">target -20.0 LUFS</text>
 <text x="230" y="82" font-size="12.5" font-weight="600" fill="#d1495b" text-anchor="middle">BEFORE</text>
 <text x="540" y="82" font-size="12.5" font-weight="600" fill="#2a9d8f" text-anchor="middle">AFTER</text>
-<line x1="230" y1="327.7" x2="540" y2="226.1" stroke="#6a737d" stroke-width="1.1" opacity="0.45"/>
+<line x1="230" y1="327.7" x2="540" y2="227.1" stroke="#6a737d" stroke-width="1.1" opacity="0.45"/>
 <circle cx="230" cy="327.7" r="5" fill="#d1495b"/>
-<circle cx="540" cy="226.1" r="5" fill="#2a9d8f"/>
+<circle cx="540" cy="227.1" r="5" fill="#2a9d8f"/>
 <text x="216" y="331.7" font-size="11.5" fill="#1b1f24" text-anchor="end">-29.4</text>
 <line x1="230" y1="278.5" x2="540" y2="227.1" stroke="#6a737d" stroke-width="1.1" opacity="0.45"/>
 <circle cx="230" cy="278.5" r="5" fill="#d1495b"/>

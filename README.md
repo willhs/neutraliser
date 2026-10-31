@@ -41,8 +41,13 @@ And the same again on synthetic clips, if you'd rather run it yourself than trus
 
 ![Integrated loudness before and after normalisation: eight files spread across roughly 19 LU converge onto the -20 LUFS target](demo/loudness-before-after.svg)
 
-The two synthetic charts were re-run on 2026-10-31 against the current constant-gain default
-and still hold (18.6 LU → 0.2 LU). Don't take the charts' word for it. [`demo/run.rb`](demo/README.md) and
+Re-run on 2026-11-01 with the current constant-gain default: the eight synthetic clips
+measured **18.6 LU → 0.2 LU** integrated spread; the four-clip playlist measured
+**15.5 LU → 0.4 LU** short-term swing. These steady pink-noise clips have enough peak
+headroom to reach target; they don't demonstrate quiet, peaky films. A separate synthetic
+transient test reached −36.3 LUFS with a −1.5 dBTP peak, confirming that the peak cap
+can leave quiet material short of −20 LUFS ([measurements](demo/README.md#verified-synthetic-rerun)).
+Don't take the charts' word for it. [`demo/run.rb`](demo/README.md) and
 [`demo/ab.rb`](demo/README.md) regenerate both from scratch, `--source ~/media/movies`
 runs them over your own library (on copies; originals untouched), and `ab.rb` also
 writes `before.mkv`/`after.mkv` so you can *listen* rather than squint at a line.

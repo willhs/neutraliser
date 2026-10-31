@@ -22,11 +22,11 @@ Example output:
 
 ```
   quiet film        -26.9 ->  -20.0 LUFS
-  loud remaster     -11.6 ->  -20.1 LUFS
+  loud remaster     -11.5 ->  -20.1 LUFS
   quiet doco        -23.4 ->  -20.2 LUFS
-  TV episode        -15.4 ->  -20.2 LUFS
+  TV episode        -15.4 ->  -20.1 LUFS
 
-swing across the sitting: 15.5 LU -> 0.5 LU
+swing across the sitting: 15.5 LU -> 0.4 LU
 ```
 
 ## Library sweep — `demo/run.rb`
@@ -45,14 +45,53 @@ file                             before      after
 clip_01.mkv                      -29.4     -20.2
 clip_02.mkv                      -24.9     -20.2
 clip_03.mkv                      -22.4     -20.2
-clip_04.mkv                      -18.9     -20.3
+clip_04.mkv                      -18.9     -20.2
 clip_05.mkv                      -17.4     -20.2
 clip_06.mkv                      -14.9     -20.1
 clip_07.mkv                      -12.4     -20.1
-clip_08.mkv                      -10.7     -20.0
+clip_08.mkv                      -10.8     -20.0
 
-spread: 18.7 LU -> 0.3 LU
+spread: 18.6 LU -> 0.2 LU
 ```
+
+## Verified synthetic rerun
+
+Measured on 2026-11-01 (Pacific/Auckland), at `8463db0`, Ruby 3.2.3 and FFmpeg
+7.1.1. Both scripts ran with default durations and the current `livingroom`
+constant-gain path, without `--allow-dynamic`, `--limit-db`, `--fast`, or real media:
+
+```bash
+ruby demo/run.rb --work-dir ../evidence/sweep
+ruby demo/ab.rb --work-dir ../evidence/ab
+```
+
+The tables above are this run's independent `ebur128` measurements. The eight-file
+integrated spread was **18.6 → 0.2 LU**. The four-file integrated spread was
+**15.4 → 0.2 LU**, while the plotted 3-second short-term swing was **15.5 → 0.4 LU**.
+Both committed SVGs were regenerated from these runs; the noise is random, so a
+later run need not match every decimal.
+
+**Community demo verdict: `loudness-over-time.svg` is suitable**, when explicitly
+captioned as synthetic pink noise demonstrating jumps between files with sufficient
+peak headroom. It does not establish results for films or within-film compression.
+Use it in preference to the August real-library chart for task `0553f300`.
+
+A separate 20-second FLAC synthetic fixture combined a quiet 440 Hz sine
+(`0.01*sin(2*PI*440*t)`) with a 10 ms, amplitude-0.7, 1 kHz transient at 10 seconds.
+With the same defaults, independent `ebur128=peak=true` measurements were:
+
+| Metric | Before | After |
+|---|---:|---:|
+| Integrated loudness | −37.8 LUFS | −36.3 LUFS |
+| True peak | −3.0 dBTP | −1.5 dBTP |
+| LRA | 13.0 LU | 13.0 LU |
+
+The stamp records `linear`, gain **1.48 dB**, input **−38.26 LUFS**, and input peak
+**−2.98 dBTP**. The CLI reports **16.78 LU shortfall**, based on its own `loudnorm`
+measurement; this differs from the independent `ebur128` result by about 0.5 LU.
+This directly confirms the peak-cap mechanism on synthetic audio, not a measured
+claim about any particular film. Raw logs, clips, and the fixture script are held
+in the verification task's workspace `evidence/` directory.
 
 ## Run it against your own library
 
