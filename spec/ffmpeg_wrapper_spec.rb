@@ -101,6 +101,7 @@ RSpec.describe Neutraliser::FFmpegWrapper do
         :primary_audio_index,
         :probe_audio_profile_mid_file,
         :stream_counts,
+        :version,
         :unsupported_subtitles,
         :codec_change,
         :output_audio_count
@@ -169,7 +170,7 @@ RSpec.describe Neutraliser::FFmpegWrapper do
         pairs = cmd.each_cons(2).to_a
         expect(cmd[cmd.index('-filter_complex') + 1]).to start_with('[0:a:1]')
         maps = cmd.each_cons(2).select { |a, _| a == '-map' }.map(&:last)
-        expect(maps).to eq(['0:v', '0:a:0', '[norm]', '0:a:2', '0:s?'])
+        expect(maps).to eq(['0:v?', '0:a:0', '[norm]', '0:a:2', '0:s?', '0:t?'])
         expect(pairs).to include(['-c:a:0', 'copy'], ['-c:a:1', 'ac3'], ['-b:a:1', '448k'], ['-c:a:2', 'copy'])
         expect(pairs).to include(['-map_metadata:s:a:0', '0:s:a:0'], ['-map_metadata:s:a:1', '0:s:a:1'],
                                  ['-map_metadata:s:a:2', '0:s:a:2'])
@@ -182,7 +183,7 @@ RSpec.describe Neutraliser::FFmpegWrapper do
         cmd = run(tracks, keep_original: true)
         pairs = cmd.each_cons(2).to_a
         maps = pairs.select { |a, _| a == '-map' }.map(&:last)
-        expect(maps).to eq(['0:v', '0:a:0', '[norm]', '0:a:1', '0:a:2', '0:s?'])
+        expect(maps).to eq(['0:v?', '0:a:0', '[norm]', '0:a:1', '0:a:2', '0:s?', '0:t?'])
         expect(pairs).to include(['-c:a:2', 'copy'], ['-c:a:3', 'copy'])
         expect(pairs).to include(['-map_metadata:s:a:2', '0:s:a:1'], ['-map_metadata:s:a:3', '0:s:a:2'])
         expect(pairs).to include(['-disposition:a:1', 'default'], ['-disposition:a:2', '0'])
@@ -356,6 +357,7 @@ RSpec.describe Neutraliser::FFmpegWrapper do
 
     it 'turns on use_metadata_tags for MP4 so the container-level stamp survives' do
       tracks = [{ index: 0, channels: 2, codec: 'aac', bit_rate: 128_000, sample_rate: 48_000 }]
+      allow(described_class).to receive(:mp4_mdta_safe?).and_return(true)
       allow(described_class).to receive(:execute_with_timeout).and_return(['', '', ok_status])
 
       described_class.apply_normalization('in.mp4', 'out.mp4', measured_data, profile.merge(name: 'livingroom'),
@@ -368,6 +370,7 @@ RSpec.describe Neutraliser::FFmpegWrapper do
 
     it 'never engages dynamic compression by default, regardless of ffmpeg output' do
       tracks = [{ index: 0, channels: 2, codec: 'aac', bit_rate: 128_000, sample_rate: 48_000 }]
+      allow(described_class).to receive(:mp4_mdta_safe?).and_return(true)
       allow(described_class).to receive(:execute_with_timeout).and_return(['', 'Normalization Type:   Dynamic', ok_status])
 
       result = described_class.apply_normalization('in.mp4', 'out.mp4', measured_data, profile, audio_tracks: tracks)
@@ -590,9 +593,9 @@ RSpec.describe Neutraliser::FFmpegWrapper do
         array_including('-of', 'json'), described_class::PROBE_TIMEOUT, 'Audio track detection'
       )
       expect(result).to eq([
-                             { index: 0, stream_index: 1, channels: 6, codec: 'ac3', profile: nil, title: nil, language: nil, default: false, bit_rate: 640_000,
+                             { index: 0, stream_index: 1, channels: 6, codec: 'ac3', profile: nil, title: nil, language: nil, default: false, dispositions: [], bit_rate: 640_000,
                                sample_rate: 48_000 },
-                             { index: 1, stream_index: 2, channels: 2, codec: 'aac', profile: nil, title: nil, language: nil, default: false, bit_rate: 256_000,
+                             { index: 1, stream_index: 2, channels: 2, codec: 'aac', profile: nil, title: nil, language: nil, default: false, dispositions: [], bit_rate: 256_000,
                                sample_rate: 44_100 }
                            ])
     end

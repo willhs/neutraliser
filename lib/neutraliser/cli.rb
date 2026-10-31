@@ -32,9 +32,7 @@ module Neutraliser
       cache_manager = CacheManager.new(enabled: true)
 
       # Find all video files and clean their caches
-      video_files = Dir.glob(File.join(path, '**', '*')).select do |f|
-        Processor::SUPPORTED_FORMATS.include?(File.extname(f).downcase)
-      end
+      video_files = VideoFiles.under(path)
 
       cleaned_count = 0
       video_files.each do |video_file|
@@ -61,8 +59,8 @@ module Neutraliser
     # over from older runs still exist on disk — sweep them up here rather
     # than leaving orphaned sidecars.
     def clean_legacy_markers(path)
-      legacy_pattern = File.join(path, '**', '.*.neutralised_*')
-      Dir.glob(legacy_pattern).count do |marker_file|
+      Dir.glob('**/.*.neutralised_*', base: path).count do |relative|
+        marker_file = File.join(path, relative)
         File.delete(marker_file)
         true
       rescue StandardError => e
@@ -75,6 +73,7 @@ module Neutraliser
   class CLI < Thor
     EXIT_LOCK_BUSY = 3
     EXIT_DISK_ABORT = 4
+    EXIT_SIGNAL_BASE = 128
 
     desc 'process PATH', 'Process video file(s) at PATH'
     option :replace, type: :boolean, default: false, desc: 'Replace original files instead of creating copies'
@@ -83,7 +82,8 @@ module Neutraliser
     option :tolerance, type: :numeric, default: 1.0, desc: 'Skip files within this many LU of target'
     option :cache, type: :boolean, default: true, desc: 'Cache analysis results'
     option :dry_run, type: :boolean, default: false, desc: 'Analyze only, do not process files'
-    option :fast_verify, type: :boolean, default: true, desc: 'Enable fast verification to reduce analysis time'
+    option :fast_verify, type: :boolean, default: false,
+                         desc: 'Skip a file when a 30-second sample looks within tolerance. Faster, but a sample can misjudge a whole film'
     option :resume, type: :boolean, default: false, desc: 'Resume from previous run manifest and skip completed files'
     option :fast, type: :boolean, default: false, desc: 'Single-pass normalization (faster, slightly less accurate)'
     option :local_stage, type: :boolean, default: false, desc: 'Copy files to local disk before processing'
@@ -110,27 +110,7 @@ module Neutraliser
     def process(path)
       warn 'Warning: --linear-only is now the default and has no effect' if options[:linear_only]
 
-      guard = DiskGuard.new(min_free: gib(options[:min_free_gb]), abort_free: gib(options[:abort_free_gb]))
-      processor = Processor.new(
-        replace: options[:replace],
-        target_level: options[:target_level],
-        profile: options[:profile],
-        tolerance: options[:tolerance],
-        cache: options[:cache],
-        dry_run: options[:dry_run],
-        fast_verify: options[:fast_verify],
-        resume: options[:resume],
-        fast: options[:fast],
-        local_stage: options[:local_stage],
-        allow_dynamic: options[:allow_dynamic],
-        allow_object_audio_loss: options[:allow_object_audio_loss],
-        keep_original_audio: options[:keep_original_audio],
-        limit_db: options[:limit_db],
-        min_gain: options[:min_gain],
-        allow_codec_change: options[:allow_codec_change],
-        disk_guard: guard
-      )
-
+      processor = build_processor
       summary = run_locked(options[:lock_file]) { processor.process(path) }
 
       return unless summary.is_a?(Hash)
@@ -144,13 +124,46 @@ module Neutraliser
       puts "Manifest: #{summary[:manifest_path]}" if summary[:manifest_path]
       exit EXIT_DISK_ABORT if summary[:aborted]
       exit 1 if summary[:failed].to_i.positive?
-    rescue ArgumentError => e
-      # Invalid option combinations (e.g. --fast without --allow-dynamic)
+    rescue FFmpegNotFoundError => e
       raise Thor::Error, "Error: #{e.message}"
+    rescue SignalException => e
+      # Ctrl-C, `docker stop`, a service stop. By now the running ffmpeg has been
+      # stopped and its temp output removed on the way up.
+      warn "\nStopped by #{Signal.signame(e.signo)}. The file in progress is untouched; " \
+           're-run the same command to carry on.'
+      exit EXIT_SIGNAL_BASE + e.signo
     end
 
     no_commands do
       def gib(value) = value && (value * DiskGuard::GIB).to_i
+
+      # The only place a bad option combination (--fast without --allow-dynamic)
+      # surfaces. Anything raised once the run is under way is a real error, not
+      # a usage message.
+      def build_processor
+        guard = DiskGuard.new(min_free: gib(options[:min_free_gb]), abort_free: gib(options[:abort_free_gb]))
+        Processor.new(
+          replace: options[:replace],
+          target_level: options[:target_level],
+          profile: options[:profile],
+          tolerance: options[:tolerance],
+          cache: options[:cache],
+          dry_run: options[:dry_run],
+          fast_verify: options[:fast_verify],
+          resume: options[:resume],
+          fast: options[:fast],
+          local_stage: options[:local_stage],
+          allow_dynamic: options[:allow_dynamic],
+          allow_object_audio_loss: options[:allow_object_audio_loss],
+          keep_original_audio: options[:keep_original_audio],
+          limit_db: options[:limit_db],
+          min_gain: options[:min_gain],
+          allow_codec_change: options[:allow_codec_change],
+          disk_guard: guard
+        )
+      rescue ArgumentError, FileManagerError, SystemCallError => e
+        raise Thor::Error, "Error: #{e.message}"
+      end
 
       def run_locked(lock_file, &block)
         return yield unless lock_file
@@ -159,6 +172,8 @@ module Neutraliser
       rescue RunLock::Busy => e
         warn "Error: #{e.message}"
         exit EXIT_LOCK_BUSY
+      rescue RunLock::Unavailable => e
+        raise Thor::Error, "Error: #{e.message}"
       end
     end
 
@@ -174,6 +189,7 @@ module Neutraliser
     option :full, type: :boolean, default: false,
                   desc: 'Measure every title end to end (accurate, slow: reads each file in full) instead of sampling'
     def analyze_plex
+      PlexEnv.load
       analyzer = PlexAnalyzer.new(
         server_url: options[:server_url],
         token: options[:token],
@@ -197,6 +213,9 @@ module Neutraliser
     def report(path)
       raise Thor::Error, "Error: Path '#{path}' does not exist" unless File.exist?(path)
 
+      # A failed tag probe reads as "no tags", so without ffprobe every file would
+      # look untouched.
+      FFmpegWrapper.version
       report = Report.new(path)
       case options[:format]
       when 'tsv'
@@ -205,6 +224,8 @@ module Neutraliser
       when 'json' then puts report.to_json
       else puts report.summary
       end
+    rescue FFmpegNotFoundError => e
+      raise Thor::Error, "Error: #{e.message}"
     end
 
     desc 'import-manifest MANIFEST', "Mark files recorded as done in a retired neutralise.sh manifest.jsonl as already processed"

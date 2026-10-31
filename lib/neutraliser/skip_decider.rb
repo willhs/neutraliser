@@ -1,5 +1,4 @@
 require 'json'
-require 'pathname'
 
 module Neutraliser
   # The single authority for "is this file already normalised?".
@@ -31,10 +30,13 @@ module Neutraliser
     # being silently scaled. This is the ONE place that margin is applied.
     QUICK_SAMPLE_SAFETY_MARGIN_LU = 0.2
 
-    def initialize(root_dir, fast_verification: true)
+    # tolerance is this run's --tolerance: a file recorded as "close enough" under
+    # a looser one gets looked at again.
+    def initialize(root_dir, fast_verification: true, tolerance: nil)
       @path = File.join(root_dir, FILENAME)
       @entries = load
       @fast_verification = fast_verification
+      @tolerance = tolerance
     end
 
     # Cheap pre-check: has this exact file+profile been fully processed
@@ -58,21 +60,24 @@ module Neutraliser
 
       if quick_sample_verified?(file_path, profile, tolerance: tolerance)
         Neutraliser.logger.log '  Quick sample: file likely within tolerance'
-        mark_processed(file_path, profile)
+        mark_processed(file_path, profile, tolerance: tolerance)
         true
       else
         false
       end
     end
 
-    def mark_processed(file_path, profile)
-      key = tracker_key(file_path)
-      @entries[key] = {
+    # tolerance: set when the file was left alone for being close enough, rather
+    # than normalised, so that a stricter run isn't bound by this verdict.
+    def mark_processed(file_path, profile, tolerance: nil)
+      entry = {
         'size' => File.size(file_path),
         'mtime' => File.mtime(file_path).to_i,
         'profile' => profile[:name],
         'processed_at' => Time.now.utc.iso8601
       }
+      entry['tolerance'] = tolerance if tolerance
+      @entries[tracker_key(file_path)] = entry
       save
     end
 
@@ -92,7 +97,7 @@ module Neutraliser
 
       @neighbours ||= {}
       @neighbours[dir] ||= load_entries(File.join(dir, FILENAME))
-      @neighbours[dir][File.basename(file_path)]
+      @neighbours[dir][File.basename(file_path).scrub]
     end
 
     def entry_matches?(entry, file_path, profile)
@@ -102,6 +107,7 @@ module Neutraliser
       return false if File.size(file_path) != entry['size']
       return false if File.mtime(file_path).to_i != entry['mtime']
       return false if entry['profile'] != profile[:name]
+      return false if entry['tolerance'] && @tolerance && @tolerance < entry['tolerance']
 
       true
     end
@@ -124,10 +130,13 @@ module Neutraliser
       [tolerance - QUICK_SAMPLE_SAFETY_MARGIN_LU, 0.0].max
     end
 
+    # The path relative to the root, so the sidecar is portable. Scrubbed because
+    # a Latin-1 file name on an old NAS isn't valid UTF-8, and one such key in
+    # @entries would stop the whole sidecar ever saving as JSON.
     def tracker_key(file_path)
-      # Store relative path from the root dir so the sidecar is portable
-      root = File.expand_path(File.dirname(@path))
-      Pathname.new(File.expand_path(file_path)).relative_path_from(Pathname.new(root)).to_s
+      root = "#{File.expand_path(File.dirname(@path))}/"
+      expanded = File.expand_path(file_path)
+      (expanded.start_with?(root) ? expanded.delete_prefix(root) : expanded).scrub
     end
 
     def load = load_entries(@path)

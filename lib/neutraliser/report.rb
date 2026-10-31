@@ -52,18 +52,17 @@ module Neutraliser
     end
 
     def to_json(*)
-      files = rows.map { |row| { file: row.file, state: row.state, stamp: row.stamp&.to_h } }
+      files = rows.map { |row| { file: row.file.scrub, state: row.state, stamp: row.stamp&.to_h } }
       JSON.pretty_generate(summary: counts, files: files)
     end
 
     private
 
     def video_files(path)
-      return [File.expand_path(path)] if File.file?(path)
+      absolute = File.absolute_path(path)
+      return [absolute] if File.file?(absolute)
 
-      Dir.glob(File.join(path, '**', '*'))
-         .select { |file| Processor::SUPPORTED_FORMATS.include?(File.extname(file).downcase) }
-         .sort.map { |file| File.expand_path(file) }
+      VideoFiles.under(absolute).sort
     end
   end
 end

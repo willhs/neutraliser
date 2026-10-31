@@ -27,8 +27,10 @@ module Neutraliser
 
     # `dynamic: true` marks a compression profile: it implies allow-dynamic,
     # so loudnorm may squash dynamic range without the --allow-dynamic flag.
-    def self.custom_profile(target_lufs, name: 'custom', tp: -1.5, lra: 12.0, dynamic: false)
-      { name: name, lufs: target_lufs.to_f, tp: tp, lra: lra, dynamic: dynamic }
+    # The default name carries the target because stamps, sidecars and caches
+    # match on the name: a file done at -18 isn't done at -24.
+    def self.custom_profile(target_lufs, name: nil, tp: -1.5, lra: 12.0, dynamic: false)
+      { name: name || format('custom%+g', target_lufs), lufs: target_lufs.to_f, tp: tp, lra: lra, dynamic: dynamic }
     end
 
     def self.list_profiles

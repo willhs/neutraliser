@@ -47,7 +47,8 @@ module Neutraliser
         input_tp: hash['input_tp'].to_f,
         input_lra: hash['input_lra'].to_f,
         input_thresh: hash['input_thresh'].to_f,
-        target_offset: hash['target_offset'].to_f
+        target_offset: hash['target_offset'].to_f,
+        silent: hash['silent'] == true
       )
     end
 
@@ -89,7 +90,7 @@ module Neutraliser
     end
 
     def needs_normalization?(target_profile, tolerance: 1.0)
-      return false if already_at_target?
+      return false if already_at_target? || silent?
 
       (input_i - target_profile[:lufs]).abs > tolerance
     end
@@ -97,13 +98,14 @@ module Neutraliser
     # Sidecar cache representation — the single place that knows which fields
     # are persisted.
     def to_cache_h
-      {
+      fields = {
         'input_i' => input_i,
         'input_tp' => input_tp,
         'input_lra' => input_lra,
         'input_thresh' => input_thresh,
         'target_offset' => target_offset
       }
+      silent? ? fields.merge('silent' => true) : fields
     end
 
     def ==(other)

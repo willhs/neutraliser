@@ -98,6 +98,20 @@ module Neutraliser
     # with -movflags +use_metadata_tags.
     MP4_FAMILY = %w[.mp4 .m4v .mov].freeze
 
+    # Container tags the muxer writes itself, which say nothing about the film.
+    MP4_TECHNICAL_TAGS = %w[major_brand minor_version compatible_brands encoder creation_time].freeze
+
+    # Disposition flags a filtered stream loses and has to be given back. Named,
+    # not copied from ffprobe, because ffprobe also reports flags that older
+    # ffmpegs refuse on the command line. `default` is handled on its own.
+    PRESERVED_DISPOSITIONS = %w[dub original comment lyrics karaoke forced hearing_impaired visual_impaired
+                                clean_effects captions descriptions].freeze
+
+    NO_STREAMS = { video: 0, audio: 0, subtitle: 0, attachment: 0, chapter: 0 }.freeze
+
+    # Seconds a subprocess gets to exit after SIGTERM before it is killed.
+    STOP_GRACE_S = 2
+
     # Preferred fallback codec per container when source codec can't be matched
     CONTAINER_FALLBACKS = {
       '.mkv' => 'flac',
@@ -111,8 +125,9 @@ module Neutraliser
     }.freeze
 
     # input_args are inserted before -i (e.g. ["-headers", "X-Plex-Token: ...\r\n"]
-    # for authenticating a remote stream without ever putting the credential
-    # into the URL, where it would land in argv and thus `ps` output).
+    # for authenticating a remote stream). That keeps the credential out of the
+    # URL, and so out of ffmpeg's logs, but it is still in argv and visible to
+    # `ps` for the length of the run: ffmpeg has no other way to take a header.
     # duration, when given, caps how much of the input is read (-t) — useful
     # for a fast preview measurement of a remote stream rather than a full
     # pass.
@@ -136,6 +151,21 @@ module Neutraliser
       raise FFmpegError.from_run('Measurement', stderr, status) unless status.success?
 
       Measurement.from_loudnorm_json(parse_loudnorm_json(stderr))
+    end
+
+    # [major, minor] of the installed ffmpeg, or nil for a build with no release
+    # number (a git snapshot). Raises FFmpegNotFoundError when ffmpeg or ffprobe
+    # isn't on PATH, so a run can say so once, up front.
+    def self.version
+      output = %w[ffmpeg ffprobe].map do |tool|
+        Open3.capture2e(tool, '-version').first
+      rescue Errno::ENOENT
+        raise FFmpegNotFoundError, "#{tool} not found on PATH. Install FFmpeg (brew install ffmpeg, apt install ffmpeg) " \
+                                   'or use the Docker image.'
+      end.first
+
+      match = output.scrub.match(/\Affmpeg version n?(\d+)\.(\d+)/)
+      match && [match[1].to_i, match[2].to_i]
     end
 
     # Probes a file's duration via ffprobe, timeboxed like every other
@@ -305,11 +335,12 @@ module Neutraliser
         build_stamp(profile, type, codec_decision, gain: gain, measured: measured_data)
       end
       container_opts = container_args(container, output_path)
+      mdta = mp4_mdta_safe?(input_path, container)
 
       cmd = build_complete_ffmpeg_command(
         input_path, output_path, audio_filter,
         codec_args, audio_tracks, stream_counts(input_path),
-        tags: stamp_args(stamp_for.call(predicted_type), container, primary_track[:index]),
+        tags: stamp_args(stamp_for.call(predicted_type), container, primary_track[:index], mdta: mdta),
         keep_original: keep_original, container_opts: container_opts
       )
 
@@ -318,7 +349,7 @@ module Neutraliser
       # Rare: loudnorm disagreed with the prediction. A stream-copy remux
       # corrects the record rather than leave a tag that lies.
       if %w[Linear Dynamic].include?(normalization_type) && normalization_type != predicted_type
-        restamp(output_path, stamp_for.call(normalization_type), container)
+        restamp(output_path, stamp_for.call(normalization_type), container, primary_track[:index], mdta: mdta)
       end
 
       codec_decision = codec_decision.merge(normalization_type: normalization_type)
@@ -345,7 +376,7 @@ module Neutraliser
       cmd = build_complete_ffmpeg_command(
         input_path, output_path, loudnorm_filter,
         codec_args, audio_tracks, stream_counts(input_path),
-        tags: stamp_args(stamp, container, primary_track[:index]),
+        tags: stamp_args(stamp, container, primary_track[:index], mdta: mp4_mdta_safe?(input_path, container)),
         keep_original: keep_original, container_opts: container_args(container, output_path)
       )
 
@@ -380,33 +411,30 @@ module Neutraliser
       stream&.dig('tags')
     end
 
-    # Counts video and subtitle streams so build_complete_ffmpeg_command can
-    # emit an explicit -map_metadata:s:v:N / :s:s:N pair for each one. Once
-    # the audio loop below issues any stream-scoped -map_metadata, ffmpeg's
-    # implicit "auto-copy every output stream's metadata from its matching
-    # input stream" behaviour is disabled for the whole command — video and
-    # subtitle streams need the same explicit treatment or their language/
-    # title tags come out empty despite being stream-copied. Best-effort:
-    # a failed/unparseable probe just means no video/subtitle metadata
-    # mappings are added, not a hard failure of the normalization itself.
+    # Counts each kind of stream, plus chapters. build_complete_ffmpeg_command
+    # uses it to emit an explicit -map_metadata:s:v:N / :s:s:N / :s:t:N pair for
+    # each stream. Once the audio loop below issues any stream-scoped
+    # -map_metadata, ffmpeg's implicit "auto-copy every output stream's metadata
+    # from its matching input stream" behaviour is disabled for the whole
+    # command — other streams need the same explicit treatment or their tags
+    # come out empty despite being stream-copied, and an attachment with no
+    # filename tag stops Matroska writing at all. FileManager.output_mismatch
+    # compares source and output with it. Best-effort: a failed probe reads as
+    # nothing there, so no extra mappings, and verification can't pass an output
+    # it couldn't count unless the source couldn't be counted either.
     def self.stream_counts(input_path)
-      cmd = [
-        'ffprobe', '-v', 'error', '-select_streams', 'v',
-        '-show_entries', 'stream=index', '-of', 'csv=p=0', input_path
-      ]
-      video_stdout, _stderr, status = execute_with_timeout(cmd, PROBE_TIMEOUT, 'Video stream count')
-      video_count = status.success? ? video_stdout.each_line.count { |l| !l.strip.empty? } : 0
+      cmd = ['ffprobe', '-v', 'error', '-show_entries', 'stream=codec_type:chapter=id', '-of', 'json', input_path]
+      stdout, _stderr, status = execute_with_timeout(cmd, PROBE_TIMEOUT, 'Stream count')
+      return NO_STREAMS unless status.success?
 
-      cmd = [
-        'ffprobe', '-v', 'error', '-select_streams', 's',
-        '-show_entries', 'stream=index', '-of', 'csv=p=0', input_path
-      ]
-      subtitle_stdout, _stderr, status = execute_with_timeout(cmd, PROBE_TIMEOUT, 'Subtitle stream count')
-      subtitle_count = status.success? ? subtitle_stdout.each_line.count { |l| !l.strip.empty? } : 0
-
-      { video: video_count, subtitle: subtitle_count }
+      data = JSON.parse(stdout)
+      kinds = Array(data['streams']).map { |stream| stream['codec_type'] }.tally
+      {
+        video: kinds.fetch('video', 0), audio: kinds.fetch('audio', 0), subtitle: kinds.fetch('subtitle', 0),
+        attachment: kinds.fetch('attachment', 0), chapter: Array(data['chapters']).length
+      }
     rescue StandardError
-      { video: 0, subtitle: 0 }
+      NO_STREAMS
     end
 
     # Subtitle streams this ffmpeg has no codec for ("Subtitle: none"), each
@@ -440,7 +468,7 @@ module Neutraliser
     def self.detect_audio_tracks(input_path)
       cmd = [
         'ffprobe', '-v', 'error', '-select_streams', 'a',
-        '-show_entries', 'stream=index,codec_name,profile,sample_rate,channels,bit_rate:stream_tags=title,language:stream_disposition=default',
+        '-show_entries', 'stream=index,codec_name,profile,sample_rate,channels,bit_rate:stream_tags=title,language:stream_disposition',
         '-of', 'json', input_path
       ]
 
@@ -476,6 +504,7 @@ module Neutraliser
           title: stream.dig('tags', 'title'),
           language: stream.dig('tags', 'language')&.downcase,
           default: stream.dig('disposition', 'default') == 1,
+          dispositions: PRESERVED_DISPOSITIONS.select { |flag| stream.dig('disposition', flag) == 1 },
           bit_rate: parse_bit_rate(stream['bit_rate']),
           sample_rate: stream['sample_rate']&.to_i
         }
@@ -505,8 +534,8 @@ module Neutraliser
 
     def self.execute_with_timeout(cmd, timeout_seconds, operation_name)
       # Use Open3.popen3 with manual timeout to avoid thread corruption from Timeout.timeout
-      stdout_str = ''
-      stderr_str = ''
+      stdout_str = +''
+      stderr_str = +''
       status = nil
 
       Open3.popen3(*cmd) do |stdin, stdout, stderr, wait_thr|
@@ -520,25 +549,13 @@ module Neutraliser
         until stdout_eof && stderr_eof
           elapsed = Time.now - start_time
           if elapsed > timeout_seconds
-            # Timeout - kill the process
-            begin
-              Process.kill('TERM', wait_thr.pid)
-            rescue StandardError
-              nil
-            end
-            sleep(1)
-            begin
-              Process.kill('KILL', wait_thr.pid)
-            rescue StandardError
-              nil
-            end
             # Don't guess at corruption. The overwhelmingly common cause is a
             # large file on a slow or contended mount, and telling someone
             # their media is broken when it isn't sends them chasing ghosts.
             raise FFmpegTimeoutError,
                   "#{operation_name} timed out after #{timeout_seconds}s. Large files on network mounts " \
                   '(or several jobs running at once) can legitimately need longer — raise the limit with ' \
-                  'NEUTRALISER_ANALYSIS_TIMEOUT=<seconds>. If it times out with a generous limit and the ' \
+                  "#{timeout_variable(operation_name)}=<seconds>. If it times out with a generous limit and the " \
                   'file plays elsewhere, then suspect the file itself.'
           end
 
@@ -563,9 +580,42 @@ module Neutraliser
         end
 
         status = wait_thr.value
+      ensure
+        # On a timeout, and on a signal or any other exception raised in this
+        # block. Open3 would otherwise wait for the child, and ffmpeg ignores
+        # SIGPIPE, so it would finish its encode while `docker stop` ran out of
+        # patience and killed us, orphaning the temp output.
+        stop_process(wait_thr)
       end
 
-      [stdout_str, stderr_str, status]
+      # Media tags and file names can hold any bytes. Everything downstream
+      # (JSON.parse, regexes, manifest entries) needs valid UTF-8.
+      [valid_utf8(stdout_str), valid_utf8(stderr_str), status]
+    end
+
+    def self.stop_process(wait_thr)
+      return unless wait_thr.alive?
+
+      Process.kill('TERM', wait_thr.pid)
+      return if wait_thr.join(STOP_GRACE_S)
+
+      Process.kill('KILL', wait_thr.pid)
+      wait_thr.join
+    rescue Errno::ESRCH
+      nil
+    end
+
+    def self.valid_utf8(bytes)
+      bytes.force_encoding(Encoding::UTF_8).scrub
+    end
+
+    def self.timeout_variable(operation_name)
+      case operation_name
+      when 'Loudness measurement' then 'NEUTRALISER_ANALYSIS_TIMEOUT'
+      when 'Normalization', 'Restamp' then 'NEUTRALISER_NORMALIZATION_TIMEOUT'
+      when 'Quick loudness sample', 'Profile slice' then 'NEUTRALISER_QUICK_TIMEOUT'
+      else 'NEUTRALISER_PROBE_TIMEOUT'
+      end
     end
 
     def self.parse_loudnorm_json(stderr_output)
@@ -747,23 +797,50 @@ module Neutraliser
 
     # The stamp goes on the normalised audio stream and on the container.
     # MP4/MOV only keep arbitrary keys at container level, and only with
-    # use_metadata_tags; their stream-level copy is silently dropped.
-    def self.stamp_args(stamp, container, output_index = 0)
+    # use_metadata_tags; their stream-level copy is silently dropped. mdta: false
+    # leaves that flag off, and the muxer then drops the stamp altogether.
+    def self.stamp_args(stamp, container, output_index = 0, mdta: true)
       args = stamp.to_tags.flat_map do |key, value|
         ["-metadata:s:a:#{output_index}", "#{key}=#{value}", '-metadata', "#{key}=#{value}"]
       end
-      args += ['-movflags', '+use_metadata_tags'] if MP4_FAMILY.include?(container)
+      args += ['-movflags', '+use_metadata_tags'] if mdta && MP4_FAMILY.include?(container)
       args
+    end
+
+    # use_metadata_tags is the only way to get a custom tag into an MP4, but it
+    # writes every tag as an mdta key instead of iTunes' ilst atoms, and cover art
+    # lives only in ilst. So on a file with a cover or descriptive tags, the
+    # stamp would cost the cover and hide the tags from anything reading iTunes
+    # atoms. Least lossy wins: those files keep their atoms and the sidecar holds
+    # their record, as for AVI. A file already stamped this way has no atoms left
+    # to lose. A failed probe answers no: the record can be lost, the tags can't
+    # be brought back.
+    def self.mp4_mdta_safe?(input_path, container)
+      return true unless MP4_FAMILY.include?(container)
+
+      cmd = ['ffprobe', '-v', 'error', '-show_entries', 'format_tags:stream_disposition=attached_pic', '-of', 'json', input_path]
+      stdout, _stderr, status = execute_with_timeout(cmd, PROBE_TIMEOUT, 'MP4 tag probe')
+      return false unless status.success?
+
+      data = JSON.parse(stdout)
+      return false if Array(data['streams']).any? { |stream| stream.dig('disposition', 'attached_pic') == 1 }
+
+      tags = (data.dig('format', 'tags') || {}).keys.map(&:downcase)
+      tags.any? { |tag| tag.start_with?('neutraliser_') } || (tags - MP4_TECHNICAL_TAGS).empty?
+    rescue FFmpegTimeoutError
+      raise
+    rescue StandardError
+      false
     end
 
     # Rewrites only the stamp, stream-copying everything else. No
     # stream-scoped -map_metadata here, so ffmpeg's default per-stream
     # metadata copy stays on.
-    def self.restamp(path, stamp, container = File.extname(path).downcase)
+    def self.restamp(path, stamp, container = File.extname(path).downcase, output_index = 0, mdta: true)
       temp = File.join(File.dirname(path), ".restamp-#{File.basename(path)}")
       cmd = [
         'ffmpeg', '-hide_banner', '-v', 'error', '-y', '-i', path,
-        '-map', '0', '-c', 'copy', '-map_metadata', '0', *stamp_args(stamp, container),
+        '-map', '0', '-c', 'copy', '-map_metadata', '0', *stamp_args(stamp, container, output_index, mdta: mdta),
         *container_args(container, temp), temp
       ]
       _, stderr, status = execute_with_timeout(cmd, NORMALIZATION_TIMEOUT, 'Restamp')
@@ -787,7 +864,7 @@ module Neutraliser
       cmd = [
         'ffmpeg', '-hide_banner', '-y', '-i', input_path,
         # Video stream - always copy
-        '-map', '0:v', '-c:v', 'copy'
+        '-map', '0:v?', '-c:v', 'copy'
       ]
 
       # Output audio order matches input order: the primary track (the
@@ -834,13 +911,15 @@ module Neutraliser
       source_for_output.each do |output_index, track|
         cmd += ["-map_metadata:s:a:#{output_index}", "0:s:a:#{track[:index]}"]
       end
+      # A filtered stream carries no disposition of its own, so every flag the
+      # source track had (hearing_impaired, forced ...) has to be given back.
+      flags = Array(primary[:dispositions])
+      flags = ['default', *flags] if keep_original || primary[:default]
+      cmd += ["-disposition:a:#{normalised_output}", flags.join('+')] if flags.any?
       if keep_original
         cmd += ["-map_metadata:s:a:#{kept_output}", "0:s:a:#{primary[:index]}",
                 "-metadata:s:a:#{kept_output}", "title=#{original_title(primary)}",
-                "-disposition:a:#{normalised_output}", 'default', "-disposition:a:#{kept_output}", '0']
-      elsif primary[:default]
-        # A filtered stream carries no disposition of its own.
-        cmd += ["-disposition:a:#{normalised_output}", 'default']
+                "-disposition:a:#{kept_output}", '0']
       end
       stream_counts[:video].to_i.times do |i|
         cmd += ["-map_metadata:s:v:#{i}", "0:s:v:#{i}"]
@@ -848,8 +927,13 @@ module Neutraliser
       stream_counts[:subtitle].to_i.times do |i|
         cmd += ["-map_metadata:s:s:#{i}", "0:s:s:#{i}"]
       end
+      stream_counts[:attachment].to_i.times do |i|
+        cmd += ["-map_metadata:s:t:#{i}", "0:s:t:#{i}"]
+      end
       cmd += [
         '-map', '0:s?', '-c:s', 'copy',
+        # Attachments are mostly the fonts styled subtitles need to render.
+        '-map', '0:t?', '-c:t', 'copy',
         *tags,
         *container_opts,
         output_path
@@ -879,11 +963,15 @@ module Neutraliser
 
     # The real public surface is measure_loudness, apply_normalization,
     # apply_normalization_single_pass, quick_loudness_sample,
-    # detect_audio_tracks, probe_audio_profile_mid_file, read_stamp and probe_duration —
+    # detect_audio_tracks, probe_audio_profile_mid_file, read_stamp, stream_counts,
+    # version and probe_duration —
     # everything else is an implementation detail and made genuinely private here (see the NOTE
     # above `execute_with_timeout` on why the old `private` keyword didn't
     # do this).
     private_class_method :execute_with_timeout,
+                         :stop_process,
+                         :valid_utf8,
+                         :timeout_variable,
                          :parse_loudnorm_json,
                          :parse_audio_tracks_json,
                          :parse_profile,
@@ -904,6 +992,7 @@ module Neutraliser
                          :container_args,
                          :output_container,
                          :stamp_args,
+                         :mp4_mdta_safe?,
                          :restamp,
                          :primary_stream_tags,
                          :build_complete_ffmpeg_command,

@@ -9,7 +9,7 @@ module Neutraliser
     def initialize(enabled:, staging_dir: STAGING_DIR)
       @enabled = enabled
       @staging_dir = staging_dir
-      FileUtils.mkdir_p(@staging_dir) if @enabled
+      prepare_staging_dir if @enabled
     end
 
     # Stages `file_path` in (or passes it through untouched when staging is
@@ -26,14 +26,16 @@ module Neutraliser
     end
 
     # Owns the replace x staging commit matrix: staged output always goes
-    # back via stage_out+cleanup; unstaged output is atomically replaced in
-    # place, or - in copy mode - left where it already was written.
+    # back via stage_out+cleanup; unstaged output is renamed from its temp name
+    # over the original, or onto the copy's own name, once it has been verified.
     def commit(output_path, destination, replace:)
       if @enabled
         stage_out(output_path, destination)
         cleanup(output_path)
       elsif replace
         FileManager.atomic_replace(output_path, destination)
+      else
+        FileManager.publish(output_path, destination)
       end
     end
 
@@ -58,6 +60,18 @@ module Neutraliser
 
     def cleanup(local_path)
       FileUtils.rm_f(local_path)
+    end
+
+    private
+
+    # The default lives under a shared /tmp on Linux. Whoever controls this
+    # directory can swap the working copy, and we'd then publish their file
+    # over the original.
+    def prepare_staging_dir
+      FileUtils.mkdir_p(@staging_dir, mode: 0o700)
+      raise FileManagerError, "staging directory #{@staging_dir} is not owned by this user" unless File.owned?(@staging_dir)
+
+      File.chmod(0o700, @staging_dir)
     end
   end
 end

@@ -6,25 +6,32 @@ require_relative 'skip_decider'
 
 module Neutraliser
   class Processor
-    SUPPORTED_FORMATS = %w[.mp4 .mkv .avi .mov .wmv .flv .webm .m4v].freeze
+    SUPPORTED_FORMATS = VideoFiles::EXTENSIONS
     MANIFEST_FILENAME = '.neutraliser-run-manifest.jsonl'.freeze
+    NORMALIZED_SUFFIX = '_normalized'.freeze
+    # Atmos/DTS:X profile names arrived in FFmpeg 7.1. Older ones report none.
+    OBJECT_AUDIO_MIN_FFMPEG = [7, 1].freeze
     FAST_REQUIRES_DYNAMIC_MESSAGE = '--fast is single-pass loudnorm and always compresses dynamics; ' \
                                     'add --allow-dynamic (or use the night profile) to accept that'.freeze
     LIMIT_NEEDS_CONSTANT_GAIN_MESSAGE = '--limit-db adds a peak limiter to constant gain; ' \
                                         'it cannot combine with --allow-dynamic, --fast or the night profile'.freeze
-    TERMINAL_RESUME_STATES = %w[done skipped].freeze
+    # The only manifest records --resume takes as the last word on a file. Every
+    # other outcome depends on something that can change between runs (a flag,
+    # free space, the ffmpeg version, or a dry run that did nothing) and goes
+    # back through SkipDecider, which costs one probe.
+    RESUME_FINAL_REASONS = %w[normalized already_processed no_audio_track unsupported_format].freeze
 
     def initialize(replace: false, target_level: nil, profile: 'livingroom', tolerance: 1.0, cache: true,
-                   dry_run: false, fast_verify: true, resume: false, fast: false, local_stage: false,
+                   dry_run: false, fast_verify: false, resume: false, fast: false, local_stage: false,
                    allow_dynamic: false, allow_object_audio_loss: false, keep_original_audio: false,
                    limit_db: 0.0, min_gain: nil, allow_codec_change: false, disk_guard: nil)
       @replace = replace
+      base_profile = profile.is_a?(Hash) ? profile : Profiles.get_profile(profile)
       @profile = if target_level
-                   Profiles.custom_profile(target_level.to_f)
-                 elsif profile.is_a?(Hash)
-                   profile
+                   Profiles.custom_profile(target_level.to_f, tp: base_profile[:tp], lra: base_profile[:lra],
+                                                              dynamic: base_profile[:dynamic])
                  else
-                   Profiles.get_profile(profile)
+                   base_profile
                  end
       @tolerance = tolerance
       @cache_enabled = cache
@@ -48,10 +55,16 @@ module Neutraliser
     end
 
     def process(path)
+      # Absolute, because ffmpeg reads a relative "Alien: Covenant.mkv" as a URL
+      # with the protocol "Alien" (and "http:x.mkv" or "concat:a|b" as the real
+      # thing), and never takes one starting with a dash for an option.
+      path = File.absolute_path(path)
+      warn_if_object_audio_undetectable
+
       if File.directory?(path)
         process_directory(path)
       elsif File.file?(path)
-        @skip_decider = SkipDecider.new(File.dirname(path), fast_verification: @fast_verify)
+        @skip_decider = new_skip_decider(File.dirname(path))
         results, aborted = run_files([path])
         summarize_results(found: 1, queued: 1, resumed: 0, manifest_path: nil, results: results, aborted: aborted)
       else
@@ -70,10 +83,32 @@ module Neutraliser
       Neutraliser.logger.log(message)
     end
 
+    def new_skip_decider(root)
+      SkipDecider.new(root, fast_verification: @fast_verify, tolerance: @tolerance)
+    end
+
+    # Without a version that can name them, an Atmos track looks like plain
+    # E-AC3 and would be flattened, which is the one thing this tool promises
+    # not to do silently. Says so once per run, and turns a "the name says Atmos"
+    # hint from a note into a skip (see check_object_audio).
+    def warn_if_object_audio_undetectable
+      version = FFmpegWrapper.version
+      return if version.nil? || (version <=> OBJECT_AUDIO_MIN_FFMPEG) >= 0
+
+      @object_audio_undetectable = true
+      return if @allow_object_audio_loss
+
+      log "Warning: ffmpeg #{version.join('.')} can't recognise Atmos or DTS:X (that needs 7.1+). Files named as such " \
+          'are skipped, but any other E-AC3 Atmos track would be flattened to plain channels without notice. ' \
+          'Upgrade ffmpeg or use the Docker image.'
+    end
+
     def process_directory(dir_path)
       video_files = find_video_files(dir_path)
       manifest_path = manifest_path_for(dir_path)
-      @skip_decider = SkipDecider.new(dir_path, fast_verification: @fast_verify)
+      # A dry run decides nothing, so it leaves no record for --resume to trust.
+      written_manifest = manifest_path unless @dry_run
+      @skip_decider = new_skip_decider(dir_path)
 
       if video_files.empty?
         log "No video files found in '#{dir_path}'"
@@ -81,7 +116,7 @@ module Neutraliser
           found: 0,
           queued: 0,
           resumed: 0,
-          manifest_path: manifest_path,
+          manifest_path: written_manifest,
           results: []
         )
       end
@@ -95,22 +130,22 @@ module Neutraliser
           found: video_files.length,
           queued: 0,
           resumed: resumed_count,
-          manifest_path: manifest_path,
+          manifest_path: written_manifest,
           results: []
         )
       end
 
       files_to_process.each do |file_path|
-        append_manifest_entry(manifest_path, file: file_path, status: 'queued')
+        append_manifest_entry(written_manifest, file: file_path, status: 'queued')
       end
 
-      results, aborted = run_files(files_to_process, manifest_path: manifest_path)
+      results, aborted = run_files(files_to_process, manifest_path: written_manifest)
 
       summary = summarize_results(
         found: video_files.length,
         queued: files_to_process.length,
         resumed: resumed_count,
-        manifest_path: manifest_path,
+        manifest_path: written_manifest,
         results: results,
         aborted: aborted
       )
@@ -151,7 +186,7 @@ module Neutraliser
 
       manifest_entries = load_manifest_entries(manifest_path)
       pending_files = video_files.reject do |file_path|
-        resume_terminal?(manifest_entries[File.expand_path(file_path)])
+        resume_terminal?(manifest_entries[File.expand_path(file_path).scrub])
       end
 
       resumed_count = video_files.length - pending_files.length
@@ -160,12 +195,11 @@ module Neutraliser
       [pending_files, resumed_count]
     end
 
-    # An object-audio skip is only final while the loss is refused: resuming
-    # with --allow-object-audio-loss must pick those files back up.
+    # Only a final outcome, reached by a run asking for the same thing.
     def resume_terminal?(entry)
-      return false unless entry && TERMINAL_RESUME_STATES.include?(entry['status'])
+      return false unless entry && RESUME_FINAL_REASONS.include?(entry['reason'])
 
-      !(@allow_object_audio_loss && entry['reason'] == 'object_audio')
+      entry['profile'] == @profile[:name] && entry['target_lufs'] == @profile[:lufs] && entry['replace'] == @replace
     end
 
     def load_manifest_entries(manifest_path)
@@ -204,15 +238,18 @@ module Neutraliser
     end
 
     def append_manifest_entry(manifest_path, file:, status:, reason: nil, message: nil, normalization_type: nil)
+      return unless manifest_path
+
       entry = {
         timestamp: Time.now.utc.iso8601,
-        file: File.expand_path(file),
+        file: File.expand_path(file).scrub,
         status: status,
         profile: @profile[:name],
-        target_lufs: @profile[:lufs]
+        target_lufs: @profile[:lufs],
+        replace: @replace
       }
       entry[:reason] = reason.to_s if reason
-      entry[:message] = message if message && !message.empty?
+      entry[:message] = message.scrub if message && !message.empty?
       entry[:normalization_type] = normalization_type if normalization_type
 
       File.open(manifest_path, 'a') { |manifest| manifest.puts(JSON.generate(entry)) }
@@ -260,18 +297,22 @@ module Neutraliser
       summary[:not_writable_dirs].each { |dir| log "  #{dir}" }
     end
 
+    # Everything per-file happens under these rescues, so one bad file (a name
+    # Ruby chokes on, a folder that vanished) is that file's failure, not the end
+    # of a library run. Only a disk-guard abort is meant to stop the run.
     def process_file(file_path)
       unless video_file?(file_path)
         log "Skipping '#{file_path}' - not a supported video format"
         return file_result(file_path, status: :skipped, reason: :unsupported_format)
       end
 
-      if @skip_decider&.already_processed?(file_path, @profile)
+      if already_handled?(file_path)
         log '  Already processed, skipping'
         return file_result(file_path, status: :skipped, reason: :already_processed)
       end
 
       log "Processing: #{file_path}"
+      @source_fingerprint = FileManager.fingerprint(file_path)
 
       preflight_failure = check_writable(file_path)
       return preflight_failure if preflight_failure
@@ -279,74 +320,112 @@ module Neutraliser
       disk_skip = check_disk_space(file_path)
       return disk_skip if disk_skip
 
-      begin
-        subtitle_failure = check_subtitles(file_path)
-        return subtitle_failure if subtitle_failure
+      subtitle_failure = check_subtitles(file_path)
+      return subtitle_failure if subtitle_failure
 
-        @stager.with_working_copy(file_path) do |working_path|
-          movie = FFMPEG::Movie.new(working_path)
+      @stager.with_working_copy(file_path) do |working_path|
+        movie = FFMPEG::Movie.new(working_path)
 
-          unless movie.audio_stream
-            log '  No audio track found, skipping'
-            next file_result(file_path, status: :skipped, reason: :no_audio_track)
+        unless movie.audio_stream
+          unless movie.valid?
+            message = 'ffprobe could not read this file; it may be corrupt or still being written'
+            log "  Unreadable: #{message}"
+            next file_result(file_path, status: :failed, reason: :unreadable, message: message)
           end
 
-          audio_tracks = FFmpegWrapper.detect_audio_tracks(working_path)
-          # Not stamped in the sidecar: a later --allow-object-audio-loss run
-          # (or an ffmpeg that can keep the objects) must still see the file.
-          object_audio_skip = check_object_audio(file_path, working_path, FFmpegWrapper.primary_audio_track(audio_tracks))
-          next object_audio_skip if object_audio_skip
-
-          codec_skip = check_codec_change(file_path, working_path, FFmpegWrapper.primary_audio_track(audio_tracks))
-          next codec_skip if codec_skip
-
-          result = if @fast
-                     process_file_fast(file_path, working_path, audio_tracks)
-                   else
-                     process_file_two_pass(file_path, working_path, audio_tracks)
-                   end
-
-          # A dry run must never stamp the sidecar. Its :dry_run result is
-          # status :done ("we handled this file"), but nothing was written —
-          # marking it processed would make the real run that follows skip
-          # the file as already normalised, silently leaving it untouched.
-          @skip_decider&.mark_processed(file_path, @profile) if !@dry_run && %i[done skipped].include?(result[:status])
-
-          result
+          log '  No audio track found, skipping'
+          next file_result(file_path, status: :skipped, reason: :no_audio_track)
         end
-      rescue FFmpegTimeoutError => e
-        # Retryable: the subprocess ran out of time, not evidence the file
-        # (or the output already committed) is bad.
-        log "  Timed out processing file: #{e.message}"
-        file_result(file_path, status: :failed, reason: :timeout, message: e.message)
-      rescue OutputVerificationError => e
-        # The one case where the original must not be replaced - surfaced
-        # distinctly so the manifest doesn't read as "same as any other
-        # failure" when the real story is "output looked corrupt, original
-        # is untouched".
-        log "  Output verification failed: #{e.message}"
-        file_result(file_path, status: :failed, reason: :output_verification_failed, message: e.message)
-      rescue FFmpegError => e
-        # Non-retryable ffmpeg/ffprobe failure (bad container, unsupported
-        # codec, failed probe) - distinct from a timeout so the manifest
-        # doesn't conflate "try again" with "this file is broken". The error
-        # names the kinds it can recognise (:not_writable,
-        # :unsupported_subtitle); the rest stay :ffmpeg_error.
-        log "  FFmpeg error processing file: #{e.message}"
-        file_result(file_path, status: :failed, reason: e.reason, message: e.message)
-      rescue FileManagerError => e
-        log "  File management error processing file: #{e.message}"
-        file_result(file_path, status: :failed, reason: :file_manager_error, message: e.message)
-      rescue StandardError => e
-        log "  Error processing file: #{e.message}"
-        file_result(file_path, status: :failed, reason: :processing_error, message: e.message)
+
+        audio_tracks = FFmpegWrapper.detect_audio_tracks(working_path)
+        # Not stamped in the sidecar: a later --allow-object-audio-loss run
+        # (or an ffmpeg that can keep the objects) must still see the file.
+        object_audio_skip = check_object_audio(file_path, working_path, FFmpegWrapper.primary_audio_track(audio_tracks))
+        next object_audio_skip if object_audio_skip
+
+        codec_skip = check_codec_change(file_path, working_path, FFmpegWrapper.primary_audio_track(audio_tracks))
+        next codec_skip if codec_skip
+
+        result = if @fast
+                   process_file_fast(file_path, working_path, audio_tracks)
+                 else
+                   process_file_two_pass(file_path, working_path, audio_tracks)
+                 end
+
+        record_outcome(file_path, result)
+
+        result
+      end
+    rescue DiskGuard::Abort
+      raise
+    rescue FFmpegTimeoutError => e
+      # Retryable: the subprocess ran out of time, not evidence the file
+      # (or the output already committed) is bad.
+      log "  Timed out processing file: #{e.message}"
+      file_result(file_path, status: :failed, reason: :timeout, message: e.message)
+    rescue OutputVerificationError => e
+      # The one case where the original must not be replaced - surfaced
+      # distinctly so the manifest doesn't read as "same as any other
+      # failure" when the real story is "output looked corrupt, original
+      # is untouched".
+      log "  Output verification failed: #{e.message}"
+      file_result(file_path, status: :failed, reason: :output_verification_failed, message: e.message)
+    rescue SourceChangedError => e
+      log "  Source changed: #{e.message}"
+      file_result(file_path, status: :failed, reason: :source_changed, message: e.message)
+    rescue FFmpegError => e
+      # Non-retryable ffmpeg/ffprobe failure (bad container, unsupported
+      # codec, failed probe) - distinct from a timeout so the manifest
+      # doesn't conflate "try again" with "this file is broken". The error
+      # names the kinds it can recognise (:not_writable,
+      # :unsupported_subtitle); the rest stay :ffmpeg_error.
+      log "  FFmpeg error processing file: #{e.message}"
+      file_result(file_path, status: :failed, reason: e.reason, message: e.message)
+    rescue FileManagerError => e
+      log "  File management error processing file: #{e.message}"
+      file_result(file_path, status: :failed, reason: :file_manager_error, message: e.message)
+    rescue StandardError => e
+      log "  Error processing file: #{e.message}"
+      file_result(file_path, status: :failed, reason: :processing_error, message: e.message)
+    end
+
+    # With --replace only the file itself counts. Without it, a finished
+    # `_normalized` copy means the job was already done.
+    def already_handled?(file_path)
+      return false unless @skip_decider
+      return true if @skip_decider.already_processed?(file_path, @profile)
+      return false if @replace
+
+      copy = generate_output_path(file_path)
+      File.exist?(copy) && @skip_decider.already_processed?(copy, @profile)
+    end
+
+    # The sidecar says "nothing more to do here", so it only hears a verdict that
+    # holds for later runs, about the file that holds the result:
+    # - a normalised copy is recorded as the copy, so a later --replace still
+    #   does the original;
+    # - close enough is recorded with its tolerance, so a stricter run looks again;
+    # - peak-limited isn't recorded, because --limit-db or --allow-dynamic can
+    #   change it, and the cached measurement makes re-deciding cheap;
+    # - a dry run isn't recorded, because it did nothing.
+    def record_outcome(file_path, result)
+      return if @skip_decider.nil? || @dry_run
+
+      case result[:reason]
+      when :normalized
+        @skip_decider.mark_processed(@replace ? file_path : generate_output_path(file_path), @profile)
+      when :within_tolerance
+        @skip_decider.mark_processed(file_path, @profile, tolerance: @tolerance)
       end
     end
 
     def process_file_two_pass(original_path, working_path, audio_tracks)
       measurement = analyze_loudness_for_path(working_path, original_path)
 
-      if peak_limited?(measurement)
+      if measurement.silent?
+        log '  Primary audio track has no measurable level (silent), skipping'
+        file_result(original_path, status: :skipped, reason: :silent)
+      elsif peak_limited?(measurement)
         log "  Peak-limited: max useful gain #{gain_plan(measurement).applied.round(2)} dB is under " \
             "#{@min_gain} dB towards target, skipping re-encode"
         file_result(original_path, status: :skipped, reason: :peak_limited)
@@ -360,8 +439,8 @@ module Neutraliser
                                      normalization_type: codec_decision[:normalization_type])
         end
       else
-        log "  Already at target level (#{measurement.input_i.round(2)} LUFS, within #{@tolerance} LU of " \
-            "#{@profile[:lufs]}), skipping"
+        level = measurement.already_at_target? ? 'by the 30-second sample' : "#{measurement.input_i.round(2)} LUFS"
+        log "  Already at target level (#{level}, within #{@tolerance} LU of #{@profile[:lufs]}), skipping"
         file_result(original_path, status: :skipped, reason: :within_tolerance)
       end
     end
@@ -382,6 +461,12 @@ module Neutraliser
       verdict = ObjectAudio.detect(working_path, primary_track, name: File.basename(original_path))
 
       if verdict.status == :suspected
+        if @object_audio_undetectable && !@allow_object_audio_loss
+          log "  Name suggests object audio and this ffmpeg can't check the #{primary_track[:codec]} track, skipping " \
+              '(--allow-object-audio-loss to process anyway)'
+          return file_result(original_path, status: :skipped, reason: :object_audio, message: 'suspected from the name')
+        end
+
         log "  Note: name suggests object audio but ffprobe found none on the #{primary_track[:codec]} track, " \
             'processing'
         return nil
@@ -417,8 +502,9 @@ module Neutraliser
     def check_disk_space(file_path)
       return nil if @dry_run || !@disk_guard.enabled?
 
-      case @disk_guard.verdict(File.dirname(File.expand_path(file_path)), File.size(file_path))
-      when :abort then raise DiskGuard::Abort, "free space on #{File.dirname(File.expand_path(file_path))} is below the abort floor"
+      dir = output_dir(file_path)
+      case @disk_guard.verdict(dir, File.size(file_path))
+      when :abort then raise DiskGuard::Abort, "free space on #{dir} is below the abort floor"
       when :skip
         log '  Not enough free space for this file, skipping'
         file_result(file_path, status: :skipped, reason: :low_disk)
@@ -433,13 +519,19 @@ module Neutraliser
     def check_writable(file_path)
       return nil if @dry_run
 
-      dir = File.dirname(File.expand_path(file_path))
+      dir = output_dir(file_path)
       blocker = write_blocker(dir)
       return nil unless blocker
 
       message = "can't write to #{dir} (#{blocker}); fix the folder's permissions"
       log "  Not writable: #{message}"
       file_result(file_path, status: :failed, reason: :not_writable, message: message)
+    end
+
+    # Where the output is written: beside the real file when --replace goes
+    # through a symlink, since the real file is the one that gets replaced.
+    def output_dir(file_path)
+      File.dirname(@replace && File.symlink?(file_path) ? File.realpath(file_path) : File.expand_path(file_path))
     end
 
     # nil when the directory takes a new file, else why not. Memoised per run:
@@ -530,14 +622,11 @@ module Neutraliser
     # and two-pass): pick the output path, detect audio tracks, apply the
     # caller-supplied normalization (the only variation point), verify, and
     # commit - with a single ensure-based cleanup for a partially written
-    # output_path.
+    # output_path. The output is always a temp file: nothing takes a final name,
+    # or disturbs what already has it, until it has passed verification.
     def render_normalization(original_path, working_path, audio_tracks, log_message:)
       committed = false
-      output_path = if @replace
-                      FileManager.safe_temp_path(working_path)
-                    else
-                      generate_output_path(working_path)
-                    end
+      output_path = FileManager.safe_temp_path(temp_anchor(working_path))
 
       audio_tracks ||= FFmpegWrapper.detect_audio_tracks(working_path)
       warn_if_audio_track_unknown(audio_tracks)
@@ -553,7 +642,8 @@ module Neutraliser
 
       mismatch = FileManager.output_mismatch(
         working_path, output_path,
-        expected_audio_streams: FFmpegWrapper.output_audio_count(audio_tracks, keep_original: @keep_original_audio)
+        expected_audio_streams: FFmpegWrapper.output_audio_count(audio_tracks, keep_original: @keep_original_audio),
+        primary: FFmpegWrapper.primary_audio_track(audio_tracks)
       )
       raise OutputVerificationError, "Output does not match the source: #{mismatch}" if mismatch
 
@@ -567,10 +657,30 @@ module Neutraliser
       FileUtils.rm_f(output_path) if output_path && !committed && File.exist?(output_path)
     end
 
+    # The temp has to sit on the same filesystem as the file it becomes, for the
+    # rename: beside the real file when --replace goes through a symlink. It keeps
+    # the link's name, because the extension there decides the output's format.
+    def temp_anchor(working_path)
+      return working_path unless @replace && File.symlink?(working_path)
+
+      File.join(File.dirname(File.realpath(working_path)), File.basename(working_path))
+    end
+
     def commit_output(original_path, output_path)
+      assert_source_unchanged(original_path)
       destination = @replace ? original_path : generate_output_path(original_path)
       @stager.commit(output_path, destination, replace: @replace)
       log @replace ? "  Replaced: #{original_path}" : "  Saved: #{destination}"
+    end
+
+    # A file still arriving (a copy over SMB, a download finishing) changes while
+    # we work. The output is built from what was there at the start, so renaming
+    # it into place would throw away everything written since.
+    def assert_source_unchanged(path)
+      return if @source_fingerprint.nil? || FileManager.fingerprint(path) == @source_fingerprint
+
+      raise SourceChangedError, 'the file changed while it was being processed, so it was left as it is; ' \
+                                'run again once it has finished changing'
     end
 
     def file_result(file_path, status:, reason:, message: nil, normalization_type: nil)
@@ -595,11 +705,24 @@ module Neutraliser
     end
 
     def find_video_files(dir_path)
-      Dir.glob(File.join(dir_path, '**', '*')).select { |f| video_file?(f) }
+      VideoFiles.leftover_temps(dir_path).each do |leftover|
+        log "Warning: leftover temp file from an interrupted run (safe to delete if no run is active): #{leftover}"
+      end
+
+      VideoFiles.under(dir_path).reject { |file| normalized_copy?(file) }
+    end
+
+    # film_normalized.mkv beside film.mkv is this tool's output, not another film.
+    def normalized_copy?(file_path)
+      ext = File.extname(file_path)
+      base = File.basename(file_path, ext)
+      return false unless base.end_with?(NORMALIZED_SUFFIX)
+
+      File.exist?(File.join(File.dirname(file_path), "#{base.delete_suffix(NORMALIZED_SUFFIX)}#{ext}"))
     end
 
     def video_file?(file_path)
-      SUPPORTED_FORMATS.include?(File.extname(file_path).downcase)
+      VideoFiles.video?(file_path)
     end
 
     def log_codec_decision(decision)
@@ -645,7 +768,7 @@ module Neutraliser
       basename = File.basename(file_path, File.extname(file_path))
       ext = File.extname(file_path)
 
-      File.join(dir, "#{basename}_normalized#{ext}")
+      File.join(dir, "#{basename}#{NORMALIZED_SUFFIX}#{ext}")
     end
   end
 end

@@ -11,7 +11,7 @@ RSpec.describe Neutraliser::Profiles do
     it 'returns exact custom profile for numeric target' do
       profile = described_class.get_profile(-22.9)
 
-      expect(profile).to include(name: 'custom', lufs: -22.9, tp: -1.5, lra: 12.0)
+      expect(profile).to include(name: 'custom-22.9', lufs: -22.9, tp: -1.5, lra: 12.0)
     end
 
     it 'raises for unknown profile name' do

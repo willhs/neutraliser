@@ -39,8 +39,11 @@ module Neutraliser
           return nil
         end
 
-        # File modification time check
-        if File.mtime(video_path) > File.mtime(cache_file)
+        # A measurement only applies to the file it was made from. Comparing
+        # mtimes alone hands the old figure to a swapped file with an older
+        # date (an *arr upgrade keeps the release's) and to a same-named file
+        # with another extension, which shares this cache path.
+        unless same_file?(cached_data, video_path)
           discard_cache(cache_file)
           return nil
         end
@@ -74,7 +77,7 @@ module Neutraliser
           # Cache metadata
           'cache_version' => CACHE_VERSION,
           'cached_at' => Time.now.iso8601,
-          'video_file' => File.basename(video_path),
+          'video_file' => File.basename(video_path).scrub,
           'video_size' => File.size(video_path),
           'video_mtime' => File.mtime(video_path).iso8601,
           'profile' => {
@@ -98,17 +101,16 @@ module Neutraliser
       dir = File.dirname(video_path)
       basename = File.basename(video_path, File.extname(video_path))
 
-      # Find all cache files for this video
-      cache_pattern = File.join(dir, "#{basename}.loudnorm_*.json")
+      # Find all cache files for this video. Compared as strings: a film called
+      # "Film [1080p]" would be a glob pattern that doesn't match its own name.
+      cache_files = Dir.children(dir).select { |name| name.start_with?("#{basename}.loudnorm_") && name.end_with?('.json') }
 
-      Dir.glob(cache_pattern).each do |cache_file|
-        if File.exist?(cache_file)
-          age_days = (Time.now - File.mtime(cache_file)) / (24 * 60 * 60)
+      cache_files.map { |name| File.join(dir, name) }.each do |cache_file|
+        age_days = (Time.now - File.mtime(cache_file)) / (24 * 60 * 60)
 
-          if age_days > max_age_days
-            File.delete(cache_file)
-            Neutraliser.logger.log "  Cleaned up stale cache: #{File.basename(cache_file)}"
-          end
+        if age_days > max_age_days
+          File.delete(cache_file)
+          Neutraliser.logger.log "  Cleaned up stale cache: #{File.basename(cache_file)}"
         end
       rescue StandardError => e
         Neutraliser.logger.log "  Warning: Could not clean up cache file #{cache_file}: #{e.message}"
@@ -118,7 +120,7 @@ module Neutraliser
     def cache_stats(directory)
       return { enabled: false } unless @enabled
 
-      cache_files = Dir.glob(File.join(directory, '*.loudnorm_*.json'))
+      cache_files = Dir.glob('*.loudnorm_*.json', base: directory).map { |name| File.join(directory, name) }
 
       total_size = cache_files.sum { |file| File.size(file) }
       oldest_cache = cache_files.map { |file| File.mtime(file) }.min
@@ -134,6 +136,12 @@ module Neutraliser
     end
 
     private
+
+    def same_file?(cached_data, video_path)
+      cached_data['video_file'] == File.basename(video_path).scrub &&
+        cached_data['video_size'] == File.size(video_path) &&
+        Time.iso8601(cached_data['video_mtime'].to_s).to_i == File.mtime(video_path).to_i
+    end
 
     def discard_cache(cache_file)
       File.delete(cache_file) if File.exist?(cache_file)

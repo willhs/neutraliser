@@ -42,7 +42,7 @@ module Neutraliser
     end
 
     def self.hinted?(*names)
-      names.compact.any? { |n| NAME_HINT.match?(n) }
+      names.compact.any? { |n| NAME_HINT.match?(n.scrub) }
     end
   end
 end

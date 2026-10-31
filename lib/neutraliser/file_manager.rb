@@ -11,6 +11,10 @@ module Neutraliser
   # rather than lumping it in with a generic processing failure.
   class OutputVerificationError < StandardError; end
 
+  # The source was written to while we worked on it (a download still arriving,
+  # an *arr upgrade). Publishing would throw those bytes away, so we don't.
+  class SourceChangedError < StandardError; end
+
   class FileManager
     # A single rename(2) is atomic on POSIX filesystems: it either fully
     # succeeds (target_path now holds source_path's content) or fully fails
@@ -28,6 +32,11 @@ module Neutraliser
       raise FileManagerError, "Source file does not exist: #{source_path}" unless File.exist?(source_path)
 
       begin
+        # Through a symlink the real file is what gets replaced. Renaming over
+        # the link would leave the real file as it was and turn the link into
+        # a second, independent copy.
+        target_path = File.realpath(target_path) if File.symlink?(target_path)
+
         # A rename replaces the directory entry, so the source file's mode
         # becomes the destination's mode. Preserve the original permissions
         # rather than accidentally making a private media file world-readable
@@ -47,6 +56,21 @@ module Neutraliser
       rescue StandardError => e
         raise FileManagerError, "Atomic replacement failed: #{e.message}"
       end
+    end
+
+    # Gives a verified copy-mode output its final name, replacing any earlier
+    # copy in one step.
+    def self.publish(source_path, destination_path)
+      File.rename(source_path, destination_path)
+    rescue SystemCallError => e
+      raise FileManagerError, "Could not write #{destination_path}: #{e.message}"
+    end
+
+    # What "the source hasn't changed" means. Taken before any work, compared
+    # again just before publishing.
+    def self.fingerprint(path)
+      stat = File.stat(path)
+      [stat.size, stat.mtime]
     end
 
     # The new file is created by whoever runs ffmpeg (root, in a container),
@@ -79,6 +103,7 @@ module Neutraliser
     # rename, so ENOSPC, network errors, and interrupts leave any existing
     # destination untouched.
     def self.atomic_copy(source_path, destination_path)
+      destination_path = File.realpath(destination_path) if File.symlink?(destination_path)
       temp_path = safe_temp_path(destination_path)
       existing = File.stat(destination_path) if File.exist?(destination_path)
       mode = (existing || File.stat(source_path)).mode & 0o7777
@@ -97,29 +122,60 @@ module Neutraliser
     DURATION_TOLERANCE_S = 1.0
 
     # nil when the output is a faithful rewrite of the source (same duration
-    # within a second, expected number of audio streams), else what is wrong.
-    # ffmpeg can exit 0 on a short or stream-dropping write; a probe that merely
-    # parses (verify_file_integrity) would pass that, and then the original goes.
-    def self.output_mismatch(source_path, output_path, expected_audio_streams:)
+    # within a second, every stream and chapter still there, primary track's
+    # channels intact), else what is wrong. ffmpeg can exit 0 on a short or
+    # stream-dropping write, and quietly downmixes when the encoder can't hold
+    # the layout (7.1 into E-AC3 comes out 5.x). A probe that merely parses
+    # (verify_file_integrity) would pass all that, and then the original goes.
+    def self.output_mismatch(source_path, output_path, expected_audio_streams:, primary: nil)
       source_duration = FFmpegWrapper.probe_duration(source_path)
       output_duration = FFmpegWrapper.probe_duration(output_path)
       if source_duration && output_duration && (source_duration - output_duration).abs >= DURATION_TOLERANCE_S
         return "output is #{output_duration.round(1)}s long, source is #{source_duration.round(1)}s"
       end
 
-      actual = FFmpegWrapper.detect_audio_tracks(output_path).count { |track| !track[:unknown] }
-      return nil if actual == expected_audio_streams
+      output_tracks = FFmpegWrapper.detect_audio_tracks(output_path).reject { |track| track[:unknown] }
+      if output_tracks.length != expected_audio_streams
+        return "output has #{output_tracks.length} audio stream(s), expected #{expected_audio_streams}"
+      end
 
-      "output has #{actual} audio stream(s), expected #{expected_audio_streams}"
+      lost_streams(source_path, output_path) || channel_change(primary, output_tracks)
     end
 
+    # Counted independently of track detection, so a source it under-read can't
+    # lower the bar. Audio may legitimately grow (--keep-original-audio).
+    def self.lost_streams(source_path, output_path)
+      source = FFmpegWrapper.stream_counts(source_path)
+      output = FFmpegWrapper.stream_counts(output_path)
+      if output[:audio] < source[:audio]
+        return "output has #{output[:audio]} audio stream(s), source has #{source[:audio]}"
+      end
+
+      changed = %i[video subtitle attachment chapter].find { |kind| output[kind] != source[kind] }
+      changed && "output has #{output[changed]} #{changed}(s), source has #{source[changed]}"
+    end
+    private_class_method :lost_streams
+
+    def self.channel_change(primary, output_tracks)
+      return nil if primary.nil? || primary[:unknown] || primary[:channels].to_i.zero?
+
+      channels = output_tracks[primary[:index]]&.fetch(:channels)
+      return nil if channels.nil? || channels == primary[:channels]
+
+      "normalised track has #{channels} channels, source has #{primary[:channels]}"
+    end
+    private_class_method :channel_change
+
+    # Hidden, because the output sits in the library for the whole encode and
+    # Plex or an *arr scanning the folder shouldn't see a half-written film.
+    # A leftover from a killed run is reported by VideoFiles.leftover_temps.
     def self.safe_temp_path(original_path)
       dir = File.dirname(original_path)
       basename = File.basename(original_path, File.extname(original_path))
       ext = File.extname(original_path)
 
       # Use secure random to avoid collisions
-      temp_name = "#{basename}_neutraliser_#{SecureRandom.hex(8)}#{ext}"
+      temp_name = ".#{basename}_neutraliser_#{SecureRandom.hex(8)}#{ext}"
       File.join(dir, temp_name)
     end
 

@@ -112,7 +112,7 @@ RSpec.describe Neutraliser::FileManager do
       allow_any_instance_of(File).to receive(:write).and_raise(Errno::ENOSPC, 'no space left on device')
 
       expect { described_class.atomic_write(path, 'content') }.to raise_error(Errno::ENOSPC)
-      expect(Dir.glob(File.join(temp_dir, '*_neutraliser_*'))).to be_empty
+      expect(Dir.glob(File.join(temp_dir, '.*_neutraliser_*'))).to be_empty
     end
 
     it 'cleans up the temp file when the write is interrupted' do
@@ -120,7 +120,7 @@ RSpec.describe Neutraliser::FileManager do
       allow_any_instance_of(File).to receive(:write).and_raise(Interrupt)
 
       expect { described_class.atomic_write(path, 'content') }.to raise_error(Interrupt)
-      expect(Dir.glob(File.join(temp_dir, '*_neutraliser_*'))).to be_empty
+      expect(Dir.glob(File.join(temp_dir, '.*_neutraliser_*'))).to be_empty
     end
 
     it 'creates new sidecars with private permissions' do
@@ -156,7 +156,7 @@ RSpec.describe Neutraliser::FileManager do
       expect { described_class.atomic_copy(source, destination) }.to raise_error(Errno::ENOSPC)
 
       expect(File.read(destination)).to eq('old content')
-      expect(Dir.glob(File.join(temp_dir, '*_neutraliser_*'))).to be_empty
+      expect(Dir.glob(File.join(temp_dir, '.*_neutraliser_*'))).to be_empty
     end
   end
 
@@ -166,7 +166,7 @@ RSpec.describe Neutraliser::FileManager do
       temp_path = described_class.safe_temp_path(original)
 
       expect(File.dirname(temp_path)).to eq(temp_dir)
-      expect(File.basename(temp_path)).to match(/^movie_neutraliser_[0-9a-f]{16}\.mkv$/)
+      expect(File.basename(temp_path)).to match(/^\.movie_neutraliser_[0-9a-f]{16}\.mkv$/)
     end
   end
 

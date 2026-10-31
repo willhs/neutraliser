@@ -87,7 +87,7 @@ module ReviewFixtures
   end
 end
 
-RSpec.describe 'pre-release review' do
+RSpec.describe 'pre-release review', :real_ffmpeg do
   let(:dir) { Dir.mktmpdir }
   let(:logged) { [] }
   let(:bin) { File.expand_path('../bin/neutraliser', __dir__) }
@@ -265,7 +265,7 @@ RSpec.describe 'pre-release review' do
       out, status = run_cli('process', File.join(dir, 'lib'), env: { 'PATH' => '/nonexistent' })
 
       expect(status.exitstatus).to eq(1)
-      expect(out).to match(/ffmpeg.*not found/i)
+      expect(out).to match(/ffmpeg not found/i)
       expect(out.lines.length).to be <= 2
     end
 
@@ -284,6 +284,19 @@ RSpec.describe 'pre-release review' do
       end
 
       expect(logged.join("\n")).not_to match(/Atmos/i)
+    end
+
+    it 'skips a track named as Atmos when this ffmpeg has no way to check it' do
+      film = File.join(dir, 'Movie.DDP5.1.Atmos.mkv')
+      ReviewFixtures.ffmpeg('-f', 'lavfi', '-i', 'testsrc=size=64x64:rate=5:duration=4',
+                            '-f', 'lavfi', '-i', 'sine=frequency=440:duration=4:sample_rate=48000',
+                            '-map', '0', '-map', '1', '-c:v', 'libx264', '-preset', 'ultrafast', '-c:a', 'eac3', film)
+      allow(Neutraliser::FFmpegWrapper).to receive(:version).and_return([6, 1])
+
+      summary = run(film, replace: true)
+
+      expect(summary[:results].first[:reason]).to eq(:object_audio)
+      expect(profile_stamp(film)).to be_nil
     end
 
     it 'reports a lock file it cannot open in one line' do
@@ -328,6 +341,52 @@ RSpec.describe 'pre-release review' do
 
       expect(probe(film, '-select_streams', 'a', '-show_entries', 'stream=index').lines.length).to eq(3)
       expect(probe(film, '-select_streams', 't', '-show_entries', 'stream_tags=filename')).to eq('font.ttf')
+    end
+
+    describe 'MP4 metadata' do
+      def itunes_atom?(path, atom) = File.binread(path).include?(atom.b)
+
+      def tagged_mp4(*extra)
+        File.join(dir, 'tagged.mp4').tap do |path|
+          ReviewFixtures.ffmpeg('-f', 'lavfi', '-i', 'testsrc=size=64x64:rate=5:duration=4',
+                                '-f', 'lavfi', '-i', 'sine=frequency=440:duration=4:sample_rate=48000,volume=-15dB',
+                                *extra, '-c:a', 'aac', path)
+        end
+      end
+
+      it 'keeps cover art and iTunes atoms, recording the run in the sidecar instead' do
+        cover = File.join(dir, 'cover.jpg')
+        ReviewFixtures.ffmpeg('-f', 'lavfi', '-i', 'color=c=red:s=100x100:d=1', '-frames:v', '1', cover)
+        film = tagged_mp4('-i', cover, '-map', '0', '-map', '1', '-map', '2', '-c:v', 'libx264', '-preset', 'ultrafast',
+                          '-c:v:1', 'mjpeg', '-disposition:v:1', 'attached_pic', '-metadata', 'show=My Show')
+
+        first = run(film, replace: true)
+        second = run(film, replace: true)
+
+        expect(first[:done]).to eq(1)
+        expect(probe(film, '-select_streams', 'v', '-show_entries', 'stream=codec_name').lines.length).to eq(2)
+        expect(itunes_atom?(film, 'covr')).to be true
+        expect(itunes_atom?(film, 'tvsh')).to be true
+        expect(integrated(film)).to be_within(1.0).of(-20)
+        expect(second[:results].first[:reason]).to eq(:already_processed)
+      end
+
+      it 'keeps iTunes atoms on a tagged file with no cover' do
+        film = tagged_mp4('-map', '0', '-map', '1', '-c:v', 'libx264', '-preset', 'ultrafast', '-metadata', 'show=My Show')
+
+        run(film, replace: true)
+
+        expect(itunes_atom?(film, 'tvsh')).to be true
+        expect(probe(film, '-show_entries', 'format_tags=show')).to eq('My Show')
+      end
+
+      it 'still stamps an MP4 with nothing to lose' do
+        film = tagged_mp4('-map', '0', '-map', '1', '-c:v', 'libx264', '-preset', 'ultrafast')
+
+        run(film, replace: true)
+
+        expect(profile_stamp(film)).to eq('livingroom')
+      end
     end
 
     it 'does not overwrite a source that changed during the run' do
@@ -483,7 +542,7 @@ RSpec.describe 'pre-release review' do
       File.write(script, "#!/bin/sh\necho $$ > #{pid_file}\nexec sleep 60\n")
       File.chmod(0o755, script)
 
-      expect { Neutraliser::FFmpegWrapper.send(:execute_with_timeout, [script], 0, 'Normalization') }
+      expect { Neutraliser::FFmpegWrapper.send(:execute_with_timeout, [script], 0.5, 'Normalization') }
         .to raise_error(Neutraliser::FFmpegTimeoutError, /NEUTRALISER_NORMALIZATION_TIMEOUT/)
       expect { Process.kill(0, File.read(pid_file).to_i) }.to raise_error(Errno::ESRCH)
     end

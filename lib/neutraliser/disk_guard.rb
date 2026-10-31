@@ -14,6 +14,11 @@ module Neutraliser
 
     GIB = 1024**3
 
+    # `df -P` columns: device, total, used, available, capacity, mount point.
+    # The device and the mount point can both contain spaces (//nas/My Media,
+    # /Volumes/My Disk), so find the numbers rather than count fields.
+    DF_NUMBERS = /\s(\d+)\s+(\d+)\s+(\d+)\s+\d+%\s/
+
     def initialize(min_free: nil, abort_free: nil)
       @min_free = min_free
       @abort_free = abort_free
@@ -38,7 +43,7 @@ module Neutraliser
       out, status = Open3.capture2('df', '-Pk', dir)
       return nil unless status.success?
 
-      kb = out.lines[1].to_s.split[3]
+      kb = out.lines[1].to_s[DF_NUMBERS, 3]
       kb && kb.to_i * 1024
     rescue SystemCallError
       nil

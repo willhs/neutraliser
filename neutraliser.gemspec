@@ -28,10 +28,7 @@ Gem::Specification.new do |spec|
   spec.executables   = ['neutraliser']
   spec.require_paths = ['lib']
 
-  spec.add_dependency 'dotenv', '~> 2.8'
   spec.add_dependency 'json', '>= 2.19.9', '< 3.0'
-  spec.add_dependency 'nokogiri', '>= 1.19.4', '< 2.0'
-  spec.add_dependency 'plex-ruby', '~> 1.5'
   spec.add_dependency 'streamio-ffmpeg', '~> 3.0'
   spec.add_dependency 'terminal-table', '~> 3.0'
   spec.add_dependency 'thor', '~> 1.2'

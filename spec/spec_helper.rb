@@ -22,4 +22,8 @@ RSpec.configure do |config|
   config.profile_examples = 10
   config.order = :random
   Kernel.srand config.seed
+
+  # Every run asks for the ffmpeg version first. The suite has to run on a machine
+  # without ffmpeg, and most examples stub the rest of it anyway.
+  config.before { allow(Neutraliser::FFmpegWrapper).to receive(:version).and_return([7, 1]) }
 end

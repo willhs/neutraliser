@@ -65,6 +65,10 @@ module Neutraliser
     end
   end
 
+  # ffmpeg or ffprobe isn't installed: nothing can run, so this ends the run
+  # with one message instead of failing every file the same way.
+  class FFmpegNotFoundError < StandardError; end
+
   # The subprocess ran out of time: retryable, not evidence the file is bad.
   class FFmpegTimeoutError < FFmpegError
     def initialize(message = nil, **)

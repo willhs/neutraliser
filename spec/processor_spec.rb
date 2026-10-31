@@ -20,7 +20,7 @@ RSpec.describe Neutraliser::Processor do
       processor = described_class.new(target_level: -18.3)
       profile = processor.instance_variable_get(:@profile)
 
-      expect(profile).to include(name: 'custom', lufs: -18.3, tp: -1.5, lra: 12.0)
+      expect(profile).to include(name: 'custom-18.3', lufs: -18.3, tp: -1.5, lra: 12.0)
     end
   end
 
@@ -64,7 +64,11 @@ RSpec.describe Neutraliser::Processor do
         manifest.puts(JSON.generate({
                                       timestamp: Time.now.utc.iso8601,
                                       file: File.expand_path(completed),
-                                      status: 'done'
+                                      status: 'done',
+                                      reason: 'normalized',
+                                      profile: 'livingroom',
+                                      target_lufs: -20.0,
+                                      replace: false
                                     }))
       end
 
@@ -156,7 +160,7 @@ RSpec.describe Neutraliser::Processor do
 
     it 'skips files with no audio stream' do
       processor = described_class.new
-      movie = instance_double(FFMPEG::Movie, audio_stream: nil)
+      movie = instance_double(FFMPEG::Movie, audio_stream: nil, valid?: true)
       allow(FFMPEG::Movie).to receive(:new).and_return(movie)
 
       expect { processor.send(:process_file, video_file) }
@@ -299,7 +303,7 @@ RSpec.describe Neutraliser::Processor do
 
     it 'leaves no trace of the write check in a writable folder' do
       processor = described_class.new
-      allow(FFMPEG::Movie).to receive(:new).and_return(instance_double(FFMPEG::Movie, audio_stream: nil))
+      allow(FFMPEG::Movie).to receive(:new).and_return(instance_double(FFMPEG::Movie, audio_stream: nil, valid?: true))
 
       result = nil
       expect { result = processor.send(:process_file, episodes.first) }.to output.to_stdout
@@ -311,7 +315,7 @@ RSpec.describe Neutraliser::Processor do
     it 'does not check writability on a dry run, which writes nothing' do
       FileUtils.chmod(0o555, show_dir)
       processor = described_class.new(dry_run: true)
-      allow(FFMPEG::Movie).to receive(:new).and_return(instance_double(FFMPEG::Movie, audio_stream: nil))
+      allow(FFMPEG::Movie).to receive(:new).and_return(instance_double(FFMPEG::Movie, audio_stream: nil, valid?: true))
 
       result = nil
       expect { result = processor.send(:process_file, episodes.first) }.to output.to_stdout
@@ -395,17 +399,18 @@ RSpec.describe Neutraliser::Processor do
     before do
       File.write(video_file, 'x')
       allow(Neutraliser::FFmpegWrapper).to receive(:detect_audio_tracks).and_return([{ index: 0, codec: 'aac', channels: 2, bit_rate: 256_000, sample_rate: 48_000 }])
-      allow(Neutraliser::FFmpegWrapper).to receive(:apply_normalization).and_return(
+      allow(Neutraliser::FFmpegWrapper).to receive(:apply_normalization) do |_input, output, *_rest, **_kwargs|
+        File.write(output, 'y')
         { encoder: 'aac', bitrate: 256_000, source_codec: 'aac', source_bitrate: 256_000, lossless_output: false }
-      )
+      end
       allow(Neutraliser::FileManager).to receive(:verify_file_integrity).and_return(true)
     end
 
     it 'writes to _normalized output in copy mode' do
       processor.send(:normalize_file_with_paths, video_file, video_file, measured_data)
 
-      expect(Neutraliser::FFmpegWrapper).to have_received(:apply_normalization)
-        .with(video_file, output_file, measured_data, any_args)
+      expect(File.read(output_file)).to eq('y')
+      expect(File.read(video_file)).to eq('x')
     end
 
     it 'raises a distinct OutputVerificationError when output fails integrity checks' do
@@ -419,9 +424,10 @@ RSpec.describe Neutraliser::Processor do
     end
 
     it 'returns the codec decision including normalization_type' do
-      allow(Neutraliser::FFmpegWrapper).to receive(:apply_normalization).and_return(
+      allow(Neutraliser::FFmpegWrapper).to receive(:apply_normalization) do |_input, output, *_rest, **_kwargs|
+        File.write(output, 'y')
         { encoder: 'aac', bitrate: 256_000, source_codec: 'aac', source_bitrate: 256_000, lossless_output: false, normalization_type: 'Dynamic' }
-      )
+      end
 
       result = processor.send(:normalize_file_with_paths, video_file, video_file, measured_data)
 
@@ -437,7 +443,7 @@ RSpec.describe Neutraliser::Processor do
       linear_processor.send(:normalize_file_with_paths, video_file, video_file, measured_data)
 
       expect(Neutraliser::FFmpegWrapper).to have_received(:apply_normalization)
-        .with(video_file, output_file, measured_data, anything, hash_including(allow_dynamic: true))
+        .with(video_file, anything, measured_data, anything, hash_including(allow_dynamic: true))
     end
 
     it 'cleans up the temp output file even when interrupted (not just on StandardError)' do
@@ -731,11 +737,12 @@ RSpec.describe Neutraliser::Processor do
       expect(JSON.parse(File.readlines(manifest_path).last)).to include('status' => 'skipped', 'reason' => 'object_audio')
     end
 
-    it 'keeps an object-audio skip final on resume' do
+    it 'looks at an object-audio skip again on resume, since ffmpeg may have changed' do
       processor = described_class.new(resume: true)
-      expect(processor).not_to receive(:process_one)
+      expect(processor).to receive(:process_one).with(video)
+                                                .and_return({ file: video, status: :skipped, reason: :object_audio })
 
-      expect(processor.process(temp_dir)[:resumed]).to eq(1)
+      expect(processor.process(temp_dir)[:resumed]).to eq(0)
     end
 
     it 'picks object-audio skips back up when resuming with --allow-object-audio-loss' do
@@ -969,7 +976,7 @@ RSpec.describe Neutraliser::Processor do
         render(processor, nil)
 
         expect(Neutraliser::FileManager).to have_received(:output_mismatch)
-          .with(video_file, anything, expected_audio_streams: 2)
+          .with(video_file, anything, hash_including(expected_audio_streams: 2))
       end
     end
   end
