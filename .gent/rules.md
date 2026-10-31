@@ -94,6 +94,7 @@ A Ruby CLI tool that normalises audio volume in video files using industry-stand
 ### Comprehensive Test Suite (Phase 4)
 - **Unit Tests**: All components (FFmpegWrapper, AudioAnalyser, Profiles, etc.)
 - **Integration Tests**: Real media processing with mocked FFmpeg
+- **Golden round trip**: `spec/round_trip_spec.rb` (tag `:real_ffmpeg`, `rspec --tag real_ffmpeg`) runs a real `process --replace` on generated mkv/mp4 clips and checks stream tags, dispositions, chapters, stamps and which track was normalised
 - **Error Handling**: Edge cases, corrupted files, permission errors
 - **Performance**: Memory usage, concurrency, resource cleanup
 - **Validation**: EBU R128 accuracy, metadata preservation
