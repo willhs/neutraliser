@@ -1,0 +1,12 @@
+ts	phase	decision	why	evidence	result
+2026-10-31T11:34:14Z	phase-1	premise confirmed; a343fbbc is not a git commit	the review date, not that id, scopes the work	git log --since=2026-08-08 = 38 commits; gh repo view = PUBLIC	scoped to everything after 2026-08-08
+2026-10-31T11:34:14Z	phase-1	picked the bug playbook over investigation	the task asks for fixes too, and the investigation playbook says to switch when it does	task.md notes	plan-first route
+2026-10-31T11:34:14Z	phase-1	built repro.rb to drive the real CLI per finding	one script gives the before and after columns on real ffmpeg, instead of one-off runs	evidence/scripts/repro.rb; evidence/repro-before.txt	26 of 27 fail at c52f50c
+2026-10-31T11:34:14Z	phase-1	refuted: A/V offset drifts on replace	2 s delayed audio stayed at start_time 2.000 after replace	transcript: case l, ffprobe before and after	not a bug
+2026-10-31T11:34:14Z	phase-1	refuted: MOV timecode track is lost	the mov muxer regenerates tmcd from metadata; other data streams stay unmapped and go in the note	transcript: case t	not a bug for tmcd
+2026-10-31T11:34:14Z	phase-1	refuted: GHCR image is private	docker manifest inspect said no such manifest, but an anonymous registry call returned 200 for tags and manifest	curl ghcr.io/v2/willhs/neutraliser/manifests/latest	image is public
+2026-10-31T11:34:14Z	phase-1	refuted: an unknown-flag typo runs for real	'--replace --dryrun errors out and leaves the file unstamped	transcript: typo flags	not a bug
+2026-10-31T11:34:14Z	phase-1	refuted: live Plex token is in history	live token count 0 across all patches; pre-rewrite token differs (compared without printing)	git log --all -p | grep -cF; gh api contents/.env?ref=57030a3	old token only, rotated
+2026-10-31T11:34:14Z	phase-1	confirmed: pre-rewrite commit 57030a3 still served by GitHub with .env	force push on 2026-08-06 hid it from branches, not from SHA lookup; needs a support purge, so Will's call	gh api activity force_push; HTTP 200 on commit page	note only, no history rewrite
+2026-10-31T11:34:15Z	phase-1	leave tracked check-prod and docs/log.md private strings in place	August untracked check-prod and 9342eb3 retracked it on purpose for worktrees; removing it is Will's call	git log --full-history .claude/skills/check-prod/SKILL.md	note only
+2026-10-31T11:34:15Z	phase-1	leave plex_analyzer.rb to job 7a872534	that job is running on analyze-plex now; the task says rebase rather than duplicate	manager_list_jobs	note only
