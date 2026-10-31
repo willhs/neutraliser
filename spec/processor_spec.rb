@@ -80,6 +80,46 @@ RSpec.describe Neutraliser::Processor do
       expect(summary[:failed]).to eq(0)
     end
 
+    context 'when a run is cut off part-way (Ctrl-C, SIGTERM, crash)' do
+      let(:first) { File.join(temp_dir, 'a.mp4') }
+      let(:second) { File.join(temp_dir, 'b.mp4') }
+      let(:third) { File.join(temp_dir, 'c.mp4') }
+      let(:manifest) { File.join(temp_dir, '.neutraliser-run-manifest.jsonl') }
+
+      def entries = File.readlines(manifest).map { |line| JSON.parse(line) }
+
+      before do
+        [first, second, third].each { |f| File.write(f, 'x') }
+        allow(processor_under_test).to receive(:process_one).with(first).and_return(
+          { file: first, status: :done, reason: :normalized, message: nil }
+        )
+        allow(processor_under_test).to receive(:process_one).with(second).and_raise(Interrupt)
+      end
+
+      let(:processor_under_test) { described_class.new }
+
+      it 'has already recorded the files that finished, not only "queued"' do
+        expect { processor_under_test.process(temp_dir) }.to raise_error(Interrupt)
+
+        finished = entries.select { |e| e['status'] == 'done' }
+        expect(finished.map { |e| e['file'] }).to eq([File.expand_path(first)])
+        expect(entries.count { |e| e['status'] == 'queued' }).to eq(3)
+      end
+
+      it 'lets --resume skip the finished file and retry the rest' do
+        expect { processor_under_test.process(temp_dir) }.to raise_error(Interrupt)
+
+        resumed = described_class.new(resume: true)
+        expect(resumed).not_to receive(:process_one).with(first)
+        expect(resumed).to receive(:process_one).with(second).and_return({ file: second, status: :done })
+        expect(resumed).to receive(:process_one).with(third).and_return({ file: third, status: :done })
+
+        summary = resumed.process(temp_dir)
+        expect(summary[:resumed]).to eq(1)
+        expect(summary[:done]).to eq(2)
+      end
+    end
+
     it 'records normalization_type per file in the run manifest' do
       processor = described_class.new
       video = File.join(temp_dir, 'a.mp4')

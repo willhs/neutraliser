@@ -104,22 +104,7 @@ module Neutraliser
         append_manifest_entry(manifest_path, file: file_path, status: 'queued')
       end
 
-      raw_results, aborted = run_files(files_to_process)
-
-      results = Array(raw_results).each_with_index.map do |result, index|
-        normalize_file_result(result, files_to_process[index])
-      end
-
-      results.each do |result|
-        append_manifest_entry(
-          manifest_path,
-          file: result[:file],
-          status: result[:status].to_s,
-          reason: result[:reason],
-          message: result[:message],
-          normalization_type: result[:normalization_type]
-        )
-      end
+      results, aborted = run_files(files_to_process, manifest_path: manifest_path)
 
       summary = summarize_results(
         found: video_files.length,
@@ -142,9 +127,19 @@ module Neutraliser
 
     # Runs files in order. A disk-guard abort ends the run: what was done so
     # far is kept, the rest stays queued for the next run.
-    def run_files(files)
+    #
+    # Each file's outcome goes into the run manifest the moment it finishes,
+    # not when the whole run does. A multi-hour run over a big library is
+    # routinely stopped part-way (Ctrl-C, SIGTERM, a crash); `--resume` reads
+    # the manifest, so batching the writes to the end left such a run with a
+    # manifest of "queued" lines and nothing to resume from.
+    def run_files(files, manifest_path: nil)
       results = []
-      files.each { |file| results << process_one(file) }
+      files.each do |file|
+        result = normalize_file_result(process_one(file), file)
+        results << result
+        record_result(manifest_path, result) if manifest_path
+      end
       [results, false]
     rescue DiskGuard::Abort => e
       log "ABORT: #{e.message}"
@@ -195,6 +190,17 @@ module Neutraliser
 
     def manifest_path_for(dir_path)
       File.join(dir_path, MANIFEST_FILENAME)
+    end
+
+    def record_result(manifest_path, result)
+      append_manifest_entry(
+        manifest_path,
+        file: result[:file],
+        status: result[:status].to_s,
+        reason: result[:reason],
+        message: result[:message],
+        normalization_type: result[:normalization_type]
+      )
     end
 
     def append_manifest_entry(manifest_path, file:, status:, reason: nil, message: nil, normalization_type: nil)
