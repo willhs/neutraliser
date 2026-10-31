@@ -37,6 +37,7 @@ Entry point and navigation map for the neutraliser documentation set. Neutralise
 - [`research/library-validation-2026-08.md`](research/library-validation-2026-08.md) — Pre-release validation run over a real NAS/Plex library slice; found and fixed a video/subtitle metadata-preservation bug
 - [`research/prod-parity-audit-2026-10.md`](research/prod-parity-audit-2026-10.md) — Audit of media-server's neutralise.sh against the CLI: already there, ported, or dropped; the manifest migration; the driver call
 - [`research/pre-release-review-2026-11.md`](research/pre-release-review-2026-11.md) — Pre-release code and security review: findings ranked by severity, what was fixed, what needs Will's call
+- [`research/architecture-review-2026-11.md`](research/architecture-review-2026-11.md) — Architecture review after the October burst: four shallow modules to deepen in FFmpegWrapper and Processor (Remux plan, Source, Codec choice, Guards), each a Steady task; 15 ffprobe calls per file measured
 
 - [`research/plex-sampling-error-2026-10.md`](research/plex-sampling-error-2026-10.md) — How far a sampled loudness estimate sits from a film's true loudness (10 real Plex films); why analyze-plex gives "Unclear" instead of guessing, and `--full`
 
@@ -56,6 +57,7 @@ Entry point and navigation map for the neutraliser documentation set. Neutralise
 - [`front-matter-schema.json`](front-matter-schema.json) — JSON Schema for validating doc frontmatter
 
 ### Change Log
+- 2026-11-01 (agent:architecture-review): Added architecture-review-2026-11.md research note
 - 2026-11-01 (agent:analyze-plex-figures): Added plex-sampling-error-2026-10.md research note
 - 2026-10-20 (agent:prod-parity): Added prod-parity audit and task 0006
 - 2025-09-24 (agent:create-project): Created initial documentation index scaffold
