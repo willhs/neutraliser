@@ -16,12 +16,22 @@ Ten films from a real 800-film Plex library, before and after — **16.7 LU of s
 
 Nothing here is staged. The "before" figures are what Neutraliser recorded in its own
 analysis sidecars when it first saw each file; the "after" is an independent `ebur128`
-measurement of those same files today. `demo/real_library.rb` builds this from any
+measurement of those same files. `demo/real_library.rb` builds this from any
 library Neutraliser has run over — [the method is documented](demo/README.md).
 
-Across that whole library, **716 of 804 films (89%) now sit within 1 LU of the target**.
-The remainder are files added since the last run — which is what `--resume` and the
-skip-already-normalised sidecars are for.
+> **Read this as a result from v0.1's first runs (August 2026), not a promise about
+> the current defaults.** Those runs used two-pass `loudnorm`, which picks constant
+> gain or dynamic compression per file and doesn't record which. Since then constant
+> gain has become the default: it never compresses, but it is capped at the profile's
+> −1.5 dBTP ceiling, so a quiet-but-peaky film now lands *short* of −20 LUFS (and the
+> log says by how much) unless you opt in to `--limit-db` or `--allow-dynamic`. The ten
+> films were also picked from files that had been processed, not at random. Expect
+> loud-to-quiet jumps to shrink a lot; don't expect every file at −20.0.
+
+Across that library in August, **716 of 804 films (89%) sat within 1 LU of the target**.
+That count predates the constant-gain default, so it isn't what a fresh run of today's
+defaults is guaranteed to give. The remainder were files added after the run, which is
+what `--resume` and the skip-already-normalised stamps are for.
 
 Four files played back to back — the loud remaster after the quiet film is the moment you reach for the remote:
 
@@ -31,7 +41,8 @@ And the same again on synthetic clips, if you'd rather run it yourself than trus
 
 ![Integrated loudness before and after normalisation: eight files spread across roughly 19 LU converge onto the -20 LUFS target](demo/loudness-before-after.svg)
 
-Don't take the charts' word for it. [`demo/run.rb`](demo/README.md) and
+The two synthetic charts were re-run on 2026-10-31 against the current constant-gain default
+and still hold (18.6 LU → 0.2 LU). Don't take the charts' word for it. [`demo/run.rb`](demo/README.md) and
 [`demo/ab.rb`](demo/README.md) regenerate both from scratch, `--source ~/media/movies`
 runs them over your own library (on copies; originals untouched), and `ab.rb` also
 writes `before.mkv`/`after.mkv` so you can *listen* rather than squint at a line.
@@ -201,7 +212,7 @@ neutraliser process --local-stage --replace /mnt/nas/movies
 **Re-run over an already-levelled library.** Sidecars make this cheap — it's safe to schedule as a cron job that catches newly added files:
 
 ```bash
-neutraliser process --replace --fast /media/movies
+neutraliser process --replace /media/movies
 ```
 
 ## Profiles

@@ -101,6 +101,13 @@ Re-measure those files to get the "after" side, build a
 ruby demo/real_library.rb --pairs pairs.tsv
 ```
 
+**Staleness:** the committed pairs were processed in August 2026, when the default
+was two-pass `loudnorm` (constant gain or dynamic, chosen per file and not recorded).
+Today's default is peak-capped constant gain, so re-running the tool on those films
+could leave quiet-but-peaky ones short of −20 LUFS. The chart shows what v0.1's first
+runs achieved, not a guarantee of the current default; to chart today's behaviour,
+process a library with the current version and rebuild the pairs.
+
 The data behind the README's chart is committed as `demo/real-library-pairs.tsv`,
 so the chart can be regenerated without access to the library it came from.
 
