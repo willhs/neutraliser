@@ -25,7 +25,7 @@ jobs:
       fail-fast: false
       matrix:
         include:
-          # Oldest ffmpeg the README claims (4.2.x); static build from johnvansickle.com.
+          # Oldest ffmpeg we check (4.2.x), older than the 5.1 and 7.1 the README says were tested; static build from johnvansickle.com.
           - ffmpeg: '4.2.2'
             url: https://johnvansickle.com/ffmpeg/old-releases/ffmpeg-4.2.2-amd64-static.tar.xz
           # First release with Atmos/DTS:X detection support (7.1+); pinned BtbN static build.

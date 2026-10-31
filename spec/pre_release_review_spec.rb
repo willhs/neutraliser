@@ -93,9 +93,7 @@ RSpec.describe 'pre-release review', :real_ffmpeg do
   let(:bin) { File.expand_path('../bin/neutraliser', __dir__) }
 
   before do
-    unless system('which ffmpeg > /dev/null 2>&1') && system('which ffprobe > /dev/null 2>&1')
-      skip 'ffmpeg/ffprobe not available on PATH'
-    end
+    skip 'ffmpeg/ffprobe not available on PATH' unless system('which ffmpeg > /dev/null 2>&1') && system('which ffprobe > /dev/null 2>&1')
     allow(Neutraliser.logger).to receive(:log) { |message| logged << message }
   end
 
