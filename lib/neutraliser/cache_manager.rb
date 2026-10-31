@@ -41,7 +41,7 @@ module Neutraliser
 
         # A measurement only applies to the file it was made from. Comparing
         # mtimes alone hands the old figure to a swapped file with an older
-        # date (an *arr upgrade keeps the release's) and to a same-named file
+        # date (an *arr upgrade can keep the release's) and to a same-named file
         # with another extension, which shares this cache path.
         unless same_file?(cached_data, video_path)
           discard_cache(cache_file)

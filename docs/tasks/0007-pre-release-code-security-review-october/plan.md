@@ -102,115 +102,120 @@ Core data shapes:
 
 ## Phase 2: Failing regression specs first
 
-- [ ] Add `spec/pre_release_review_spec.rb` (real ffmpeg, skips without it) with one example per
+- [x] Add `spec/pre_release_review_spec.rb` (real ffmpeg, skips without it) with one example per
   finding, driving `Processor` or the real binary and asserting what the user would observe.
-- [ ] Add unit examples for what synthetic media can't reach on APFS: invalid UTF-8 keys, `df` output
+- [x] Add unit examples for what synthetic media can't reach on APFS: invalid UTF-8 keys, `df` output
   with a space in the device name.
 
 ### Success Criteria
 
-- [ ] Run: `bundle exec rspec spec/pre_release_review_spec.rb` — red, each example failing for the
+- [x] Run: `bundle exec rspec spec/pre_release_review_spec.rb` — red, each example failing for the
   expected reason. Commit the red specs on their own.
 
 ---
 
 ## Phase 3: Security and first run
 
-- [ ] Replace `dotenv` with `PlexEnv`, called only from `analyze-plex`.
-- [ ] `Logger`: file logging is best effort (unwritable or missing `HOME`, full disk).
-- [ ] `VideoFiles.under`: literal directory walk for `process`, `report`, `cache clean`; `cache_stats`
+- [x] Replace `dotenv` with `PlexEnv`, called only from `analyze-plex`.
+- [x] `Logger`: file logging is best effort (unwritable or missing `HOME`, full disk).
+- [x] `VideoFiles.under`: literal directory walk for `process`, `report`, `cache clean`; `cache_stats`
   and `cleanup_stale_cache` stop globbing paths.
-- [ ] `Processor#process` and `Report` use absolute paths, so ffmpeg never reads a name as a protocol.
-- [ ] Unreadable file fails (`unreadable`) rather than "No audio track".
-- [ ] Preflight: a missing ffmpeg gives one error, and ffmpeg older than 7.1 warns that object audio
+- [x] `Processor#process` and `Report` use absolute paths, so ffmpeg never reads a name as a protocol.
+- [x] Unreadable file fails (`unreadable`) rather than "No audio track".
+- [x] Preflight: a missing ffmpeg gives one error, and ffmpeg older than 7.1 warns that object audio
   can't be detected.
-- [ ] Narrow the CLI's `rescue ArgumentError` to option validation; `--lock-file` open errors are one line.
-- [ ] Staging directory is created `0700` and must be owned by the user.
+- [x] Narrow the CLI's `rescue ArgumentError` to option validation; `--lock-file` open errors are one line.
+- [x] Staging directory is created `0700` and must be owned by the user.
 
 ### Success Criteria
 
-- [ ] Run: `bundle exec rspec spec/pre_release_review_spec.rb -e security -e first-run` — green.
+- [x] Run: `bundle exec rspec spec/pre_release_review_spec.rb -e security -e first-run` — green.
+  Ran as part of the full suite after Phase 6, not filtered per phase. The phases landed together in
+  one commit rather than one each.
 
 ---
 
 ## Phase 4: Data safety
 
-- [ ] `execute_with_timeout` always stops its child in `ensure`; the timeout hint names the right variable.
-- [ ] CLI turns a signal into one line and exit `128 + signo`.
-- [ ] `safe_temp_path` dot-prefixes; `render_normalization` always writes a temp and publishes by rename.
-- [ ] Leftover temps are warned about, and `_normalized` copies with a sibling source aren't scanned.
-- [ ] Symlink targets: temp beside the real file, rename over the real file; preflight checks that dir.
-- [ ] Source fingerprint before work, re-checked before publish (`source_changed`).
-- [ ] Map `0:t?`, its metadata and every primary disposition flag; map `0:v?`.
-- [ ] `output_mismatch` compares the stream inventory, chapters and primary channels.
-- [ ] Restamp writes to the primary track's index.
+- [x] `execute_with_timeout` always stops its child in `ensure`; the timeout hint names the right variable.
+- [x] CLI turns a signal into one line and exit `128 + signo`.
+- [x] `safe_temp_path` dot-prefixes; `render_normalization` always writes a temp and publishes by rename.
+- [x] Leftover temps are warned about, and `_normalized` copies with a sibling source aren't scanned.
+- [x] Symlink targets: temp beside the real file, rename over the real file; preflight checks that dir.
+- [x] Source fingerprint before work, re-checked before publish (`source_changed`).
+- [x] Map `0:t?`, its metadata and every primary disposition flag; map `0:v?`.
+- [x] `output_mismatch` compares the stream inventory, chapters and primary channels.
+- [x] Restamp writes to the primary track's index.
 
 ### Success Criteria
 
-- [ ] Run: `bundle exec rspec spec/pre_release_review_spec.rb -e 'data safety'` — green.
+- [x] Run: `bundle exec rspec spec/pre_release_review_spec.rb -e 'data safety'` — green, as part of
+  the full suite.
 
 ---
 
 ## Phase 5: Records tell the truth
 
-- [ ] Resume: `RESUME_FINAL_REASONS`, same profile, target and replace mode; per-file manifest
+- [x] Resume: `RESUME_FINAL_REASONS`, same profile, target and replace mode; per-file manifest
   writes; none in a dry run.
-- [ ] Sidecar: copy-mode records the output, peak-limited isn't recorded, within-tolerance records
+- [x] Sidecar: copy-mode records the output, peak-limited isn't recorded, within-tolerance records
   its tolerance.
-- [ ] `custom_profile` names from target and inherits the chosen profile's settings.
-- [ ] Cache validated by file name, size and mtime.
-- [ ] `Measurement#silent?`; silent tracks skipped with reason `silent`.
-- [ ] `--fast-verify` default off.
+- [x] `custom_profile` names from target and inherits the chosen profile's settings.
+- [x] Cache validated by file name, size and mtime.
+- [x] `Measurement#silent?`; silent tracks skipped with reason `silent`.
+- [x] `--fast-verify` default off.
 
 ### Success Criteria
 
-- [ ] Run: `bundle exec rspec spec/pre_release_review_spec.rb -e records` — green.
+- [x] Run: `bundle exec rspec spec/pre_release_review_spec.rb -e records` — green, as part of the
+  full suite.
 
 ---
 
 ## Phase 6: Per-file isolation and small fixes
 
-- [ ] Any per-file exception becomes that file's failure; only `DiskGuard::Abort` ends a run.
-- [ ] Subprocess output scrubbed to valid UTF-8; sidecar, manifest and cache keys scrubbed.
-- [ ] `DiskGuard` parses `df` from the numeric columns.
+- [x] Any per-file exception becomes that file's failure; only `DiskGuard::Abort` ends a run.
+- [x] Subprocess output scrubbed to valid UTF-8; sidecar, manifest and cache keys scrubbed.
+- [x] `DiskGuard` parses `df` from the numeric columns.
 
 ### Success Criteria
 
-- [ ] Run: `bundle exec rspec` — green.
-- [ ] Run: `ruby evidence/scripts/repro.rb <worktree>` — all pass (`evidence/repro-after.txt`).
-- [ ] Docker: `docker stop` exits 143 with no temp; `--user 1000:1000` runs; a Latin-1 name doesn't
-  stop the run; older ffmpeg result recorded for the README claim.
+- [x] Run: `bundle exec rspec` — green.
+- [x] Run: `ruby evidence/scripts/repro.rb <worktree>` — all pass (`evidence/repro-after.txt`).
+- [x] Docker: `docker stop` exits 143 with no temp; `--user 1000:1000` runs; a Latin-1 name doesn't
+  stop the run; older ffmpeg result recorded for the README claim (5.1 passes; 4.2 could not be
+  built, so the README now claims only 5.1 and 7.1).
 
 ---
 
 ## Phase 7: Docs and note
 
-- [ ] Write `docs/research/pre-release-review-2026-11.md`, ranked by severity.
-- [ ] Correct README claims; update `CHANGELOG.md`, `data_contracts.md`, `architecture.md`,
+- [x] Write `docs/research/pre-release-review-2026-11.md`, ranked by severity.
+- [x] Correct README claims; update `CHANGELOG.md`, `data_contracts.md`, `architecture.md`,
   `AGENTS.md`, `docs/index.md`, `docs/log.md`.
 
 ---
 
 ## Phase 8: Wrap (commit & finalize)
 
-- [ ] Run: `git status` — note unstaged and untracked files.
-- [ ] Commit (in a Manager job this only commits: no merge, no push).
+- [x] Run: `git status` — note unstaged and untracked files.
+- [x] Commit (in a Manager job this only commits: no merge, no push).
 
 ### Success Criteria
 
-- [ ] Run: `git status` — `nothing to commit, working tree clean`.
+- [x] Run: `git status` — `nothing to commit, working tree clean`.
 
 ---
 
 ## Final Checklist
 
-- [ ] All phases complete.
-- [ ] Documentation updated.
-- [ ] Nothing written outside the worktree except `evidence/`.
+- [x] All phases complete.
+- [x] Documentation updated.
+- [x] Nothing written outside the worktree except `evidence/`.
 
 ## Documentation Updates
 
-- [ ] `docs/research/pre-release-review-2026-11.md` (new), with `docs/index.md` and `docs/log.md`.
+- [x] `docs/research/pre-release-review-2026-11.md` (new), with `docs/index.md` and `docs/log.md`.
 
 ## References
 
