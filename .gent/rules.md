@@ -117,7 +117,7 @@ A Ruby CLI tool that normalises audio volume in video files using industry-stand
 - **Resource usage**: Stable memory, proper cleanup
 
 ## Running tests
-- `bundle exec rspec` (about 90 s) and `bundle exec rubocop`. `bundle exec rspec --tag '~real_ffmpeg'` skips the real-media regressions (about 10 s). Ruby is rbenv 3.2.3.
+- `bundle exec rspec` (about a minute) and `bundle exec rubocop`. `bundle exec rspec --tag '~real_ffmpeg'` skips the real-media regressions (about 6 s). Ruby is rbenv 3.2.3.
 - Manager job shells may not have rbenv's shims on PATH, so `ruby`/`bundle` resolve to macOS system Ruby 2.6 (`RubyGems version (3.0.3.1) has a bug`, `LoadError thor`). Run `export PATH="$HOME/.rbenv/shims:$PATH" LANG=en_US.UTF-8` first; don't hunt through `~/.rbenv/versions` or Homebrew Ruby.
 
 ## Development Guidelines
