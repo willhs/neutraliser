@@ -136,7 +136,7 @@ docker run --rm -v /path/to/media:/media ghcr.io/willhs/neutraliser:latest \
 ```
 
 - **Media volume**: mount your library at `/media`; the working directory is `/media`, and sidecars and the `.neutraliser-run-manifest.jsonl` are written next to the files, so the mount must be writable.
-- **File ownership**: the image runs as root by default, so copies, sidecars and the manifest come out owned by root (`--replace` keeps each file's owner). Add `--user $(id -u):$(id -g)` to write as yourself. Logs then go to stdout only.
+- **File ownership**: the image runs as root by default, so copies, sidecars and the manifest come out owned by root (`--replace` keeps each file's owner). Add `--user $(id -u):$(id -g)` to write as yourself. Logs then go to stdout only, and each run starts with a harmless `Warning: not keeping a log file (Permission denied @ dir_s_mkdir - /.local)`.
 - **`--resume`**: skips files already completed in the manifest, so a stopped container can be re-run with the same command. `docker stop` stops cleanly: the original stays as it was and the temp output is removed.
 - **Timeouts**: pass `-e NEUTRALISER_ANALYSIS_TIMEOUT=3600` (also `NEUTRALISER_NORMALIZATION_TIMEOUT`, `NEUTRALISER_QUICK_TIMEOUT`, `NEUTRALISER_PROBE_TIMEOUT`, in seconds) for slow storage such as NAS disks.
 - **Build it yourself**: `docker build -t neutraliser .`
