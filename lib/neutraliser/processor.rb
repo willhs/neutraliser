@@ -354,7 +354,8 @@ module Neutraliser
                                      normalization_type: codec_decision[:normalization_type])
         end
       else
-        log '  Already at target level, skipping'
+        log "  Already at target level (#{measurement.input_i.round(2)} LUFS, within #{@tolerance} LU of " \
+            "#{@profile[:lufs]}), skipping"
         file_result(original_path, status: :skipped, reason: :within_tolerance)
       end
     end

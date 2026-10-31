@@ -733,6 +733,23 @@ RSpec.describe Neutraliser::Processor do
       expect(result).to include(status: :skipped, reason: :peak_limited)
     end
 
+    it 'labels a -24 LUFS / 0 dBTP file peak_limited under --tolerance 2 --min-gain 1, not within_tolerance' do
+      m = measurement(input_i: -23.98, input_tp: 0.03)
+      proc = described_class.new(replace: false, dry_run: true, tolerance: 2.0, min_gain: 1.0)
+      allow(proc).to receive(:analyze_loudness_for_path).and_return(m)
+
+      expect(proc.send(:process_file_two_pass, path, path, nil)).to include(status: :skipped, reason: :peak_limited)
+    end
+
+    it 'names the measured level when a file really is within tolerance' do
+      m = measurement(input_i: profile_lufs - 1.5, input_tp: -6.0)
+      proc = described_class.new(replace: false, tolerance: 2.0)
+      allow(proc).to receive(:analyze_loudness_for_path).and_return(m)
+
+      expect { expect(proc.send(:process_file_two_pass, path, path, nil)).to include(reason: :within_tolerance) }
+        .to output(/Already at target level \(-21\.5 LUFS, within 2\.0 LU of -20\.0\)/).to_stdout
+    end
+
     it 'skips a quiet file whose peaks would turn it down (gain the wrong way)' do
       m = measurement(input_i: -28.0, input_tp: 0.5)
       proc = described_class.new(replace: false) # tolerance 1.0: |-2.0| used to pass the old check
