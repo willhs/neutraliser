@@ -287,9 +287,9 @@ NEUTRALISER_ANALYSIS_TIMEOUT=3600 NEUTRALISER_NORMALIZATION_TIMEOUT=3600 \
 
 ### `analyze-plex`
 
-Rough loudness triage across your Plex libraries, modifying nothing. Reads audio over Plex's own stream, so it doesn't need filesystem access to the media.
+Loudness triage across your Plex libraries, modifying nothing. Reads audio over Plex's own stream, so it doesn't need filesystem access to the media.
 
-**Accuracy caveat:** each title is judged from a 60-second sample taken from the middle of the runtime. That is a fast preview, not a measurement — on one verified title the sample read 3 LU away from the true integrated loudness, more than the tolerance the verdicts use. Use it to spot obvious outliers; let `process` decide what actually needs work.
+**What it can and can't tell you:** by default each title is *sampled* (five 60-second windows spread across the runtime, combined on energy), and a sample can't support a ±1 LU verdict. Measured against full readings on 10 real films, five windows read up to 6.5 LU quieter (and once 1.0 LU louder) than the truth and were within 1 LU on only half of them ([the numbers](docs/research/plex-sampling-error-2026-10.md)). So a sampled title gets a verdict ("Too Loud" / "Too Quiet") only when its whole error range is clear of the tolerance band; everything else is reported as **Unclear**, with the range the true level could be in. Use `--full` to measure each title end to end (what `process` sees): accurate, but it reads the whole file over HTTP, about 2 to 7 minutes per film.
 
 | Option | Default | Description |
 |---|---|---|
@@ -300,6 +300,7 @@ Rough loudness triage across your Plex libraries, modifying nothing. Reads audio
 | `--sample-percent` | `100` | Analyse only N% of files — useful on huge libraries |
 | `--profile` | `livingroom` | Profile to measure against |
 | `--tolerance` | `1.0` | Files within this many LU count as OK |
+| `--full` | off | Measure every title end to end instead of sampling. Slow; gives a firm OK / Too Loud / Too Quiet for each |
 
 Copy `.env.example` to `.env` and add your token. See [docs/design/plex-analysis-guide.md](docs/design/plex-analysis-guide.md).
 

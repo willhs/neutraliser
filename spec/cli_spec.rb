@@ -186,5 +186,19 @@ RSpec.describe Neutraliser::CLI do
 
       described_class.start(['analyze-plex', '--token', 'x', '--server-url', 'http://localhost:32400'])
     end
+
+    it 'samples by default and measures in full only with --full' do
+      analyzer = instance_double(Neutraliser::PlexAnalyzer, analyze: nil)
+      fulls = []
+      allow(Neutraliser::PlexAnalyzer).to receive(:new) do |**kwargs|
+        fulls << kwargs[:full]
+        analyzer
+      end
+
+      described_class.start(['analyze-plex', '--token', 'x'])
+      described_class.start(['analyze-plex', '--token', 'x', '--full'])
+
+      expect(fulls).to eq([false, true])
+    end
   end
 end

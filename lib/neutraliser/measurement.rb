@@ -13,15 +13,28 @@ module Neutraliser
     attr_reader :input_i, :input_tp, :input_lra, :input_thresh, :target_offset
 
     # Builds a Measurement from ffmpeg's loudnorm print_format=json output.
+    #
+    # loudnorm prints "-inf" for input_i when it heard nothing (digital silence,
+    # or a stream that returned no audio). String#to_f turns "-inf" into 0.0,
+    # which reads as a very LOUD file, so that case is flagged `silent?` and
+    # callers that report levels must not use input_i.
     def self.from_loudnorm_json(json)
       new(
         input_i: json['input_i'].to_f,
         input_tp: json['input_tp'].to_f,
         input_lra: json['input_lra'].to_f,
         input_thresh: json['input_thresh'].to_f,
-        target_offset: json['target_offset'].to_f
+        target_offset: json['target_offset'].to_f,
+        silent: !finite_number?(json['input_i'])
       )
     end
+
+    def self.finite_number?(value)
+      Float(value).finite?
+    rescue ArgumentError, TypeError
+      false
+    end
+    private_class_method :finite_number?
 
     # Rebuilds a Measurement from a sidecar cache hash. Returns nil when the
     # hash doesn't carry a full set of loudnorm fields (corrupt/legacy cache),
@@ -55,17 +68,24 @@ module Neutraliser
       )
     end
 
-    def initialize(input_i:, input_tp:, input_lra:, input_thresh:, target_offset:, already_at_target: false)
+    def initialize(input_i:, input_tp:, input_lra:, input_thresh:, target_offset:, already_at_target: false,
+                   silent: false)
       @input_i = input_i
       @input_tp = input_tp
       @input_lra = input_lra
       @input_thresh = input_thresh
       @target_offset = target_offset
       @already_at_target = already_at_target
+      @silent = silent
     end
 
     def already_at_target?
       @already_at_target
+    end
+
+    # True when loudnorm measured no signal at all (input_i was "-inf").
+    def silent?
+      @silent
     end
 
     def needs_normalization?(target_profile, tolerance: 1.0)

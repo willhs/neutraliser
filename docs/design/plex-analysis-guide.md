@@ -1,7 +1,7 @@
 ---
 title: "Plex Library Audio Volume Analysis Guide"
 created: 2025-09-25
-updated: 2026-08-07
+updated: 2026-11-01
 status: complete
 owner: claude
 contributors: []
@@ -37,8 +37,8 @@ Without analysis, you risk:
 
 `analyze-plex` no longer keeps its own per-content-type target table. It uses
 the exact same `--profile`/`--tolerance` options as `neutraliser process`, so
-whatever the report flags as "needs adjustment" is guaranteed to match what a
-follow-up `process` run would actually do — no more separate movie/TV/other
+whatever the report flags as "needs adjustment" is judged against the same
+target and tolerance a follow-up `process` run would use — no more separate movie/TV/other
 numbers that disagreed with the profile system.
 
 Available profiles (see `neutraliser profiles`):
@@ -130,6 +130,7 @@ Options:
   --sample-percent N       Analyze only N% of files for large libraries (default: 100)
   --profile NAME           Normalization profile: reference, livingroom, night (default: livingroom)
   --tolerance N.N          Flag files within this many LU of target as OK (default: 1.0) — same as `process --tolerance`
+  --full                   Measure every title end to end instead of sampling (slow, firm verdicts)
 
 Token Resolution:
 1. --token option (overrides .env file)
@@ -347,9 +348,22 @@ neutraliser process /library --target_level -27
 
 - Streams straight off the Plex server and measures via the same
   `FFmpegWrapper` executor `process` uses for local files — no shell string,
-  no temp file. Each item samples the first 60s of audio (a fast preview
-  across a whole library, not the definitive measurement `process` performs
-  on the full file when you actually normalize).
+  no temp file.
+- **Sampled by default, and a sample is an estimate.** Each title is read as
+  five 60 s windows centred at 10/30/50/70/90% of its runtime, combined on
+  mean-square energy (`LoudnessEstimate`). Titles under five minutes are read
+  whole. Against full-stream readings on 11 real films this read up to 6.5 LU
+  quieter and up to 1.0 LU louder than the truth and was within 1 LU on half of
+  them (`docs/research/plex-sampling-error-2026-10.md`), so a sampled title
+  gets a Too Loud / Too Quiet verdict only when the whole range the true level
+  could be in is clear of the tolerance band; otherwise it is `Unclear` and
+  the report shows the range. A sample cannot certify a title as OK.
+- `--full` reads each title end to end — the same measurement `process` makes
+  — and gives an exact OK / Too Loud / Too Quiet. It is slow (2 to 7 minutes
+  per film over HTTP) and should run one stream at a time: several parallel
+  readers made Plex return truncated streams that ffmpeg reports as success.
+- A window with no audio (loudnorm's `-inf`) is dropped, not read as 0 LUFS;
+  a title with fewer than three readable windows is left out.
 - A failed or timed-out measurement is skipped and logged, never replaced
   with a fabricated/placeholder LUFS value.
 - Measurements align with broadcast and streaming industry standards.
@@ -377,5 +391,6 @@ neutraliser process /library --target_level -27
 
 ## Change Log
 
+- 2026-11-01: Sampled estimates carry an error range; `Unclear` verdict; five windows instead of one; `--full`.
 - 2026-08-07: Folded into the main pipeline (FFmpegWrapper/Measurement/Profiles/Logger); fixed the token-in-shell and sentinel-float bugs. `--concurrent-jobs`/`--cache-results` (never implemented) removed from docs; `--profile`/`--tolerance` added, replacing the old per-content-type target table.
 - 2025-09-25: Initial guide creation with comprehensive usage instructions

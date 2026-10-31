@@ -5,15 +5,23 @@ module Neutraliser
   class PlexAnalyzerError < StandardError; end
 
   class PlexAnalyzer
-    # How much of each stream to sample when measuring loudness — a fast
-    # preview across a whole library, not the definitive measurement used by
-    # `process` (which analyzes the full file).
+    # A title is judged from this many short windows spread across its runtime
+    # (at these fractions of it), not one contiguous slice: a single window
+    # reads wherever it lands, and a film's middle can sit 3 LU under its
+    # whole. Windows are energy-combined by LoudnessEstimate. A title this
+    # short in total is simply read in full.
+    SAMPLE_POSITIONS = [0.1, 0.3, 0.5, 0.7, 0.9].freeze
     STREAM_SAMPLE_DURATION_S = 60
+    UNCLEAR_ROWS_SHOWN = 25
+    ADJUSTMENT_LABELS = {
+      ok: 'OK', too_loud: 'Too Loud', too_quiet: 'Too Quiet', unclear: 'Unclear'
+    }.freeze
+    READ_IN_FULL_BELOW_S = SAMPLE_POSITIONS.size * STREAM_SAMPLE_DURATION_S
 
-    attr_reader :server_url, :token, :library_name, :output_format, :sample_percent, :profile, :tolerance
+    attr_reader :server_url, :token, :library_name, :output_format, :sample_percent, :profile, :tolerance, :full
 
     def initialize(server_url:, token: nil, library_name: nil, output_format: 'table',
-                   sample_percent: 100, profile: Profiles.default_profile, tolerance: 1.0)
+                   sample_percent: 100, profile: Profiles.default_profile, tolerance: 1.0, full: false)
       @server_url = server_url
       @token = token
       @library_name = library_name
@@ -21,6 +29,7 @@ module Neutraliser
       @sample_percent = sample_percent
       @profile = profile.is_a?(Hash) ? profile : Profiles.get_profile(profile)
       @tolerance = tolerance
+      @full = full
       @plex_server = nil
     end
 
@@ -193,22 +202,24 @@ module Neutraliser
 
       content_type = determine_content_type(item, library_type)
 
-      measurement = analyze_streaming_audio(streaming_url, start_offset: sample_offset_for(item))
-      return nil unless measurement
+      estimate = estimate_loudness(item, streaming_url)
+      return nil unless estimate
 
-      current_level = measurement.input_i
-      needs_adjustment = measurement.needs_normalization?(@profile, tolerance: @tolerance)
+      verdict = estimate.verdict(@profile[:lufs], @tolerance)
 
       {
         title: title,
         file_path: streaming_url,
         library_type: library_type,
         content_type: content_type,
-        current_level: current_level,
+        current_level: estimate.level,
         target_level: @profile[:lufs],
-        level_difference: current_level - @profile[:lufs],
-        needs_adjustment: needs_adjustment,
-        adjustment_type: adjustment_type(current_level, needs_adjustment)
+        level_difference: estimate.level - @profile[:lufs],
+        level_range: [estimate.range.begin, estimate.range.end],
+        measured: estimate.exact? ? 'full' : 'sampled',
+        verdict: verdict,
+        needs_adjustment: %i[too_loud too_quiet].include?(verdict),
+        adjustment_type: ADJUSTMENT_LABELS.fetch(verdict)
       }
     rescue StandardError => e
       log "   ❌ Error analyzing #{title}: #{e.message}"
@@ -231,23 +242,55 @@ module Neutraliser
       "#{@server_url}#{part_key}"
     end
 
-    # Measures loudness straight off the Plex stream via FFmpegWrapper's
-    # timeboxed, argv-form executor — no shell string, no temp file, no
-    # sentinel-float fallback. A failed/timed-out measurement raises and is
-    # handled by the caller (analyze_media_item), which skips the item.
-    # Samples from the middle of the item, matching what
-    # SkipDecider/quick_loudness_sample does. Measuring from the start instead
-    # reads a film's logos and opening titles, which are several LU quieter
-    # than the film — Chariots of Fire measured -35.3 LUFS from its opening
-    # minute against a true integrated -20.0.
-    def sample_offset_for(item)
+    # Builds the title's LoudnessEstimate: read in full when asked (--full) or
+    # when the title is short, otherwise energy-combined from windows spread
+    # across the runtime. Returns nil when nothing trustworthy was measured,
+    # so the title is left out rather than given an invented level.
+    def estimate_loudness(item, streaming_url)
       total_s = item['duration'].to_i / 1000.0
-      return nil if total_s <= STREAM_SAMPLE_DURATION_S * 2
 
-      (total_s - STREAM_SAMPLE_DURATION_S) / 2
+      if full || total_s <= READ_IN_FULL_BELOW_S
+        # A failed read here raises and is handled by analyze_media_item.
+        measurement = analyze_streaming_audio(streaming_url)
+        return LoudnessEstimate.exact(measurement.input_i) unless measurement.silent?
+
+        log "   ⚠️  #{item['title']}: no audio signal measured, skipping"
+        return nil
+      end
+
+      levels = window_offsets(total_s).map { |offset| measure_window(streaming_url, offset) }
+      estimate = LoudnessEstimate.sampled(levels)
+      log "   ⚠️  #{item['title']}: too few readable audio windows (#{levels.compact.size}), skipping" unless estimate
+      estimate
     end
 
-    def analyze_streaming_audio(streaming_url, start_offset: nil)
+    # Start offsets (seconds) of the sample windows, each centred on one of
+    # SAMPLE_POSITIONS. Measuring only a film's opening reads logos and
+    # titles several LU quieter than the film (Chariots of Fire: -35.3 LUFS
+    # from the first minute against a true -20.0).
+    def window_offsets(total_s)
+      SAMPLE_POSITIONS.map { |position| (total_s * position) - (STREAM_SAMPLE_DURATION_S / 2.0) }
+    end
+
+    # One window's integrated loudness, or nil if it can't be read or heard.
+    # Dropping a bad window (rather than failing the title) keeps one flaky
+    # seek over HTTP from costing the other four; LoudnessEstimate.sampled
+    # refuses to report from too few.
+    def measure_window(streaming_url, offset)
+      measurement = analyze_streaming_audio(
+        streaming_url, start_offset: offset, duration: STREAM_SAMPLE_DURATION_S
+      )
+      measurement.silent? ? nil : measurement.input_i
+    rescue FFmpegError => e
+      log "   ⚠️  Skipping an unreadable window: #{e.message.lines.first&.strip}"
+      nil
+    end
+
+    # Measures loudness straight off the Plex stream via FFmpegWrapper's
+    # timeboxed, argv-form executor — no shell string, no temp file, no
+    # sentinel-float fallback. A failed/timed-out measurement raises.
+    # No duration/start_offset measures the whole stream.
+    def analyze_streaming_audio(streaming_url, start_offset: nil, duration: nil)
       FFmpegWrapper.measure_loudness(
         streaming_url,
         start_offset: start_offset,
@@ -255,7 +298,7 @@ module Neutraliser
         target_tp: @profile[:tp],
         target_lra: @profile[:lra],
         input_args: ['-headers', "X-Plex-Token: #{@auth_token}\r\n"],
-        duration: STREAM_SAMPLE_DURATION_S
+        duration: duration
       )
     end
 
@@ -268,12 +311,6 @@ module Neutraliser
       else
         :other
       end
-    end
-
-    def adjustment_type(current_level, needs_adjustment)
-      return 'OK' unless needs_adjustment
-
-      current_level > @profile[:lufs] ? 'Too Loud' : 'Too Quiet'
     end
 
     def generate_report(results)
@@ -300,57 +337,42 @@ module Neutraliser
     end
 
     def generate_table_report(results)
-      # Summary statistics
       total_files = results.size
       needs_adjustment = results.count { |r| r[:needs_adjustment] }
+      unclear = results.select { |r| r[:verdict] == :unclear }
+      ok = results.count { |r| r[:verdict] == :ok }
+      sampled = results.count { |r| r[:measured] == 'sampled' }
       by_type = results.group_by { |r| r[:content_type] }
 
       log "\n📊 SUMMARY STATISTICS"
       log "Target: #{@profile[:name]} (#{@profile[:lufs]} LUFS, ±#{@tolerance} LU tolerance)"
-      # Be loud about this: these figures come from a #{STREAM_SAMPLE_DURATION_S}s
-      # slice, and a slice cannot stand in for a film's integrated loudness. On
-      # one measured title the sampled figure was 3 LU off the true value — more
-      # than the tolerance the verdicts are judged against. `process` measures
-      # the whole file and is the number to trust.
-      log "⚠️  Estimates only: each title is judged from a #{STREAM_SAMPLE_DURATION_S}s sample, " \
-          'which can be several LU away from its true integrated loudness. ' \
-          'Use this to spot rough outliers, not as a verdict — `process` measures in full.'
-      log "Total files analyzed: #{total_files}"
-      log "Files needing adjustment: #{needs_adjustment} (#{(needs_adjustment.to_f / total_files * 100).round(1)}%)"
-      log "Files within target range: #{total_files - needs_adjustment} (#{((total_files - needs_adjustment).to_f / total_files * 100).round(1)}%)"
+      log "Total files analyzed: #{total_files} (#{total_files - sampled} measured in full, #{sampled} sampled)"
+      log "Files needing adjustment: #{needs_adjustment} (#{percent(needs_adjustment, total_files)}%)"
+      log "Files within target range: #{ok} (#{percent(ok, total_files)}%)"
+      log "Can't tell from a sample: #{unclear.size} (#{percent(unclear.size, total_files)}%)"
+      log level_distribution(results)
+      log sampling_caveat if sampled.positive?
 
       log "\n📋 BY CONTENT TYPE"
       by_type.each do |type, items|
         needs_adj = items.count { |r| r[:needs_adjustment] }
-        log "#{type.to_s.capitalize}: #{items.size} files, #{needs_adj} need adjustment"
+        not_sure = items.count { |r| r[:verdict] == :unclear }
+        log "#{type.to_s.capitalize}: #{items.size} files, #{needs_adj} need adjustment, #{not_sure} unclear"
       end
 
-      # Detailed results table
-      log "\n🎬 DETAILED RESULTS (files needing adjustment)"
       problematic_files = results.select { |r| r[:needs_adjustment] }
 
+      log "\n🎬 DETAILED RESULTS (files needing adjustment)"
       if problematic_files.empty?
-        log '🎉 All files are within acceptable volume ranges!'
-        return
+        log '🎉 No file is clearly outside the acceptable volume range.'
+      else
+        log results_table(problematic_files)
       end
 
-      table = Terminal::Table.new do |t|
-        t.headings = %w[Title Type Current Target Diff Status]
-        problematic_files.each do |result|
-          t.add_row [
-            result[:title].length > 30 ? result[:title][0..27] + '...' : result[:title],
-            result[:content_type].to_s.capitalize,
-            "#{result[:current_level].round(1)} LUFS",
-            "#{result[:target_level].round(1)} LUFS",
-            "#{'+' if result[:level_difference] > 0}#{result[:level_difference].round(1)} dB",
-            result[:adjustment_type]
-          ]
-        end
-      end
+      log_unclear_section(unclear, sampled: sampled.positive?)
 
-      log table.to_s
+      return if problematic_files.empty?
 
-      # Recommendations
       log "\n💡 RECOMMENDATIONS"
       too_loud = problematic_files.count { |r| r[:adjustment_type] == 'Too Loud' }
       too_quiet = problematic_files.count { |r| r[:adjustment_type] == 'Too Quiet' }
@@ -358,10 +380,62 @@ module Neutraliser
       log "Files too loud: #{too_loud} (will be reduced in volume)"
       log "Files too quiet: #{too_quiet} (will be increased in volume)"
 
-      return unless needs_adjustment > 0
-
       log "\nTo normalize these files, run:"
       log "neutraliser process [PATH_TO_PLEX_LIBRARY] --profile #{@profile[:name]} --tolerance #{@tolerance}"
+    end
+
+    def log_unclear_section(unclear, sampled:)
+      return if unclear.empty?
+
+      shown = unclear.sort_by { |r| -r[:level_difference].abs }.first(UNCLEAR_ROWS_SHOWN)
+      log "\n❓ CAN'T TELL FROM A SAMPLE (estimate, and the range the true level could be in)"
+      log results_table(shown)
+      hidden = unclear.size - shown.size
+      log "…and #{hidden} more (use --output-format csv or json for every title)." if hidden.positive?
+      return unless sampled
+
+      log "A sample can't settle these. Re-run with --full to measure each title end to end (slow), " \
+          'or run `neutraliser process --dry-run` on the files.'
+    end
+
+    def percent(count, total)
+      (count.to_f / total * 100).round(1)
+    end
+
+    def level_distribution(results)
+      levels = results.map { |r| r[:current_level] }.sort
+      median = levels[levels.size / 2]
+      "Estimated levels: lowest #{levels.first.round(1)}, median #{median.round(1)}, " \
+        "highest #{levels.last.round(1)} LUFS"
+    end
+
+    # Be loud about this: a verdict on a sampled title is only given when the
+    # whole range the true level could be in sits on one side of the tolerance
+    # band. Everything else is "unclear", not a guess.
+    def sampling_caveat
+      "ℹ️  Sampled titles are judged from #{SAMPLE_POSITIONS.size} x #{STREAM_SAMPLE_DURATION_S}s windows. " \
+        "Against full measurements the true level was up to #{format('%g', LoudnessEstimate::TRUTH_LOUDER_MARGIN_LU)} LU " \
+        "louder, or #{format('%g', LoudnessEstimate::TRUTH_QUIETER_MARGIN_LU)} LU quieter, than such a sample reads, so a " \
+        "sampled title gets a verdict only when that whole range is clear of ±#{@tolerance} LU of target. " \
+        'Otherwise it is listed as unclear. `process` (and --full) measure in full.'
+    end
+
+    def results_table(rows)
+      Terminal::Table.new do |t|
+        t.headings = ['Title', 'Type', 'Current', 'Could be', 'Target', 'Diff', 'Status']
+        rows.each do |result|
+          low, high = result[:level_range]
+          t.add_row [
+            result[:title].length > 30 ? "#{result[:title][0..27]}..." : result[:title],
+            result[:content_type].to_s.capitalize,
+            "#{result[:current_level].round(1)} LUFS",
+            result[:measured] == 'full' ? 'measured' : "#{low.round(1)} to #{high.round(1)}",
+            "#{result[:target_level].round(1)} LUFS",
+            "#{'+' if result[:level_difference] > 0}#{result[:level_difference].round(1)} dB",
+            result[:adjustment_type]
+          ]
+        end
+      end.to_s
     end
 
     def generate_csv_report(results)
@@ -371,7 +445,8 @@ module Neutraliser
 
       CSV.open(filename, 'w') do |csv|
         csv << ['Title', 'File Path', 'Library Type', 'Content Type', 'Current Level (LUFS)',
-                'Target Level (LUFS)', 'Level Difference (dB)', 'Needs Adjustment', 'Adjustment Type']
+                'Target Level (LUFS)', 'Level Difference (dB)', 'Needs Adjustment', 'Adjustment Type',
+                'Measured', 'Range Low (LUFS)', 'Range High (LUFS)']
 
         results.each do |result|
           csv << [
@@ -383,7 +458,10 @@ module Neutraliser
             result[:target_level].round(2),
             result[:level_difference].round(2),
             result[:needs_adjustment],
-            result[:adjustment_type]
+            result[:adjustment_type],
+            result[:measured],
+            result[:level_range][0].round(2),
+            result[:level_range][1].round(2)
           ]
         end
       end
@@ -402,6 +480,7 @@ module Neutraliser
         tolerance: @tolerance,
         total_files: results.size,
         files_needing_adjustment: results.count { |r| r[:needs_adjustment] },
+        files_unclear: results.count { |r| r[:verdict] == :unclear },
         results: results
       }
 

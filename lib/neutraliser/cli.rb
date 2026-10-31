@@ -171,6 +171,8 @@ module Neutraliser
     option :profile, type: :string, default: 'livingroom', desc: 'Normalization profile: reference, livingroom, night'
     option :tolerance, type: :numeric, default: 1.0,
                        desc: 'Flag files within this many LU of target as OK (matches `process --tolerance`)'
+    option :full, type: :boolean, default: false,
+                  desc: 'Measure every title end to end (accurate, slow: reads each file in full) instead of sampling'
     def analyze_plex
       analyzer = PlexAnalyzer.new(
         server_url: options[:server_url],
@@ -179,7 +181,8 @@ module Neutraliser
         output_format: options[:output_format],
         sample_percent: options[:sample_percent],
         profile: options[:profile],
-        tolerance: options[:tolerance]
+        tolerance: options[:tolerance],
+        full: options[:full]
       )
 
       analyzer.analyze

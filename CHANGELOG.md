@@ -67,12 +67,33 @@ Docker image; a RubyGems release is deferred until v0.1 has had real-world milea
 
 ### Changed
 
+- `analyze-plex` no longer gives a confident per-file verdict from a sample. Titles are
+  estimated from five 60-second windows spread across the runtime (combined on energy,
+  not by averaging LUFS), and a title is flagged Too Loud / Too Quiet only when the whole
+  error range measured on real films (up to 6.5 LU quieter, 1.0 LU louder than the full
+  reading, each widened by 0.5 LU) is clear of the tolerance. Everything else is listed as Unclear with the range
+  it could be in. On 10 films the old middle-window verdict disagreed with the full
+  measurement 6 times; the new rule contradicted it 0 times. The report also shows the
+  spread of estimated levels, and the CSV/JSON gain `Measured` and range columns
+  ([research note](docs/research/plex-sampling-error-2026-10.md)).
+- `analyze-plex --full` measures every title end to end for a firm verdict (slow: it reads
+  each whole file over HTTP).
+- Files whose codec can't be re-encoded to itself (DTS, TrueHD ...) are skipped by
+  default (`codec_change`); `--allow-codec-change` restores the FLAC/E-AC-3 fallback.
+- With no default-flagged audio track, the first English track is normalised, not a:0.
 - Output is checked against the source (duration, audio stream count) before it
   replaces the original; the new file keeps the original's owner when permitted.
 - The within-tolerance skip message now logs the measured level.
 
 ### Fixed
 
+- The `process` run manifest (`.neutraliser-run-manifest.jsonl`) recorded each file's outcome
+  only after the whole run finished, so a run stopped part-way (Ctrl-C, SIGTERM, a crash)
+  left only `queued` lines and `--resume` had nothing to skip. Outcomes are now written as
+  each file finishes.
+- `analyze-plex` read a window with no audio (loudnorm's `-inf`, e.g. a failed Plex read) as
+  0 LUFS, the loudest possible level. Such windows are now dropped, and a title with too few
+  readable windows is left out rather than given an invented level.
 - A quiet file whose peaks sat over the ceiling was re-encoded quieter (negative
   capped gain passed the tolerance check). Peak-capped files now need a gain
   towards target of at least `--min-gain`.

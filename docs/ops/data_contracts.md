@@ -55,7 +55,7 @@ JSON in the run's root directory, mapping each file's path (relative to that roo
 
 ### Run manifest: `.neutraliser-run-manifest.jsonl`
 
-One JSON line per file event: `timestamp`, `file` (absolute), `status` (`queued`/`done`/`skipped`/`failed`), `profile`, `target_lufs`, plus `reason`, `message` and `normalization_type` (`Linear`/`Limited`/`Dynamic`) when known. `--resume` reads it.
+One JSON line per file event: `timestamp`, `file` (absolute), `status` (`queued`/`done`/`skipped`/`failed`), `profile`, `target_lufs`, plus `reason`, `message` and `normalization_type` (`Linear`/`Limited`/`Dynamic`) when known. `--resume` reads it. Every queued file gets its `queued` line when the run starts, and its outcome line the moment that file finishes (not at the end of the run), so a run stopped part-way still leaves a manifest `--resume` can use. The last line for a file wins; a file whose last line is still `queued` was not reached or was interrupted.
 
 Skip `reason`s worth knowing (`status` `skipped`): `already_processed`, `within_tolerance`, `peak_limited` (the peak cap leaves under `--min-gain` dB of gain towards target), `object_audio`, `codec_change` (codec can't be kept; `--allow-codec-change`), `low_disk` (`--min-free-gb`; retried next run), `no_audio_track`, `unsupported_format`.
 

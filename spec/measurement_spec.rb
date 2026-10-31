@@ -16,6 +16,16 @@ RSpec.describe Neutraliser::Measurement do
       expect(measurement.input_thresh).to eq(-28.9)
       expect(measurement.target_offset).to eq(1.5)
       expect(measurement.already_at_target?).to be false
+      expect(measurement.silent?).to be false
+    end
+
+    it 'flags a "-inf" input_i (nothing to measure) as silent rather than a 0.0 LUFS reading' do
+      measurement = described_class.from_loudnorm_json(
+        'input_i' => '-inf', 'input_tp' => '-inf', 'input_lra' => '0.00',
+        'input_thresh' => '-70.00', 'target_offset' => 'inf'
+      )
+
+      expect(measurement.silent?).to be true
     end
   end
 

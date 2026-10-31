@@ -37,6 +37,8 @@ Entry point and navigation map for the neutraliser documentation set. Neutralise
 - [`research/library-validation-2026-08.md`](research/library-validation-2026-08.md) — Pre-release validation run over a real NAS/Plex library slice; found and fixed a video/subtitle metadata-preservation bug
 - [`research/prod-parity-audit-2026-10.md`](research/prod-parity-audit-2026-10.md) — Audit of media-server's neutralise.sh against the CLI: already there, ported, or dropped; the manifest migration; the driver call
 
+- [`research/plex-sampling-error-2026-10.md`](research/plex-sampling-error-2026-10.md) — How far a sampled loudness estimate sits from a film's true loudness (10 real Plex films); why analyze-plex gives "Unclear" instead of guessing, and `--full`
+
 ## Tasks
 - [`tasks/0001-plex-library-analysis/task.md`](tasks/0001-plex-library-analysis/task.md) — Plex library audio analysis command (complete)
 - [`tasks/0002-video-volume-normalisation/task.md`](tasks/0002-video-volume-normalisation/task.md) — Core video normalisation implementation (complete)
@@ -53,6 +55,7 @@ Entry point and navigation map for the neutraliser documentation set. Neutralise
 - [`front-matter-schema.json`](front-matter-schema.json) — JSON Schema for validating doc frontmatter
 
 ### Change Log
+- 2026-11-01 (agent:analyze-plex-figures): Added plex-sampling-error-2026-10.md research note
 - 2026-10-20 (agent:prod-parity): Added prod-parity audit and task 0006
 - 2025-09-24 (agent:create-project): Created initial documentation index scaffold
 - 2026-04-12 (agent:docs-lint): Rebuilt with agent notice, linked entries, orphaned files added, broken links removed

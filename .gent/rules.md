@@ -30,7 +30,8 @@ A Ruby CLI tool that normalises audio volume in video files using industry-stand
 - **`FileManager`**: Atomic file operations with integrity verification
 - **`CacheManager`**: Sidecar `.loudnorm_{profile}.json` caching system for analysis results
 - **`LocalStager`**: Stages files to local disk (`--local-stage`) before processing, copies results back
-- **`PlexAnalyzer`**: Plex library integration for media analysis, routed through FFmpegWrapper/Measurement/Profiles
+- **`PlexAnalyzer`**: Plex library integration for media analysis, routed through FFmpegWrapper/Measurement/Profiles; samples five 60s windows per title (`--full` reads end to end)
+- **`LoudnessEstimate`**: A title's loudness plus the range the truth can lie in; sampled estimates give a verdict only when the whole range clears the tolerance band, else `unclear` (research: `docs/research/plex-sampling-error-2026-10.md`)
 - **`CLI`**: Thor-based command-line interface with comprehensive options
 
 ### Processing Pipeline
@@ -67,7 +68,7 @@ A Ruby CLI tool that normalises audio volume in video files using industry-stand
 - `neutraliser report PATH [--format summary|tsv|json]` - What was done to each file, from its tags
 - `neutraliser import-manifest MANIFEST --root DIR` - Mark files a `neutralise.sh` manifest recorded as done as already processed
 - `neutraliser profiles` - List normalization profiles
-- `neutraliser analyze-plex` - Plex library analysis
+- `neutraliser analyze-plex [--full]` - Plex library loudness triage (sampled estimates; `--full` for exact, slow)
 - `neutraliser cache stats/clean` - Cache management
 
 ### Key Options
