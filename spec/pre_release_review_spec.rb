@@ -848,6 +848,22 @@ RSpec.describe 'pre-release review', :real_ffmpeg do
       expect(summary[:results]).to be_empty
     end
 
+    it 'processes a file whose name is not valid UTF-8, on a filesystem that allows one' do
+      lib = File.join(dir, 'lib')
+      FileUtils.mkdir_p(lib)
+      begin
+        FileUtils.cp(ReviewFixtures.film, File.join(lib, "caf\xE9.mkv"))
+      rescue Errno::EILSEQ
+        skip 'this filesystem refuses such names (APFS); covered on Linux'
+      end
+
+      first = run(lib, replace: true)
+      second = run(lib, replace: true)
+
+      expect(first[:done]).to eq(1)
+      expect(second[:results].first[:reason]).to eq(:already_processed)
+    end
+
     it 'keeps the sidecar usable when a file name is not valid UTF-8' do
       bad = File.join(dir, "caf\xE9.mkv")
       allow(File).to receive(:size).and_call_original

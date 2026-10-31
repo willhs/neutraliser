@@ -46,7 +46,7 @@ Confidence tags: **[verified]** I ran it; **[read]** from source only.
 | 23 | Skip `._*` AppleDouble files | **Already** | `Dir.glob('**/*')` doesn't match dotfiles. **[read]** |
 | 24 | Per-file log lines, `driver.status` | **Drop** | The driver only writes its own status; nothing parses the script's log. **[read]** |
 | 25 | No timeouts | **Config** | The CLI times out after 1800 s per subprocess. The driver doc says ~20 min to measure a movie on the NAS CPU: set `NEUTRALISER_ANALYSIS_TIMEOUT` and `NEUTRALISER_NORMALIZATION_TIMEOUT` to 7200+ in the container |
-| 26 | Measures every file fully | **Config** | The CLI's `--fast-verify` (default on) can skip a file after a 30 s sample. Pass `--no-fast-verify` for the same exactness |
+| 26 | Measures every file fully | **Config** | The CLI measures fully by default. `--fast-verify` can skip a file after a 30 s sample; it was on by default until the [pre-release review](pre-release-review-2026-11.md) |
 | 27 | Nothing written into the library but the media | **Config** | The CLI adds hidden `.neutraliser`, `.loudnorm_*.json` and `.neutraliser-run-manifest.jsonl` files. Plex and the *arrs ignore them; `--no-cache` drops the `.loudnorm_*` ones |
 | 28 | `sudo docker run linuxserver/ffmpeg` | **Follow-up** | The CLI needs an image with Ruby and ffmpeg |
 

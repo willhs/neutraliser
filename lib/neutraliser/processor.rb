@@ -324,7 +324,9 @@ module Neutraliser
       return subtitle_failure if subtitle_failure
 
       @stager.with_working_copy(file_path) do |working_path|
-        movie = FFMPEG::Movie.new(working_path)
+        # Binary, because the gem runs a regex over the path, which raises on a
+        # name that isn't valid UTF-8 (Latin-1 names are common on older NASes).
+        movie = FFMPEG::Movie.new(working_path.b)
 
         unless movie.audio_stream
           unless movie.valid?

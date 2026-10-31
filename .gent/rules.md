@@ -9,7 +9,7 @@ A Ruby CLI tool that normalises audio volume in video files using industry-stand
 - **Language**: Ruby
 - **Type**: Command-line interface with Thor
 - **Purpose**: EBU R128 video audio volume normalisation
-- **Dependencies**: FFmpeg 4.2+ for video/audio processing
+- **Dependencies**: FFmpeg for video/audio processing (tested on 5.1 and 7.1; Atmos/DTS:X detection needs 7.1+)
 - **Status**: ✅ **FULLY IMPLEMENTED** - Production ready
 
 ## Architecture Overview
@@ -32,6 +32,8 @@ A Ruby CLI tool that normalises audio volume in video files using industry-stand
 - **`LocalStager`**: Stages files to local disk (`--local-stage`) before processing, copies results back
 - **`PlexAnalyzer`**: Plex library integration for media analysis, routed through FFmpegWrapper/Measurement/Profiles; samples five 60s windows per title (`--full` reads end to end)
 - **`LoudnessEstimate`**: A title's loudness plus the range the truth can lie in; sampled estimates give a verdict only when the whole range clears the tolerance band, else `unclear` (research: `docs/research/plex-sampling-error-2026-10.md`)
+- **`VideoFiles`**: The one directory walk: literal paths, supported extensions, leftover temp detection
+- **`PlexEnv`**: Reads `PLEX_TOKEN`/`PLEX_SERVER_URL` from `.env` for `analyze-plex` only. Never add dotenv back: it runs `$(...)` from a file in the working directory, which may be a media folder
 - **`CLI`**: Thor-based command-line interface with comprehensive options
 
 ### Processing Pipeline
@@ -115,7 +117,7 @@ A Ruby CLI tool that normalises audio volume in video files using industry-stand
 - **Resource usage**: Stable memory, proper cleanup
 
 ## Running tests
-- `bundle exec rspec` (about 5 s) and `bundle exec rubocop`. Ruby is rbenv 3.2.3.
+- `bundle exec rspec` (about 90 s) and `bundle exec rubocop`. `bundle exec rspec --tag '~real_ffmpeg'` skips the real-media regressions (about 10 s). Ruby is rbenv 3.2.3.
 - Manager job shells may not have rbenv's shims on PATH, so `ruby`/`bundle` resolve to macOS system Ruby 2.6 (`RubyGems version (3.0.3.1) has a bug`, `LoadError thor`). Run `export PATH="$HOME/.rbenv/shims:$PATH" LANG=en_US.UTF-8` first; don't hunt through `~/.rbenv/versions` or Homebrew Ruby.
 
 ## Development Guidelines

@@ -6,6 +6,46 @@ All notable changes to this project are documented here. The format follows
 
 ## [Unreleased]
 
+### Security
+
+- A `.env` in the working directory no longer runs commands or reaches ffmpeg. `dotenv` is
+  gone: `analyze-plex` reads `PLEX_TOKEN` and `PLEX_SERVER_URL` from it literally, and nothing
+  else does. Unused `plex-ruby` and `nokogiri` are removed too.
+
+### Changed
+
+- `--fast-verify` is now off by default. A 30-second sample could record a film 9 LU off
+  target as finished, and `--no-fast-verify` couldn't undo that afterwards.
+- Temp outputs are hidden, so media scanners don't pick up a half-written file.
+- `--dry-run` no longer writes a run manifest. Its analysis caches stay.
+- `--target-level` keeps the chosen profile's other settings and names its profile from the
+  target (`custom-18`).
+- MP4 files with cover art or descriptive tags no longer get an in-file stamp, because it
+  cost them the cover and their iTunes tags. The sidecar holds their record.
+
+### Fixed
+
+- `--replace` lost MKV attachments (subtitle fonts), MP4 cover art and iTunes atoms, and the
+  primary track's dispositions other than default.
+- `--replace` overwrote a file that was still being written. It now fails with
+  `source_changed`.
+- SIGTERM and `docker stop` hung while ffmpeg kept running, then orphaned the temp output.
+  Exit is now prompt, with code 130 or 143.
+- Copy mode wrote directly to the final name and could destroy an earlier `_normalized` file
+  on failure.
+- `--replace` through a symlink replaced the link and left the real file untouched.
+- Output verification now checks every stream, chapters and the primary track's channels,
+  so a silent 7.1 downmix is refused.
+- `--resume` trusted dry-run and low-disk records, and ignored a changed profile.
+- A copy-mode run stopped a later `--replace`; a second `--target-level` was skipped; a
+  peak-limited or within-tolerance verdict outlived the options that produced it.
+- The measurement cache gave old figures to swapped files and same-named siblings.
+- Silent tracks were re-encoded as "0 LUFS".
+- Directories with `[`, `{` or `*` in their name read as empty. A relative name with a colon
+  was read as an ffmpeg protocol. A file name that isn't valid UTF-8 aborted the whole run.
+- An unwritable `HOME`, as under `docker --user`, crashed at startup. A missing ffmpeg now
+  gives one error, and an unreadable file fails instead of reading as "no audio".
+
 ## [0.1.0] — 2026-10-31
 
 First public release. Run from source (`git clone` + `bundle install`) or with the

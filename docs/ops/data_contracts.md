@@ -22,7 +22,7 @@ Every file neutraliser writes carries a record of what was done to it. `Neutrali
 | Tag | Example | Meaning |
 |---|---|---|
 | `NEUTRALISER_VERSION` | `0.1.0` | neutraliser version that wrote it |
-| `NEUTRALISER_PROFILE` | `livingroom` | Profile name (`reference`, `livingroom`, `night`, or `custom` for `--target-level`). **Its presence is what marks a file as processed.** |
+| `NEUTRALISER_PROFILE` | `livingroom` | Profile name (`reference`, `livingroom`, `night`, or `custom<target>` for `--target-level`, e.g. `custom-18`). **Its presence is what marks a file as processed.** |
 | `NEUTRALISER_MODE` | `linear` | `linear` (constant gain, dynamics untouched), `limited` (constant gain plus a peak limiter, `--limit-db`) or `dynamic` (loudnorm compressed the dynamic range) |
 | `NEUTRALISER_GAIN_DB` | `-1.50` | Constant gain applied, in dB (before the limiter, for `limited`). Empty for `dynamic` |
 | `NEUTRALISER_SOURCE_CODEC` | `eac3` | Primary audio codec before re-encoding |
@@ -43,21 +43,22 @@ Where the tags live:
 | Container | Primary audio stream | Container (format) |
 |---|---|---|
 | MKV, WebM | yes | yes |
-| MP4, M4V, MOV | no (silently dropped) | yes, via `-movflags +use_metadata_tags` |
+| MP4, M4V, MOV, nothing to lose | no (silently dropped) | yes, via `-movflags +use_metadata_tags` |
+| MP4, M4V, MOV, with cover art or descriptive tags | no | no. `use_metadata_tags` replaces the iTunes atoms and loses the cover, so the sidecar is the only record |
 | FLV, WMV | yes | yes |
 | AVI | no | no. The sidecar is the only record |
 
-`FFmpegWrapper.read_stamp` reads stream `a:0` first and falls back to the container.
+`FFmpegWrapper.read_stamp` reads the primary audio stream first and falls back to the container.
 
 ### Sidecar cache: `.neutraliser`
 
-JSON in the run's root directory, mapping each file's path (relative to that root) to `{size, mtime, profile, processed_at}`. It is a cache in front of the tag check. A file counts as processed when size, mtime and profile all match. A tag hit refreshes the entry. A sidecar in the file's own folder also counts for a run started above it; `neutraliser import-manifest` writes there.
+JSON in the run's root directory, mapping each file's path (relative to that root) to `{size, mtime, profile, processed_at}`, plus `tolerance` when the file was left alone for being close enough (a stricter run looks again). After a copy-mode run the entry names the `_normalized` copy, not the original. Peak-limited files aren't recorded, so a later `--limit-db` run can still reach them. It is a cache in front of the tag check. A file counts as processed when size, mtime and profile all match. A tag hit refreshes the entry. A sidecar in the file's own folder also counts for a run started above it; `neutraliser import-manifest` writes there.
 
 ### Run manifest: `.neutraliser-run-manifest.jsonl`
 
-One JSON line per file event: `timestamp`, `file` (absolute), `status` (`queued`/`done`/`skipped`/`failed`), `profile`, `target_lufs`, plus `reason`, `message` and `normalization_type` (`Linear`/`Limited`/`Dynamic`) when known. `--resume` reads it. Every queued file gets its `queued` line when the run starts, and its outcome line the moment that file finishes (not at the end of the run), so a run stopped part-way still leaves a manifest `--resume` can use. The last line for a file wins; a file whose last line is still `queued` was not reached or was interrupted.
+One JSON line per file event: `timestamp`, `file` (absolute), `status` (`queued`/`done`/`skipped`/`failed`), `profile`, `target_lufs`, `replace`, plus `reason`, `message` and `normalization_type` (`Linear`/`Limited`/`Dynamic`) when known. A dry run writes none. Every queued file gets its `queued` line when the run starts, and its outcome line the moment that file finishes (not at the end of the run), so a run stopped part-way still leaves a manifest `--resume` can use. The last line for a file wins; a file whose last line is still `queued` was not reached or was interrupted. `--resume` trusts only `normalized`, `already_processed`, `no_audio_track` and `unsupported_format`, and only under the same profile, target and `replace`; anything else is checked again.
 
-Skip `reason`s worth knowing (`status` `skipped`): `already_processed`, `within_tolerance`, `peak_limited` (the peak cap leaves under `--min-gain` dB of gain towards target), `object_audio`, `codec_change` (codec can't be kept; `--allow-codec-change`), `low_disk` (`--min-free-gb`; retried next run), `no_audio_track`, `unsupported_format`.
+Skip `reason`s worth knowing (`status` `skipped`): `already_processed`, `within_tolerance`, `peak_limited` (the peak cap leaves under `--min-gain` dB of gain towards target), `object_audio`, `codec_change` (codec can't be kept; `--allow-codec-change`), `low_disk` (`--min-free-gb`; retried next run), `silent` (primary track has no measurable level), `no_audio_track`, `unsupported_format`.
 
 A failed entry's `message` is one line: what failed plus the last stderr line that says why (e.g. `Normalization failed (exit 1): Error opening output files: Permission denied`), never the ffmpeg banner. Failure `reason`s:
 
@@ -66,7 +67,9 @@ A failed entry's `message` is one line: what failed plus the last stderr line th
 | `not_writable` | The file's folder won't take a new file (preflight, before analysis) | after fixing folder permissions |
 | `unsupported_subtitle` | A subtitle stream this ffmpeg can't identify, so it can't be copied (preflight, or recognised in the encode's stderr) | after remuxing/removing that track |
 | `timeout` | A subprocess ran out of time | yes, with a bigger `NEUTRALISER_*_TIMEOUT` |
-| `output_verification_failed` | The output looked corrupt, or its duration (±1 s) or audio stream count differs from the source; the original is untouched | investigate |
+| `output_verification_failed` | The output looked corrupt, or its duration (±1 s), stream or chapter counts, or the primary track's channels differ from the source (a 7.1 track through a 5.1-only encoder ends up here); the original is untouched | investigate |
+| `source_changed` | The file changed while it was being processed, such as a copy still arriving; it was left as it is | yes, once it has finished changing |
+| `unreadable` | ffprobe could not read the file | after checking the file |
 | `ffmpeg_error` | Any other ffmpeg/ffprobe failure | investigate |
 | `file_manager_error`, `processing_error`, `invalid_result` | Failures outside ffmpeg | investigate |
 

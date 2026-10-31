@@ -109,7 +109,7 @@ Both flags are independent and can be combined.
 - **Sidecar caching** — `.loudnorm_{profile}.json` files next to videos avoid re-analysis on repeated runs.
 - **The file is the record** — the `.neutraliser` sidecar lives in whichever root a run started from, so moving a file or running from another root lost the record and could cause another lossy re-encode. The Stamp travels with the file. The sidecar stays as a cache in front of the one-ffprobe tag check and is refreshed on a tag hit.
 - **One skip decider** — SkipDecider is the single place that answers "is this file already normalised?", backed by one sidecar (`.neutraliser`) and one staleness rule (size+mtime+profile, never expires). Quick LUFS sampling lives inside it as an internal fallback strategy and never writes its own marker file; a verified quick sample is recorded through the same sidecar. The legacy `.{basename}.neutralised_{profile}` marker format is retired; `neutraliser cache clean` removes any left over from older runs.
-- **Atomic replace** — write to temp file, verify integrity, then rename to prevent corruption.
+- **Atomic replace** — write to a hidden temp file, verify it against the source (duration, streams, chapters, primary channels), check the source has not changed, then rename. Copy mode does the same onto `_normalized`.
 
 ## Next Actions
 

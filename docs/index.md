@@ -36,6 +36,7 @@ Entry point and navigation map for the neutraliser documentation set. Neutralise
 - [`research/object-audio-detection.md`](research/object-audio-detection.md) — How ffprobe reports Atmos/DTS:X (decoder-set profile), FATE-sample tests, and the detect-and-skip approach
 - [`research/library-validation-2026-08.md`](research/library-validation-2026-08.md) — Pre-release validation run over a real NAS/Plex library slice; found and fixed a video/subtitle metadata-preservation bug
 - [`research/prod-parity-audit-2026-10.md`](research/prod-parity-audit-2026-10.md) — Audit of media-server's neutralise.sh against the CLI: already there, ported, or dropped; the manifest migration; the driver call
+- [`research/pre-release-review-2026-11.md`](research/pre-release-review-2026-11.md) — Pre-release code and security review: findings ranked by severity, what was fixed, what needs Will's call
 
 - [`research/plex-sampling-error-2026-10.md`](research/plex-sampling-error-2026-10.md) — How far a sampled loudness estimate sits from a film's true loudness (10 real Plex films); why analyze-plex gives "Unclear" instead of guessing, and `--full`
 

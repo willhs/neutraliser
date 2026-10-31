@@ -2,7 +2,7 @@
 
 **Stop reaching for the remote between every film.** Neutraliser levels the audio across your whole video library — one CLI, no server, no database, no plugin marketplace.
 
-It uses FFmpeg's EBU R128 `loudnorm` filter to bring every file to the same perceived loudness, re-encoding audio at the source's own codec and bitrate so you don't pay for levelling with quality.
+It measures each file with FFmpeg's EBU R128 `loudnorm` filter and moves it to the same perceived loudness with one constant gain. Video is stream-copied, and only the track being levelled is re-encoded, at the source's own codec and bitrate. Re-encoding lossy audio still costs a generation, so files already close to target are left alone.
 
 ```bash
 neutraliser process /media/movies --profile livingroom
@@ -81,24 +81,24 @@ Neutraliser does the one job: make the library level, leave everything else alon
 
 - **Whole-library levelling** — point it at a directory; it walks it, analyses, and normalises
 - **Home-theatre profiles** — `reference`, `livingroom`, `night`, tuned for how you're actually listening
-- **Source-matched codec & bitrate** — AAC 512k stays AAC 512k; FLAC stays lossless. No fixed 256k downgrade, no generational decay ([ADR-0001](docs/design/adr/0001-smart-codec-selection.md))
-- **Full stream preservation** — every audio/subtitle track, per-stream metadata (titles, languages), chapters and dispositions survive the round trip
-- **Never silently strips Atmos / DTS:X** — ffmpeg can't re-encode object audio, so files whose primary track is Dolby Atmos (E-AC3 JOC, TrueHD) or DTS:X are skipped and logged; `--allow-object-audio-loss` processes them anyway ([detection notes](docs/research/object-audio-detection.md))
-- **Safe by default** — writes `*_normalized` copies; originals untouched unless you pass `--replace`
+- **Source-matched codec & bitrate** — AAC stays AAC at its own bitrate and FLAC stays lossless, with no fixed 256k target. Very low and very high bitrates move to a sensible floor or cap (128k MP3 becomes 192k, stereo AAC tops out at 320k). A lossy re-encode is still one generation of loss ([ADR-0001](docs/design/adr/0001-smart-codec-selection.md))
+- **Full stream preservation** — every audio and subtitle track, attachments (subtitle fonts), per-stream metadata (titles, languages), chapters and dispositions survive the round trip, and the original isn't replaced if any go missing. Data streams other than a MOV timecode aren't carried over
+- **Won't silently strip Atmos / DTS:X** — ffmpeg can't re-encode object audio, so files whose primary track is Dolby Atmos (E-AC3 JOC, TrueHD) or DTS:X are skipped and logged; `--allow-object-audio-loss` processes them anyway. Detecting them needs **FFmpeg 7.1+**. On anything older you get a warning at the start of each run and files *named* as Atmos are skipped, but an unnamed E-AC3 Atmos track can't be told apart from plain E-AC3 and would be flattened ([detection notes](docs/research/object-audio-detection.md))
+- **Safe by default** — writes `*_normalized` copies; originals untouched unless you pass `--replace`. Output is written under a hidden temporary name, checked against the source, then renamed into place, and a file that changes during the run is left alone
 - **Fully reversible on request** — `--keep-original-audio` stream-copies the untouched original track into the output as a non-default extra track, so nothing is lost even with `--replace`
-- **Every change is recorded in the file** — the normalised track carries `NEUTRALISER_*` tags (profile, linear/dynamic, gain, source codec, measured loudness, date), so the record survives moves and renames; `neutraliser report` reads it back
-- **Skips what's already fine** — a file tagged for the same profile is never re-encoded; a `.neutraliser` sidecar caches that check and an optional 30-second sample spots files already at target, so a re-run over a processed library costs seconds, not hours
-- **Resumable** — interrupted a 500-file run? `--resume` picks up from the manifest
+- **Every change is recorded** — the normalised track carries `NEUTRALISER_*` tags (profile, linear/dynamic, gain, source codec, measured loudness, date), so the record survives moves and renames; `neutraliser report` reads it back. The exceptions are AVI, and MP4 files with cover art or descriptive tags, where writing them would cost the iTunes tags. Those are recorded in the sidecar only
+- **Skips what's already fine** — a file tagged for the same profile is never re-encoded and a `.neutraliser` sidecar caches that check, so a re-run over a processed library costs seconds, not hours
+- **Resumable** — interrupted a 500-file run? `--resume` picks up from the manifest, which is written as each file finishes
 - **Plex-aware** — `analyze-plex` gives a quick loudness triage across your Plex libraries before you change a single file
 - **Big-batch friendly** — `--fast` (single-pass, ~30% quicker) and `--local-stage` for slow network mounts
 
 ## Requirements
 
 - **Ruby** 3.2+
-- **FFmpeg** 4.2+ (with `ffprobe`) on your `PATH`
+- **FFmpeg** with `ffprobe` on your `PATH`. Tested on 5.1 and 7.1; **7.1 or newer** is what detects Atmos / DTS:X
 - *(Optional)* a Plex token in `.env` for `analyze-plex`
 
-Check FFmpeg with `ffmpeg -version`. On macOS: `brew install ffmpeg`. On Debian/Ubuntu: `sudo apt install ffmpeg`.
+Check FFmpeg with `ffmpeg -version`. On macOS: `brew install ffmpeg`. On Debian/Ubuntu: `sudo apt install ffmpeg`, though many releases ship older than 7.1, in which case the Docker image is the easy way to get it.
 
 ## Installation
 
@@ -136,7 +136,8 @@ docker run --rm -v /path/to/media:/media ghcr.io/willhs/neutraliser:latest \
 ```
 
 - **Media volume**: mount your library at `/media`; the working directory is `/media`, and sidecars and the `.neutraliser-run-manifest.jsonl` are written next to the files, so the mount must be writable.
-- **`--resume`**: skips files already completed in the manifest, so a stopped container can be re-run with the same command.
+- **File ownership**: the image runs as root by default, so copies, sidecars and the manifest come out owned by root (`--replace` keeps each file's owner). Add `--user $(id -u):$(id -g)` to write as yourself. Logs then go to stdout only.
+- **`--resume`**: skips files already completed in the manifest, so a stopped container can be re-run with the same command. `docker stop` stops cleanly: the original stays as it was and the temp output is removed.
 - **Timeouts**: pass `-e NEUTRALISER_ANALYSIS_TIMEOUT=3600` (also `NEUTRALISER_NORMALIZATION_TIMEOUT`, `NEUTRALISER_QUICK_TIMEOUT`, `NEUTRALISER_PROBE_TIMEOUT`, in seconds) for slow storage such as NAS disks.
 - **Build it yourself**: `docker build -t neutraliser .`
 
@@ -145,7 +146,7 @@ A RubyGems release (and possibly a Homebrew tap) will follow once v0.1 has had s
 ## Quick start
 
 ```bash
-# See what a file's loudness actually is — changes nothing
+# See what a file's loudness actually is — changes no media
 neutraliser process --dry-run movie.mkv
 
 # Normalise one file (writes movie_normalized.mkv alongside it)
@@ -214,10 +215,10 @@ neutraliser process --tolerance 0.5 /media/movies
 neutraliser process --local-stage --replace /mnt/nas/movies
 ```
 
-**Re-run over an already-levelled library.** Sidecars make this cheap — it's safe to schedule as a cron job that catches newly added files:
+**Re-run over an already-levelled library.** Sidecars make this cheap, so it suits a cron job that catches newly added files. A file still being copied in is left alone (it fails with `source_changed`) and picked up next time. Use `--lock-file` so a slow run and the next one don't overlap:
 
 ```bash
-neutraliser process --replace /media/movies
+neutraliser process --replace --lock-file /tmp/neutraliser.lock /media/movies
 ```
 
 ## Profiles
@@ -238,11 +239,11 @@ Any numeric `--target-level` overrides the profile's LUFS while keeping the rest
 
 ## How it works
 
-1. **Skip check** — a file whose primary audio track (or container) carries a `NEUTRALISER_PROFILE` tag for this profile has already been done, wherever it lives now. A `.neutraliser` sidecar (size + mtime + profile) caches that answer. If neither says so, an optional 30-second sample estimates whether it's already within tolerance.
+1. **Skip check** — a file whose primary audio track (or container) carries a `NEUTRALISER_PROFILE` tag for this profile has already been done, wherever it lives now. A `.neutraliser` sidecar (size + mtime + profile) caches that answer.
 2. **Measure** — an FFmpeg `loudnorm` analysis pass measures integrated loudness, true peak, and loudness range. Results are cached, so re-analysis is free.
 3. **Decide** — within `--tolerance` of the profile target? Skip it. Otherwise, pick an output codec that matches the source ([ADR-0001](docs/design/adr/0001-smart-codec-selection.md)).
 4. **Normalise** — applies a constant gain (an ffmpeg `volume` filter) computed from the measured values, capped so true peak stays within the profile ceiling. With `--allow-dynamic` (or the `night` profile) a second `loudnorm` pass is used instead, which may fall back to dynamic compression. Video is stream-copied — it is never re-encoded. Chapters, subtitles, and per-stream metadata are mapped across explicitly.
-5. **Write** — atomically, to `*_normalized.<ext>` or over the original with `--replace`. The same ffmpeg pass writes the `NEUTRALISER_*` tags ([tag schema](docs/ops/data_contracts.md)), and the sidecar is updated.
+5. **Write** — to a hidden temporary file beside the target. Duration, every stream, chapters and the track's channel count are checked against the source, then one rename puts it at `*_normalized.<ext>`, or over the original with `--replace`. Through a symlink, `--replace` updates the real file and keeps the link. It does break hard links: the old copy stays under its other names, so a library hard-linked to a torrent client's folder takes up the space twice. The same ffmpeg pass writes the `NEUTRALISER_*` tags ([tag schema](docs/ops/data_contracts.md)), and the sidecar is updated.
 
 Use `--fast` (requires `--allow-dynamic` or the `night` profile) to collapse steps 2 and 4 into a single dynamic-mode pass: roughly 30% quicker, marginally less precise ([ADR-0002](docs/design/adr/0002-performance-flags.md) has the benchmarks).
 
@@ -258,10 +259,10 @@ Normalise a file or every video under a directory.
 | `--target-level` | — | Explicit LUFS target, overriding the profile |
 | `--tolerance` | `1.0` | Skip files already within this many LU of target |
 | `--replace` | `false` | Overwrite originals instead of writing `*_normalized` copies |
-| `--dry-run` | `false` | Analyse and report only; write nothing |
+| `--dry-run` | `false` | Analyse and report only; no media changes. It leaves its measurements in `*.loudnorm_*.json` caches so the real run doesn't repeat them, but writes no run manifest |
 | `--cache` / `--no-cache` | on | Cache loudness analysis results |
-| `--fast-verify` / `--no-fast-verify` | on | Use the 30-second quick sample before a full analysis |
-| `--resume` | `false` | Skip files already completed per `.neutraliser-run-manifest.jsonl` |
+| `--fast-verify` / `--no-fast-verify` | off | Skip a file when a 30-second sample from its middle looks within tolerance. Saves a full measurement, but a sample can misjudge a whole film, and the file is then recorded as finished |
+| `--resume` | `false` | Skip files already finished per `.neutraliser-run-manifest.jsonl` under the same profile, target and `--replace` setting. Everything else is checked again |
 | `--allow-dynamic` | `false` | Let `loudnorm` compress dynamics when it needs to. Default is constant gain only. Implied by the `night` profile |
 | `--keep-original-audio` | `false` | Keep the untouched original primary audio as an extra, non-default track titled `<title> (original, not normalised)`, after the normalised one. Costs file size; makes processing reversible. A re-run never adds a second copy |
 | `--allow-object-audio-loss` | `false` | Process files whose primary track is Atmos / DTS:X anyway. Re-encoding drops the object audio (plain 5.1/7.1 out); each such file logs a warning. Default skips them with reason `object_audio` |
@@ -277,7 +278,11 @@ Normalise a file or every video under a directory.
 
 The run summary reports `linear=N, dynamic=N, limited=N` counts; each file that went Dynamic logs a warning, and each peak-capped file logs how many LU it landed short of target.
 
-Exits `1` if any file fails, so batch runners can detect partial failure, `3` if `--lock-file` is held by another run, and `4` if the run stopped on `--abort-free-gb`.
+Exits `1` if any file fails, so batch runners can detect partial failure, `3` if `--lock-file` is held by another run, `4` if the run stopped on `--abort-free-gb`, and `130` or `143` if stopped by Ctrl-C or SIGTERM.
+
+Each run also logs to `~/.local/share/neutraliser/logs/`, when that's writable.
+
+A run killed with SIGKILL, or a power cut, can leave a hidden `.<name>_neutraliser_<hex>.<ext>` file behind. The next run over that folder lists any it finds, and they're safe to delete once no run is active.
 
 `neutraliser import-manifest MANIFEST --root DIR` marks files that the retired `neutralise.sh` already leveled (its `manifest.jsonl`) as processed, so a first run doesn't re-measure them. See the [parity audit](docs/research/prod-parity-audit-2026-10.md).
 
@@ -307,7 +312,7 @@ Loudness triage across your Plex libraries, modifying nothing. Reads audio over 
 | `--tolerance` | `1.0` | Files within this many LU count as OK |
 | `--full` | off | Measure every title end to end instead of sampling. Slow; gives a firm OK / Too Loud / Too Quiet for each |
 
-Copy `.env.example` to `.env` and add your token. See [docs/design/plex-analysis-guide.md](docs/design/plex-analysis-guide.md).
+Copy `.env.example` to `.env` and add your token. Only `analyze-plex` reads that file, and only `PLEX_TOKEN` and `PLEX_SERVER_URL` from it, so a stray `.env` in a media folder does nothing. The token is passed to ffmpeg as a request header, so while a title is being sampled it is visible in `ps` to other users on the same machine. See [docs/design/plex-analysis-guide.md](docs/design/plex-analysis-guide.md).
 
 ### `report PATH`
 
@@ -322,7 +327,7 @@ neutraliser report /media/tv
 neutraliser report /media/tv --format tsv > tv-report.tsv
 ```
 
-AVI can't hold custom tags, so AVI files always show as untouched. Their skip state lives only in the sidecar.
+AVI can't hold custom tags, and MP4 files with cover art or descriptive tags keep their iTunes tags rather than take ours, so these always show as untouched. Their skip state lives only in the sidecar.
 
 ### `profiles`
 

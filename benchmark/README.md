@@ -81,7 +81,6 @@ For each run, capture:
 ## Running the Benchmark
 
 ```bash
-cd /home/will/projects/neutraliser
 bash benchmark/run.sh
 ```
 
