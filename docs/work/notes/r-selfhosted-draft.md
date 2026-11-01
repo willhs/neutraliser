@@ -33,6 +33,8 @@ Every claim in the body was checked against the README, `demo/README.md`, the co
 
 **Not verified by anyone but you** (kept only as first-person statements, or marked): what Plex's own settings do on your clients, your August library run, and anything said about other tools (star counts, features), which comes from `docs/research/landscape.md` (2026-08-08), not from a fresh look.
 
+Plex facts re-read from Plex's announcement on 2026-11-01; Jellyfin's music-only claim is from `AudioNormalizationTask.cs` on master as read in research 0002 (not re-fetched in this job). Re-check both before posting. Jellyfin users may be a better audience than assumed here, since they have no video option at all.
+
 ## Title options
 
 - Neutraliser: levels the audio across a media library, one CLI, no server or database
@@ -41,6 +43,8 @@ Every claim in the body was checked against the README, `demo/README.md`, the co
 ## Body
 
 I run my own media library and got fed up with volume jumping between films. I wrote a small CLI, Neutraliser, that fixes it once, in the files.
+
+Why not the built-in options: Plex added Normalize Loudness in Sept 2026, but it needs Plex Pass, transcodes the audio on every play, and needs client support. Jellyfin's loudness normalisation task only covers music (`MediaTypes = [Audio]` in its source), so there's nothing for video. A one-time change to the file works on any client, direct play included, at the cost of one audio re-encode.
 
 It's one job: measure each file with ffmpeg's EBU R128 loudnorm filter, then apply one constant gain to reach a target (-20 LUFS by default). No daemon, no database, no web UI. Point it at a directory.
 

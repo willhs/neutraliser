@@ -17,6 +17,8 @@ tags: [release, community, draft]
 
 ## Claims audit (2026-11-01, this tree)
 
+Plex's Normalize Loudness / Boost Dialog facts re-read from Plex's announcement on 2026-11-01 (no update to the post; Web/Smart TV still listed "coming soon"). Re-check the thread right before posting: client support may have shipped. If it has, soften "need client support" to "need a supporting client" and keep the Plex Pass and per-play transcode points. I haven't tested these Plex features, so the draft makes no claim about how well they work.
+
 Every claim in the body was checked against the README, `demo/README.md`, the code or a run in this job. Left out on purpose: the August "716 of 804 films within 1 LU" figure and the ten-film real-library chart (they predate the constant-gain default, and the films were picked from processed files). The synthetic figures were re-run 2026-11-01 on FFmpeg 7.1.1 (`demo/README.md#verified-synthetic-rerun`) and are pink noise, not films.
 
 **`analyze-plex`:** movie libraries were measured against your live Plex server in October (the sampling research). TV libraries returned nothing until this job: a show library's `/all` lists shows, which carry no media, so it now asks for episodes. That is tested against a fake Plex server only. Run it on a real TV library before you post the TV claim.
@@ -28,11 +30,13 @@ Every claim in the body was checked against the README, `demo/README.md`, the co
 - I got tired of reaching for the remote between films, so I wrote a tool that levels a whole library
 - Fix volume jumps between films once, at the file level (free, open source CLI)
 
+Title note: don't say "Plex's setting doesn't work". Say what is different.
+
 ## Body
 
-I never found a Plex setting that fixed this for me. My workarounds were soundbar night mode and the remote.
+My workarounds for volume jumps between films were soundbar night mode and the remote. Plex now has Normalize Loudness and Boost Dialog (Sept 2026, Plex Pass). They work at playback: Plex transcodes the audio on every play, and they need client support (Web and Smart TV apps were "coming soon" at the announcement). I wanted the opposite trade: change the file once, so every client plays it level, direct play included, no Plex Pass needed.
 
-So I wrote Neutraliser. It measures each file with ffmpeg's EBU R128 loudnorm filter and moves it to the same loudness with one constant gain. No compression by default, so quiet scenes stay quiet relative to loud ones. Only the overall level moves.
+So I wrote Neutraliser. It costs one audio re-encode per file, once. It measures each file with ffmpeg's EBU R128 loudnorm filter and moves it to the same loudness with one constant gain. No compression by default, so quiet scenes stay quiet relative to loud ones. Only the overall level moves.
 
 What it does to a file:
 

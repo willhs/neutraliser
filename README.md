@@ -75,7 +75,7 @@ true peak stays under the profile ceiling, so a quiet-but-peaky file lands shy o
 
 ## Why this exists
 
-Plex's own "Normalize Multi-Channel Audio" setting doesn't fix it — it doesn't touch dynamic range within a file and doesn't apply to every client. The usual workarounds are client-side band-aids (soundbar night mode, Windows loudness equalisation) or a full transcode-automation platform like Tdarr, which people accurately describe as powerful but annoying to set up for one job.
+Plex's older "Normalize Multi-Channel Audio" setting only applies when downmixing. In September 2026 Plex added **Normalize Loudness** and **Boost Dialog** for video (Plex Pass; [announcement](https://forums.plex.tv/t/audio-enhancements-boost-dialog-normalize-loudness/942925)). They work at playback: turning either on makes Plex transcode the audio on every play, and they need client support (at the announcement: mobile, Android TV, Apple TV, Fire TV and Roku; Plex Web and Smart TV apps "coming soon"). Neutraliser works the other way: a one-time change to the file, at the cost of one audio re-encode, after which any client levels the same way, direct play included, with no Plex Pass. They aren't mutually exclusive. The other usual workarounds are client-side band-aids (soundbar night mode, Windows loudness equalisation) or a full transcode-automation platform like Tdarr, which people accurately describe as powerful but annoying to set up for one job.
 
 Neutraliser does the one job: make the library level, leave everything else alone.
 

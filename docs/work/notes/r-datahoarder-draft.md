@@ -21,6 +21,8 @@ Every claim in the body was checked against the README, `demo/README.md`, the co
 
 `analyze-plex` isn't mentioned in this draft: it isn't the archive angle, and TV libraries are tested only against a fake Plex server.
 
+Plex's Sept 2026 Normalize Loudness (Plex Pass, transcodes per play) isn't mentioned in this draft because it isn't the archive angle. If a commenter raises it: it's a playback-time feature, Neutraliser changes the file once.
+
 **Not verified by anyone but you** (kept only as first-person statements, or marked): what Plex's own settings do on your clients, your August library run, and anything said about other tools (star counts, features), which comes from `docs/research/landscape.md` (2026-08-08), not from a fresh look.
 
 ## Title options
