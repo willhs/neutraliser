@@ -16,6 +16,7 @@ module Neutraliser
     ADJUSTMENT_LABELS = {
       ok: 'OK', too_loud: 'Too Loud', too_quiet: 'Too Quiet', unclear: 'Unclear'
     }.freeze
+    EPISODE_TYPE = 4 # Plex's metadata type number for an episode
     READ_IN_FULL_BELOW_S = SAMPLE_POSITIONS.size * STREAM_SAMPLE_DURATION_S
 
     attr_reader :server_url, :token, :library_name, :output_format, :sample_percent, :profile, :tolerance, :full
@@ -160,8 +161,7 @@ module Neutraliser
     def analyze_library(library)
       log "\n🔍 Analyzing library: #{library['title']}"
 
-      # Get all media items from the library using Plex API
-      response = make_plex_request("/library/sections/#{library['key']}/all")
+      response = make_plex_request(library_contents_path(library))
       unless response.code == '200'
         log "❌ Failed to get library contents: HTTP #{response.code}"
         return []
@@ -187,15 +187,31 @@ module Neutraliser
 
         log "   ⏳ Processed #{processed}/#{all_items.size} items..." if processed % 25 == 0
       rescue StandardError => e
-        log "   ❌ Error analyzing #{item['title']}: #{e.message}"
+        log "   ❌ Error analyzing #{display_title(item)}: #{e.message}"
       end
 
       log "✅ Completed analysis of #{library['title']}: #{results.size} valid results"
       results
     end
 
-    def analyze_media_item(item, library_type)
+    # A movie library's /all lists the films. A show library's /all lists the
+    # shows, which carry no Media, so ask for its episodes (Plex type 4).
+    def library_contents_path(library)
+      path = "/library/sections/#{library['key']}/all"
+      library['type'] == 'show' ? "#{path}?type=#{EPISODE_TYPE}" : path
+    end
+
+    # "Show S01E02 Title" for an episode, so a TV row says which show it is from.
+    def display_title(item)
       title = item['title'] || 'Unknown Title'
+      return title unless item['grandparentTitle']
+
+      episode = format('S%<season>02dE%<number>02d', season: item['parentIndex'].to_i, number: item['index'].to_i)
+      "#{item['grandparentTitle']} #{episode} #{title}"
+    end
+
+    def analyze_media_item(item, library_type)
+      title = display_title(item)
 
       streaming_url = get_plex_streaming_url(item)
       return nil unless streaming_url
@@ -254,13 +270,13 @@ module Neutraliser
         measurement = analyze_streaming_audio(streaming_url)
         return LoudnessEstimate.exact(measurement.input_i) unless measurement.silent?
 
-        log "   ⚠️  #{item['title']}: no audio signal measured, skipping"
+        log "   ⚠️  #{display_title(item)}: no audio signal measured, skipping"
         return nil
       end
 
       levels = window_offsets(total_s).map { |offset| measure_window(streaming_url, offset) }
       estimate = LoudnessEstimate.sampled(levels)
-      log "   ⚠️  #{item['title']}: too few readable audio windows (#{levels.compact.size}), skipping" unless estimate
+      log "   ⚠️  #{display_title(item)}: too few readable audio windows (#{levels.compact.size}), skipping" unless estimate
       estimate
     end
 

@@ -25,7 +25,7 @@ The neutralizer implements a strictly sequential architecture that processes fil
 
 ### How to Verify:
 1. **Automated Testing**: Run performance benchmarks with 10+ test files and measure throughput
-2. **Real-world Validation**: Process 100+ movies in /Volumes/F-Movies and measure total time
+2. **Real-world Validation**: Process 100+ movies in an external drive and measure total time
 3. **Accuracy Verification**: Ensure all processed files maintain exact EBU R128 compliance vs current implementation
 4. **Safety Verification**: Confirm atomic operations, error handling, and rollback continue to function
 
@@ -679,7 +679,7 @@ end
 3. **Error Recovery Test**: Introduce corrupted files and verify isolated failure handling
 4. **Resource Stress Test**: Monitor CPU, memory, and I/O during peak processing
 5. **Cache Performance Test**: Verify cache hit rates improve on repeat processing
-6. **Storage Performance Test**: Test with files on external storage (/Volumes/F-Movies)
+6. **Storage Performance Test**: Test with files on external storage (an external drive)
 
 ## Performance Considerations
 
@@ -695,7 +695,7 @@ end
 - **Storage**: No additional storage requirements beyond existing cache files
 
 ### Bottleneck Analysis:
-- **External Storage**: /Volumes/F-Movies I/O may become limiting factor
+- **External Storage**: an external drive I/O may become limiting factor
 - **FFmpeg Operations**: Still bound by video encoding speed per file
 - **Cache System**: Current implementation scales well to parallel access
 

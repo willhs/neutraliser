@@ -95,8 +95,8 @@ def svg(rows, target, profile)
   parts = []
   parts << %(<svg xmlns="http://www.w3.org/2000/svg" width="#{width}" height="#{height}" viewBox="0 0 #{width} #{height}" font-family="-apple-system,BlinkMacSystemFont,Segoe UI,Helvetica,Arial,sans-serif">)
   parts << %(<rect width="#{width}" height="#{height}" rx="8" fill="#{bg}"/>)
-  parts << %(<text x="32" y="34" font-size="17" font-weight="600" fill="#{ink}">Integrated loudness, before and after</text>)
-  parts << %(<text x="32" y="54" font-size="12.5" fill="#{muted}">#{rows.size} files &#183; neutraliser --profile #{profile} &#183; measured with ffmpeg ebur128</text>)
+  parts << %(<text x="32" y="34" font-size="17" font-weight="600" fill="#{ink}">Integrated loudness, before and after (synthetic clips)</text>)
+  parts << %(<text x="32" y="54" font-size="12.5" fill="#{muted}">#{rows.size} synthetic pink-noise clips, not real films &#183; neutraliser --profile #{profile} &#183; measured with ffmpeg ebur128</text>)
 
   # Target line
   ty = y.call(target).round(1)

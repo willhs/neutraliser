@@ -35,7 +35,7 @@ Confidence tags: **[verified]** I ran it; **[read]** from source only.
 | 12 | MP4 bytes named `.mkv`: write `-f mp4` (mov_text can't go in Matroska) | **Ported** | **[verified]** before: CLI failed on a Lost-S01-style file, misreported as `unsupported_subtitle`. After: MP4 out, subtitle intact, stamp readable |
 | 13 | Verify staged output: duration within 1 s and audio stream count | **Ported** | CLI only checked that ffprobe could read a duration. Now `FileManager.output_mismatch`, reason `output_verification_failed` |
 | 14 | Atomic swap with `.bak`, verify in place, rollback | **Drop** | The CLI renames the temp output over the original (atomic), after verifying it. No window, nothing to roll back |
-| 15 | Stage output on `/volume2`, then `cp` to `/volume1` | **Drop (config)** | CLI writes the temp file beside the original and renames. `--local-stage` stages in and out; point `TMPDIR` at the fast volume if wanted. ADR-0002 found staging gave no benefit on this NAS |
+| 15 | Stage output on a second volume, then `cp` to the media volume | **Drop (config)** | CLI writes the temp file beside the original and renames. `--local-stage` stages in and out; point `TMPDIR` at the fast volume if wanted. ADR-0002 found staging gave no benefit on this NAS |
 | 16 | `chown 999:999`, `chmod 0777` after the swap | **Ported (owner), dropped (0777)** | The CLI keeps the original's mode and now its uid/gid (best effort; needs root in the container). Forcing 0777 was a NAS workaround, not a requirement |
 | 17 | `NEUTRALISE_KEEP_ORIG`: move the original file aside so a limited pass can be undone | **Drop** | Superseded by `--keep-original-audio`: the untouched track lives in the same file, no second file to manage. Use it with `--limit-db` |
 | 18 | `MIN_FREE_KB` 40 GiB (skip file) / `MIN_ABORT_KB` 20 GiB (abort run, exit 4) | **Ported** | `--min-free-gb`, `--abort-free-gb`. The script sized them for a 2× transient (`.bak` + new file). Rename needs 1×, so 20/10 would do, but start with 40/20 (the proven values) and relax later. The check moves before the slow encode |
@@ -64,7 +64,7 @@ The script re-encodes only AAC, AC-3 and E-AC-3 because it passes `-c:a $ACODEC`
 
 `neutralise.sh` is the only reader of `manifest.jsonl`; `neutralise-driver.sh` reads its own queue and stamp files. So the "format the driver reads" is not a CLI requirement. What the manifest carries is **history**: which of the ~4,000 library files are already leveled. The shell never tagged files, so after the switch the CLI would see none of them as processed and re-measure the library (20 min a movie).
 
-`neutraliser import-manifest manifest.jsonl --root /volume1/media` carries that over:
+`neutraliser import-manifest manifest.jsonl --root /path/to/media` carries that over:
 
 | manifest status | imported? | why |
 |---|---|---|

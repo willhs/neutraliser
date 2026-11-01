@@ -111,7 +111,7 @@ run_parallel() {
 
 echo "=== Neutraliser Performance Benchmark ===" | tee "$RESULTS_FILE"
 echo "Date: $(date)" | tee -a "$RESULTS_FILE"
-echo "Host: $(hostname)" | tee -a "$RESULTS_FILE"
+echo "Platform: $(uname -sm)" | tee -a "$RESULTS_FILE"
 echo "" | tee -a "$RESULTS_FILE"
 
 generate_test_file

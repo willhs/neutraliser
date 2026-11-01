@@ -7,7 +7,7 @@ updated: 2025-09-29
 
 ## Goal
 
-Investigate and optimize the neutralization speed for large batches of media files (100+ movies), reducing the current processing time of ~30 minutes per movie in /Volumes/F-Movies to enable practical bulk processing of entire media libraries.
+Investigate and optimize the neutralization speed for large batches of media files (100+ movies), reducing the current processing time of ~30 minutes per movie in an external drive to enable practical bulk processing of entire media libraries.
 
 ## Context
 
@@ -16,7 +16,7 @@ The current neutraliser implementation processes media files sequentially with c
 Current bottlenecks likely include:
 - Sequential file processing without parallelization
 - Redundant FFmpeg analysis operations
-- I/O intensive operations on external storage (/Volumes/F-Movies)
+- I/O intensive operations on external storage (an external drive)
 - Potentially inefficient caching strategies for large datasets
 
 ## Requirements
@@ -45,7 +45,7 @@ Current bottlenecks likely include:
 
 - Must not compromise audio quality or EBU R128 compliance
 - Cannot break existing CLI interface or user workflows
-- Limited by external storage I/O performance (/Volumes/F-Movies)
+- Limited by external storage I/O performance (an external drive)
 - Must work within existing Ruby/FFmpeg architecture
 - Memory usage should remain reasonable on typical systems
 
@@ -97,7 +97,7 @@ Current bottlenecks likely include:
 - Profile current performance bottlenecks (CPU, I/O, FFmpeg execution time)
 - Analyze caching effectiveness for large datasets
 - Evaluate parallel processing opportunities in the existing pipeline
-- Test storage performance characteristics of /Volumes/F-Movies
+- Test storage performance characteristics of an external drive
 - Review FFmpeg optimization options for batch operations
 
 ## References

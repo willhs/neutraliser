@@ -95,16 +95,21 @@ Ranked. Nothing here was changed, and history wasn't rewritten.
    commits, after item 2 so the purge covers everything.
 
 2. **NAS details are in the public tree again.** August untracked `check-prod` because of its SSH
-   details; `9342eb3` (2026-10-22) tracked it again so that worktrees get the skill. It names
-   `admin@192.168.69.217`, the volume paths, a LaunchAgent, and the fact that `sudo docker` is
-   passwordless. The addresses are private, so this isn't remotely exploitable by itself, but it's a
-   map of your network. Lines with private strings: `check-prod` 5, `docs/log.md` 4 (also
-   `willdows.local`, `nas.local`, "SSH as `admin` works"), `docs/ops/runbook.md` 2,
-   `benchmark/results_20260308_051318.txt` 89 (host `budgie`), `benchmark/README.md` 2,
-   `benchmark/run.sh` 1, `library-validation-2026-08.md` 1.
+   details; `9342eb3` (2026-10-22) tracked it again so that worktrees get the skill. It named the
+   NAS's SSH login and private address, the volume paths, a LaunchAgent label, and the fact that
+   `sudo docker` is passwordless. The addresses are private, so this isn't remotely exploitable by
+   itself, but it's a map of your network. Private strings were also in `docs/log.md` (4 lines:
+   home hostnames and the NAS address), `docs/ops/runbook.md` (2), the March benchmark results
+   (89, naming the host), `benchmark/README.md`, `benchmark/run.sh` and
+   `library-validation-2026-08.md`. (The strings themselves are left out of this note so it
+   doesn't repeat them; `git show 65a44d5:<path>` has the originals.)
    *Recommendation:* before announcing, move `check-prod` to a user-level skill, redact `docs/log.md`,
    and delete the benchmark results. Removing the skill costs worktree agents their access to it,
    which is why this is your call.
+   *Done 2026-11-01 (task 3e4efd6b):* the current tree no longer holds them. `check-prod` stays
+   tracked but generic and reads the address from a gitignored `local.env`; the log is redacted; the
+   results file is deleted and `benchmark/results_*.txt` is ignored. History is untouched, so the
+   old commits still hold them. A guard spec (`spec/no_private_details_spec.rb`) fails if they come back.
 
 3. **`--fast-verify` default, reversible.** I flipped it to off because the wrong answer is permanent
    and production already opts out (parity audit, row 26). The cost is one full measurement per file

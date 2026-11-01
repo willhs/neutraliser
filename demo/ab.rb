@@ -39,13 +39,13 @@ end.parse!
 
 target = DemoSupport.target_for(options[:profile])
 
-# Deliberately jarring running order: a quiet film, then a loud one, then a
+# Deliberately jarring running order: a quiet clip, then a loud one, then a
 # quiet one again — the sequence that has people reaching for the remote.
 PLAYLIST = [
-  { label: 'quiet film', offset: -29.0 },
-  { label: 'loud remaster', offset: -13.5 },
-  { label: 'quiet doco',   offset: -25.5 },
-  { label: 'TV episode',   offset: -17.5 }
+  { label: 'quiet clip', offset: -29.0 },
+  { label: 'loud clip', offset: -13.5 },
+  { label: 'quiet clip 2', offset: -25.5 },
+  { label: 'mid clip', offset: -17.5 }
 ].freeze
 
 def svg(before_series, after_series, boundaries, target, profile, labels)
@@ -66,8 +66,8 @@ def svg(before_series, after_series, boundaries, target, profile, labels)
 
   parts = DemoSupport.svg_header(
     width, height,
-    'Four files back to back: perceived loudness over time',
-    "short-term (3s) loudness &#183; neutraliser --profile #{profile} &#183; measured with ffmpeg ebur128"
+    'Four synthetic clips back to back: perceived loudness over time',
+    "SYNTHETIC pink noise, not real films &#183; short-term (3s) loudness &#183; --profile #{profile} &#183; ffmpeg ebur128"
   )
 
   parts << %(<text x="#{pad_l - 10}" y="#{pad_top - 12}" font-size="11" fill="#{DemoSupport::MUTED}" text-anchor="end">LUFS</text>)

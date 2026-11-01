@@ -25,9 +25,13 @@ From search snippets of the r/selfhosted wiki rules (page itself would not load;
 
 Landscape note: this is where Tdarr's launch thread did well (114 points), so differentiation from Tdarr must be clear. 
 
-## Claims checked against main (801ea90)
+## Claims audit (2026-11-01, this tree)
 
-Everything in the draft maps to the README or `demo/README.md` on main. Left out on purpose: the August "716 of 804 films within 1 LU" figure and the ten-film real-library chart (they predate the constant-gain default and the films were picked from processed files). If you want them, keep the caveat: "from v0.1 first runs in August 2026, two-pass loudnorm, ten films picked from processed files, not random". The synthetic figures below were re-run 2026-11-01 on FFmpeg 7.1.1 (`demo/README.md#verified-synthetic-rerun`) and are pink noise, not films.
+Every claim in the body was checked against the README, `demo/README.md`, the code or a run in this job. Left out on purpose: the August "716 of 804 films within 1 LU" figure and the ten-film real-library chart (they predate the constant-gain default, and the films were picked from processed files). The synthetic figures were re-run 2026-11-01 on FFmpeg 7.1.1 (`demo/README.md#verified-synthetic-rerun`) and are pink noise, not films.
+
+**`analyze-plex`:** movie libraries were measured against your live Plex server in October (the sampling research). TV libraries returned nothing until this job (a show library's `/all` lists shows, which carry no media), so it now asks for episodes. That is tested against a fake Plex server only, so the draft says so.
+
+**Not verified by anyone but you** (kept only as first-person statements, or marked): what Plex's own settings do on your clients, your August library run, and anything said about other tools (star counts, features), which comes from `docs/research/landscape.md` (2026-08-08), not from a fresh look.
 
 ## Title options
 
@@ -51,15 +55,16 @@ Things that matter if you run it on a NAS:
 - Video stream-copied; only the main audio track re-encoded, at the source's codec and bitrate
 - Every change is recorded in `NEUTRALISER_*` tags on the track (so records survive renames). AVI and some MP4s with cover art fall back to a sidecar. `neutraliser report` reads it all back
 - `--resume` uses a manifest written as each file finishes. `--local-stage` copies to local disk first for slow SMB/NFS mounts
-- Disk floors (`--min-free-gb`), a flock run lock, and a fail-fast check that the folder is writable
-- Files already tagged for the same profile are skipped, so a re-run over a done library takes seconds
-- Atmos and DTS:X are skipped and logged rather than flattened (needs FFmpeg 7.1+; the Docker image has it)
-- Optional `analyze-plex` triage (read-only, uses your Plex token). Sampled results say "Unclear" when the sample can't support a verdict
+- A free-space floor checked before each file (`--min-free-gb`), a flock run lock, and a fail-fast check that the folder is writable
+- Files already tagged for the same profile are skipped without re-measuring, so a re-run over a done library is cheap
+- Atmos and DTS:X are skipped and logged rather than flattened (detection needs FFmpeg 7.1+, which the Docker image has; older ffmpeg only catches files named as Atmos)
+- Optional `analyze-plex` triage (read-only, uses your Plex token, which is visible in `ps` while a title is read). Sampled results say "Unclear" when the sample can't support a verdict. Movie libraries are tested on a real server; TV libraries only against a stand-in so far
 
-Measured, not claimed: 4 synthetic pink-noise clips played back to back went from a 15.5 LU swing to 0.4 LU, measured with ebur128 rather than the loudnorm filter used to decide. The scripts in `demo/` re-run it on copies of your own library. Real films with high peaks can land short of target, because gain is capped at -1.5 dBTP. The log says by how much.
+Measured, not claimed: 4 synthetic pink-noise clips played back to back went from a 15.5 LU swing to 0.3 LU, measured with ebur128 rather than the loudnorm filter used to decide. The scripts in `demo/` re-run it on copies of your own library. Real films with high peaks can land short of target, because gain is capped at the profile's true-peak ceiling (-1.5 dBTP). The log says by how much.
 
 How it differs from the usual answers:
 
+- (Third-party facts below are from the 2026-08-08 landscape note: refresh before posting.)
 - **Tdarr / Unmanic**: better if you want a general transcode pipeline with workers and a plugin ecosystem. Normalisation there is a community flow. Neutraliser is the opposite trade: narrow and no infrastructure
 - **ffmpeg-normalize**: the mature general-purpose tool (1.5k stars, actively maintained, also does audio files and has a Python API). It now has a threshold to skip files already at target too. Neutraliser is narrower and built around Plex-style video libraries and resumable big runs
 - **sickbeard_mp4_automator**: Sonarr/Radarr post-processing where this is one feature among many
@@ -70,5 +75,6 @@ https://github.com/willhs/neutraliser
 ## Notes for Will
 
 - Star counts are from the 2026-08-08 landscape note; refresh before posting.
-- Docker image is published on every push to main (README); confirm it pulls before posting.
+- The workflow publishes `ghcr.io/willhs/neutraliser:latest` on every push to main, and anonymous pulls worked at the pre-release review. Confirm it still pulls before posting.
+- `--replace` breaks hard links (the old copy stays under its other names). It's in the README; consider saying so if your audience seeds from the same files.
 - Not claimed: any speed numbers, any "89%" library figure.

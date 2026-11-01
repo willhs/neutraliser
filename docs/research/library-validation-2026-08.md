@@ -27,7 +27,7 @@ run fast while still exercising the real files' actual streams, tags, and edge-c
 NAS originals were never touched — `--dry-run` first, then `--replace` only on the local scratch
 copies.
 
-Selected 8 files from `/volume1/media/movies` for codec/container/filename variety:
+Selected 8 files from the NAS's movies share for codec/container/filename variety:
 
 | File | Container | Audio codec | Notes |
 |---|---|---|---|

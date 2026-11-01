@@ -4,52 +4,16 @@ All notable changes to this project are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and this project adheres to
 [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [Unreleased]
+## [0.1.0] — 2026-10-31
+
+First public release. Run from source (`git clone` + `bundle install`) or with the
+Docker image; a RubyGems release is deferred until v0.1 has had real-world mileage.
 
 ### Security
 
 - A `.env` in the working directory no longer runs commands or reaches ffmpeg. `dotenv` is
   gone: `analyze-plex` reads `PLEX_TOKEN` and `PLEX_SERVER_URL` from it literally, and nothing
   else does. Unused `plex-ruby` and `nokogiri` are removed too.
-
-### Changed
-
-- `--fast-verify` is now off by default. A 30-second sample could record a film 9 LU off
-  target as finished, and `--no-fast-verify` couldn't undo that afterwards.
-- Temp outputs are hidden, so media scanners don't pick up a half-written file.
-- `--dry-run` no longer writes a run manifest. Its analysis caches stay.
-- `--target-level` keeps the chosen profile's other settings and names its profile from the
-  target (`custom-18`).
-- MP4 files with cover art or descriptive tags no longer get an in-file stamp, because it
-  cost them the cover and their iTunes tags. The sidecar holds their record.
-
-### Fixed
-
-- `--replace` lost MKV attachments (subtitle fonts), MP4 cover art and iTunes atoms, and the
-  primary track's dispositions other than default.
-- `--replace` overwrote a file that was still being written. It now fails with
-  `source_changed`.
-- SIGTERM and `docker stop` hung while ffmpeg kept running, then orphaned the temp output.
-  Exit is now prompt, with code 130 or 143.
-- Copy mode wrote directly to the final name and could destroy an earlier `_normalized` file
-  on failure.
-- `--replace` through a symlink replaced the link and left the real file untouched.
-- Output verification now checks every stream, chapters and the primary track's channels,
-  so a silent 7.1 downmix is refused.
-- `--resume` trusted dry-run and low-disk records, and ignored a changed profile.
-- A copy-mode run stopped a later `--replace`; a second `--target-level` was skipped; a
-  peak-limited or within-tolerance verdict outlived the options that produced it.
-- The measurement cache gave old figures to swapped files and same-named siblings.
-- Silent tracks were re-encoded as "0 LUFS".
-- Directories with `[`, `{` or `*` in their name read as empty. A relative name with a colon
-  was read as an ffmpeg protocol. A file name that isn't valid UTF-8 aborted the whole run.
-- An unwritable `HOME`, as under `docker --user`, crashed at startup. A missing ffmpeg now
-  gives one error, and an unreadable file fails instead of reading as "no audio".
-
-## [0.1.0] — 2026-10-31
-
-First public release. Run from source (`git clone` + `bundle install`) or with the
-Docker image; a RubyGems release is deferred until v0.1 has had real-world mileage.
 
 ### Added
 
@@ -94,8 +58,10 @@ Docker image; a RubyGems release is deferred until v0.1 has had real-world milea
   `.neutraliser-run-manifest.jsonl`.
 - `--fast` single-pass normalisation (~30% quicker, marginally less accurate) and
   `--local-stage` for slow or high-latency network mounts (ADR-0002).
-- `analyze-plex` — audit loudness across Plex libraries via Plex's own stream, with
-  `table`, `csv`, and `json` output and `--sample-percent` for large libraries.
+- `analyze-plex` — audit loudness across Plex movie and TV libraries (episodes, named
+  `Show S01E02 Title`) via Plex's own stream, with `table`, `csv`, and `json` output and
+  `--sample-percent` for large libraries. Checked against a fake Plex server
+  (`spec/plex_fake_server_spec.rb`), not a real one.
 - `profiles` and `version` commands.
 - Atomic writes and signal-safe cleanup, so an interrupted run never leaves a truncated
   file in place of the original.
@@ -124,6 +90,14 @@ Docker image; a RubyGems release is deferred until v0.1 has had real-world milea
 - Output is checked against the source (duration, audio stream count) before it
   replaces the original; the new file keeps the original's owner when permitted.
 - The within-tolerance skip message now logs the measured level.
+- `--fast-verify` is now off by default. A 30-second sample could record a film 9 LU off
+  target as finished, and `--no-fast-verify` couldn't undo that afterwards.
+- Temp outputs are hidden, so media scanners don't pick up a half-written file.
+- `--dry-run` no longer writes a run manifest. Its analysis caches stay.
+- `--target-level` keeps the chosen profile's other settings and names its profile from the
+  target (`custom-18`).
+- MP4 files with cover art or descriptive tags no longer get an in-file stamp, because it
+  cost them the cover and their iTunes tags. The sidecar holds their record.
 
 ### Fixed
 
@@ -149,6 +123,25 @@ Docker image; a RubyGems release is deferred until v0.1 has had real-world milea
 - The timeout message no longer claims the file "may be corrupted or have
   unsupported codec". The usual cause is a large file on a slow mount, and the old
   wording sent people hunting for damage that wasn't there.
+- `--replace` lost MKV attachments (subtitle fonts), MP4 cover art and iTunes atoms, and the
+  primary track's dispositions other than default.
+- `--replace` overwrote a file that was still being written. It now fails with
+  `source_changed`.
+- SIGTERM and `docker stop` hung while ffmpeg kept running, then orphaned the temp output.
+  Exit is now prompt, with code 130 or 143.
+- Copy mode wrote directly to the final name and could destroy an earlier `_normalized` file
+  on failure.
+- `--replace` through a symlink replaced the link and left the real file untouched.
+- Output verification now checks every stream, chapters and the primary track's channels,
+  so a silent 7.1 downmix is refused.
+- `--resume` trusted dry-run and low-disk records, and ignored a changed profile.
+- A copy-mode run stopped a later `--replace`; a second `--target-level` was skipped; a
+  peak-limited or within-tolerance verdict outlived the options that produced it.
+- The measurement cache gave old figures to swapped files and same-named siblings.
+- Silent tracks were re-encoded as "0 LUFS".
+- Directories with `[`, `{` or `*` in their name read as empty. A relative name with a colon
+  was read as an ffmpeg protocol. A file name that isn't valid UTF-8 aborted the whole run.
+- An unwritable `HOME`, as under `docker --user`, crashed at startup. A missing ffmpeg now
+  gives one error, and an unreadable file fails instead of reading as "no audio".
 
-[Unreleased]: https://github.com/willhs/neutraliser/compare/v0.1.0...HEAD
 [0.1.0]: https://github.com/willhs/neutraliser/releases/tag/v0.1.0

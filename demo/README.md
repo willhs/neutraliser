@@ -21,12 +21,12 @@ the work dir **so you can listen to the difference**, not just look at it.
 Example output:
 
 ```
-  quiet film        -26.9 ->  -20.0 LUFS
-  loud remaster     -11.5 ->  -20.1 LUFS
-  quiet doco        -23.4 ->  -20.2 LUFS
-  TV episode        -15.4 ->  -20.1 LUFS
+  quiet clip        -26.9 ->  -20.1 LUFS
+  loud clip         -11.5 ->  -20.2 LUFS
+  quiet clip 2      -23.4 ->  -20.2 LUFS
+  mid clip          -15.4 ->  -20.1 LUFS
 
-swing across the sitting: 15.5 LU -> 0.4 LU
+swing across the sitting: 15.5 LU -> 0.3 LU
 ```
 
 ## Library sweep — `demo/run.rb`
@@ -56,7 +56,7 @@ spread: 18.6 LU -> 0.2 LU
 
 ## Verified synthetic rerun
 
-Measured on 2026-11-01 (Pacific/Auckland), at `8463db0`, Ruby 3.2.3 and FFmpeg
+Measured on 2026-11-01 (Pacific/Auckland), at `65a44d5`, Ruby 3.2.3 and FFmpeg
 7.1.1. Both scripts ran with default durations and the current `livingroom`
 constant-gain path, without `--allow-dynamic`, `--limit-db`, `--fast`, or real media:
 
@@ -67,9 +67,10 @@ ruby demo/ab.rb --work-dir ../evidence/ab
 
 The tables above are this run's independent `ebur128` measurements. The eight-file
 integrated spread was **18.6 → 0.2 LU**. The four-file integrated spread was
-**15.4 → 0.2 LU**, while the plotted 3-second short-term swing was **15.5 → 0.4 LU**.
-Both committed SVGs were regenerated from these runs; the noise is random, so a
-later run need not match every decimal.
+**15.4 → 0.1 LU**, while the plotted 3-second short-term swing was **15.5 → 0.3 LU**.
+Both committed SVGs were regenerated from these runs, and each says "synthetic" in its own
+subtitle so a screenshot can't be mistaken for real films. The noise is random, so a later
+run need not match every decimal. The table under the A/B heading above is this run's.
 
 **Community demo verdict: `loudness-over-time.svg` is suitable**, when explicitly
 captioned as synthetic pink noise demonstrating jumps between files with sufficient

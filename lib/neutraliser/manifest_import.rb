@@ -18,7 +18,7 @@ module Neutraliser
     Result = Data.define(:imported, :changed, :missing, :legacy, :ignored)
 
     # root is the directory the manifest's relative `file` paths hang off
-    # (neutralise.sh's MEDIA_HOST, e.g. /volume1/media).
+    # (neutralise.sh's MEDIA_HOST, e.g. /path/to/media).
     def initialize(manifest_path, root:, profile:, trust_legacy: false, dry_run: false)
       @manifest_path = manifest_path
       @root = root

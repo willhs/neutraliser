@@ -80,7 +80,7 @@ Full benchmark script and raw results are in `benchmark/`.
 
 - Task spec: `docs/tasks/0005-local-staging-and-fast-mode/task.md`
 - Benchmark script: `benchmark/run.sh`
-- Benchmark results: `benchmark/results_20260308_051318.txt`
+- Benchmark results: the figures this ADR cites came from a March 2026 run. The raw results file named the machine it ran on, so it was removed from the tree (it is still in git history)
 - Implementation: `lib/neutraliser/local_stager.rb`, `lib/neutraliser/ffmpeg_wrapper.rb` (`apply_normalization_single_pass`)
 
 ### Change Log

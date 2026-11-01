@@ -35,9 +35,9 @@ That count predates the constant-gain default, so it isn't what a fresh run of t
 defaults is guaranteed to give. The remainder were files added after the run, which is
 what `--resume` and the skip-already-normalised stamps are for.
 
-Four files played back to back — the loud remaster after the quiet film is the moment you reach for the remote:
+Four **synthetic** clips (pink noise, not films) played back to back — the loud clip after the quiet one is the moment you reach for the remote:
 
-![Perceived loudness across four files played back to back. Before normalisation the level steps between -27 and -11 LUFS at each file boundary; after, it holds flat at -20 LUFS](demo/loudness-over-time.svg)
+![Perceived loudness across four synthetic clips played back to back. Before normalisation the level steps between -27 and -11 LUFS at each file boundary; after, it holds flat at -20 LUFS](demo/loudness-over-time.svg)
 
 And the same again on synthetic clips, if you'd rather run it yourself than trust someone else's library — 8 files spread over ~19 LU:
 
@@ -45,7 +45,7 @@ And the same again on synthetic clips, if you'd rather run it yourself than trus
 
 Re-run on 2026-11-01 with the current constant-gain default: the eight synthetic clips
 measured **18.6 LU → 0.2 LU** integrated spread; the four-clip playlist measured
-**15.5 LU → 0.4 LU** short-term swing. These steady pink-noise clips have enough peak
+**15.5 LU → 0.3 LU** short-term swing. These steady pink-noise clips have enough peak
 headroom to reach target; they don't demonstrate quiet, peaky films. A separate synthetic
 transient test reached −36.3 LUFS with a −1.5 dBTP peak, confirming that the peak cap
 can leave quiet material short of −20 LUFS ([measurements](demo/README.md#verified-synthetic-rerun)).
@@ -299,7 +299,9 @@ NEUTRALISER_ANALYSIS_TIMEOUT=3600 NEUTRALISER_NORMALIZATION_TIMEOUT=3600 \
 
 ### `analyze-plex`
 
-Loudness triage across your Plex libraries, modifying nothing. Reads audio over Plex's own stream, so it doesn't need filesystem access to the media.
+Loudness triage across your Plex movie and TV libraries, modifying nothing. Reads audio over Plex's own stream, so it doesn't need filesystem access to the media. TV libraries are read episode by episode (`Show S01E02 Title`).
+
+**How well tested:** movie libraries have been measured against a real Plex server. TV libraries are covered only by a fake Plex server in the specs (`spec/plex_fake_server_spec.rb`), so report anything odd on a real one.
 
 **What it can and can't tell you:** by default each title is *sampled* (five 60-second windows spread across the runtime, combined on energy), and a sample can't support a ±1 LU verdict. Measured against full readings on 10 real films, five windows read up to 6.5 LU quieter (and once 1.0 LU louder) than the truth and were within 1 LU on only half of them ([the numbers](docs/research/plex-sampling-error-2026-10.md)). So a sampled title gets a verdict ("Too Loud" / "Too Quiet") only when its whole error range is clear of the tolerance band; everything else is reported as **Unclear**, with the range the true level could be in. Use `--full` to measure each title end to end (what `process` sees): accurate, but it reads the whole file over HTTP, about 2 to 7 minutes per film.
 

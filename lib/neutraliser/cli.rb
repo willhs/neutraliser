@@ -229,7 +229,7 @@ module Neutraliser
     end
 
     desc 'import-manifest MANIFEST', "Mark files recorded as done in a retired neutralise.sh manifest.jsonl as already processed"
-    option :root, type: :string, required: true, desc: "Directory the manifest's relative paths hang off (e.g. /volume1/media)"
+    option :root, type: :string, required: true, desc: "Directory the manifest's relative paths hang off (e.g. /path/to/media)"
     option :profile, type: :string, default: 'livingroom', desc: 'Profile those runs were equivalent to'
     option :trust_legacy, type: :boolean, default: false,
                           desc: 'Also accept old entries that recorded no size/mtime (cannot be checked against the file)'

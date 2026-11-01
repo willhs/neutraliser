@@ -14,3 +14,5 @@
 *.gem
 benchmark/test_source.mp4
 spec/examples.txt
+/.claude/skills/check-prod/local.env
+benchmark/results_*.txt

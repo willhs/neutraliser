@@ -30,7 +30,7 @@ A Ruby CLI tool that normalises audio volume in video files using industry-stand
 - **`FileManager`**: Atomic file operations with integrity verification
 - **`CacheManager`**: Sidecar `.loudnorm_{profile}.json` caching system for analysis results
 - **`LocalStager`**: Stages files to local disk (`--local-stage`) before processing, copies results back
-- **`PlexAnalyzer`**: Plex library integration for media analysis, routed through FFmpegWrapper/Measurement/Profiles; samples five 60s windows per title (`--full` reads end to end)
+- **`PlexAnalyzer`**: Plex library integration for media analysis, routed through FFmpegWrapper/Measurement/Profiles; samples five 60s windows per title (`--full` reads end to end). Show libraries are read as episodes (`/all?type=4`). Tested against `spec/support/fake_plex_server.rb`, not a real Plex, for TV
 - **`LoudnessEstimate`**: A title's loudness plus the range the truth can lie in; sampled estimates give a verdict only when the whole range clears the tolerance band, else `unclear` (research: `docs/research/plex-sampling-error-2026-10.md`)
 - **`VideoFiles`**: The one directory walk: literal paths, supported extensions, leftover temp detection
 - **`PlexEnv`**: Reads `PLEX_TOKEN`/`PLEX_SERVER_URL` from `.env` for `analyze-plex` only. Never add dotenv back: it runs `$(...)` from a file in the working directory, which may be a media folder
@@ -119,6 +119,8 @@ A Ruby CLI tool that normalises audio volume in video files using industry-stand
 ## Running tests
 - `bundle exec rspec` (about a minute) and `bundle exec rubocop`. `bundle exec rspec --tag '~real_ffmpeg'` skips the real-media regressions (about 6 s). Ruby is rbenv 3.2.3.
 - Manager job shells may not have rbenv's shims on PATH, so `ruby`/`bundle` resolve to macOS system Ruby 2.6 (`RubyGems version (3.0.3.1) has a bug`, `LoadError thor`). Run `export PATH="$HOME/.rbenv/shims:$PATH" LANG=en_US.UTF-8` first; don't hunt through `~/.rbenv/versions` or Homebrew Ruby.
+
+- Never commit private network details (hosts, addresses, NAS paths): `spec/no_private_details_spec.rb` fails on them. The `check-prod` skill reads them from a gitignored `.claude/skills/check-prod/local.env`.
 
 ## Development Guidelines
 - **Architecture**: Modular design with clear separation of concerns
