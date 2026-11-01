@@ -1,0 +1,10 @@
+VLC 3.0.24, decoded through its transcode chain to WAV, then measured with FFmpeg ebur128.
+Clips come from spike/dolby_tests.py T1 and T4. Same audio; dn31 and dn24 differ only in dialnorm; drc and nodrc differ only in dynrng words.
+dn31   vlc:     I: -29.2 LUFS  LRA: 20.0 LU 
+dn31   ffmpeg:  I: -29.2 LUFS  LRA: 20.0 LU 
+dn24   vlc:     I: -29.2 LUFS  LRA: 20.0 LU 
+dn24   ffmpeg:  I: -29.2 LUFS  LRA: 20.0 LU 
+drc    vlc:     I: -42.8 LUFS  LRA: 12.0 LU 
+drc    ffmpeg:  I: -42.8 LUFS  LRA: 12.0 LU 
+nodrc  vlc:     I: -29.2 LUFS  LRA: 20.0 LU 
+nodrc  ffmpeg:  I: -29.2 LUFS  LRA: 20.0 LU 

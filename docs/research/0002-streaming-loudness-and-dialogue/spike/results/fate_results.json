@@ -1,0 +1,177 @@
+{
+ "ac3/monsters_inc_5.1_448_small.ac3": {
+  "bytes": 100000,
+  "frames": 56,
+  "dialnorm": [
+   -27
+  ],
+  "frames_with_dynrng_word_block0": 1.0,
+  "seconds_decoded_approx": 5.4,
+  "default_decode_differs_from_drc_off": true,
+  "default": {
+   "I": -70.0,
+   "LRA": 0.0,
+   "TP": -75.3
+  },
+  "drc_off": {
+   "I": -70.0,
+   "LRA": 0.0,
+   "TP": -81.3
+  },
+  "dialnorm_honoured_drc_off": {
+   "I": -70.0,
+   "LRA": 0.0,
+   "TP": -85.3
+  }
+ },
+ "ac3/monsters_inc_2.0_192_small.ac3": {
+  "bytes": 100000,
+  "frames": 131,
+  "dialnorm": [
+   -27
+  ],
+  "frames_with_dynrng_word_block0": 0.992,
+  "seconds_decoded_approx": 4.2,
+  "default_decode_differs_from_drc_off": true,
+  "default": {
+   "I": -30.7,
+   "LRA": 16.7,
+   "TP": -12.2
+  },
+  "drc_off": {
+   "I": -27.9,
+   "LRA": 23.0,
+   "TP": -11.7
+  },
+  "dialnorm_honoured_drc_off": {
+   "I": -31.9,
+   "LRA": 23.0,
+   "TP": -15.7
+  }
+ },
+ "ac3/millers_crossing_4.0.ac3": {
+  "bytes": 95232,
+  "frames": 62,
+  "dialnorm": [
+   -27
+  ],
+  "frames_with_dynrng_word_block0": 1.0,
+  "seconds_decoded_approx": 4.0,
+  "default_decode_differs_from_drc_off": true,
+  "default": {
+   "I": -26.9,
+   "LRA": 0.0,
+   "TP": -14.0
+  },
+  "drc_off": {
+   "I": -19.8,
+   "LRA": 0.0,
+   "TP": -6.4
+  },
+  "dialnorm_honoured_drc_off": {
+   "I": -23.8,
+   "LRA": 0.0,
+   "TP": -10.4
+  }
+ },
+ "eac3/serenity_english_5.1_1536_small.eac3": {
+  "bytes": 99328,
+  "frames": 97,
+  "dialnorm": [
+   -27
+  ],
+  "seconds_decoded_approx": 1.6,
+  "default_decode_differs_from_drc_off": true,
+  "default": {
+   "I": -70.0,
+   "LRA": 0.0,
+   "TP": -79.8
+  },
+  "drc_off": {
+   "I": -70.0,
+   "LRA": 0.0,
+   "TP": -80.3
+  },
+  "dialnorm_honoured_drc_off": {
+   "I": -70.0,
+   "LRA": 0.0,
+   "TP": -84.3
+  }
+ },
+ "eac3/csi_miami_5.1_256_spx_small.eac3": {
+  "bytes": 48128,
+  "frames": 47,
+  "dialnorm": [
+   -26
+  ],
+  "seconds_decoded_approx": 4.5,
+  "default_decode_differs_from_drc_off": true,
+  "default": {
+   "I": -24.2,
+   "LRA": 0.0,
+   "TP": -10.3
+  },
+  "drc_off": {
+   "I": -24.3,
+   "LRA": 0.0,
+   "TP": -10.3
+  },
+  "dialnorm_honoured_drc_off": {
+   "I": -29.3,
+   "LRA": 0.0,
+   "TP": -15.4
+  }
+ },
+ "eac3/csi_miami_stereo_128_spx.eac3": {
+  "download_error": "curl: (35) Recv failure: Connection reset by peer"
+ },
+ "eac3/matrix2_commentary1_stereo_192_small.eac3": {
+  "bytes": 99840,
+  "frames": 130,
+  "dialnorm": [
+   -27
+  ],
+  "seconds_decoded_approx": 4.2,
+  "default_decode_differs_from_drc_off": true,
+  "default": {
+   "I": -24.4,
+   "LRA": 1.1,
+   "TP": -10.9
+  },
+  "drc_off": {
+   "I": -21.7,
+   "LRA": 1.2,
+   "TP": -9.5
+  },
+  "dialnorm_honoured_drc_off": {
+   "I": -25.8,
+   "LRA": 1.2,
+   "TP": -13.5
+  }
+ },
+ "eac3/the_great_wall_7.1.eac3": {
+  "bytes": 723456,
+  "frames": 314,
+  "dialnorm": [
+   -31
+  ],
+  "frames_with_dynrng_word_block0": 1.0,
+  "seconds_decoded_approx": 20.1,
+  "default_decode_differs_from_drc_off": true,
+  "default": {
+   "I": -24.3,
+   "LRA": 3.5,
+   "TP": -10.9
+  },
+  "drc_off": {
+   "I": -23.9,
+   "LRA": 3.8,
+   "TP": -10.0
+  },
+  "dialnorm_honoured_drc_off": {
+   "I": -23.9,
+   "LRA": 3.8,
+   "TP": -10.0
+  }
+ }
+}

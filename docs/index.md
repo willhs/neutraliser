@@ -41,6 +41,7 @@ Entry point and navigation map for the neutraliser documentation set. Neutralise
 
 - [`research/compression-ladder-fixtures-2026-11.md`](research/compression-ladder-fixtures-2026-11.md) — What the opt-in `--lra-target` compression ladder does on a synthetic 5.1 fixture (rung, LRA, level, peak) and where the two LRA readings differ; no perceptual claims
 - [`research/plex-sampling-error-2026-10.md`](research/plex-sampling-error-2026-10.md) — How far a sampled loudness estimate sits from a film's true loudness (10 real Plex films); why analyze-plex gives "Unclear" instead of guessing, and `--full`
+- [`research/0002-streaming-loudness-and-dialogue/research.md`](research/0002-streaming-loudness-and-dialogue/research.md) — What streamers do about volume jumps and quiet dialogue, and whether it works. Recommends anchoring on dialogue, and found two bugs: stream DRC baked in and dialnorm reset on Dolby tracks
 
 ## Tasks
 - [`tasks/0001-plex-library-analysis/task.md`](tasks/0001-plex-library-analysis/task.md) — Plex library audio analysis command (complete)
@@ -59,6 +60,7 @@ Entry point and navigation map for the neutraliser documentation set. Neutralise
 
 ### Change Log
 - 2026-11-01 (agent:lra-target): Added compression-ladder-fixtures-2026-11.md research note
+- 2026-11-01 (agent:streaming-research): Added research/0002-streaming-loudness-and-dialogue
 - 2026-11-01 (agent:architecture-review): Added architecture-review-2026-11.md research note
 - 2026-11-01 (agent:analyze-plex-figures): Added plex-sampling-error-2026-10.md research note
 - 2026-10-20 (agent:prod-parity): Added prod-parity audit and task 0006

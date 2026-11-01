@@ -1,0 +1,235 @@
+{
+  "T1 FFmpeg default decode ignores dialnorm": {
+    "ac3": {
+      "dialnorm_in_stream": [
+        -24
+      ],
+      "default_decode_I": -29.2,
+      "target_level_decode_I": -36.2
+    },
+    "eac3": {
+      "dialnorm_in_stream": [
+        -24
+      ],
+      "default_decode_I": -29.2,
+      "target_level_decode_I": -36.2
+    }
+  },
+  "T2 in-place dialnorm rewrite is lossless": {
+    "ac3": {
+      "dialnorm_after": [
+        -27
+      ],
+      "pcm_identical_default_decode": true,
+      "crc_clean_before": true,
+      "crc_clean_after": true,
+      "level_shift_under_dialnorm_decode_LU": 3.0
+    },
+    "eac3": {
+      "dialnorm_after": [
+        -27
+      ],
+      "pcm_identical_default_decode": true,
+      "crc_clean_before": true,
+      "crc_clean_after": true,
+      "level_shift_under_dialnorm_decode_LU": 3.0
+    }
+  },
+  "T3 neutraliser and dialnorm": {
+    "ac3": {
+      "target": -29.2,
+      "cli_exit": 0,
+      "files": {
+        "near_target": {
+          "before": {
+            "raw": {
+              "I": -29.2,
+              "LRA": 20.0,
+              "TP": -18.1
+            },
+            "dolby": {
+              "I": -36.2,
+              "LRA": 20.0,
+              "TP": -25.1
+            }
+          },
+          "after": {
+            "raw": {
+              "I": -29.2,
+              "LRA": 20.0,
+              "TP": -18.1
+            },
+            "dolby": {
+              "I": -36.2,
+              "LRA": 20.0,
+              "TP": -25.1
+            },
+            "dialnorm": [
+              -24
+            ],
+            "stamp_mode": null
+          }
+        },
+        "quiet": {
+          "before": {
+            "raw": {
+              "I": -35.2,
+              "LRA": 20.0,
+              "TP": -24.2
+            },
+            "dolby": {
+              "I": -42.2,
+              "LRA": 20.0,
+              "TP": -31.3
+            }
+          },
+          "after": {
+            "raw": {
+              "I": -29.2,
+              "LRA": 20.0,
+              "TP": -18.2
+            },
+            "dolby": {
+              "I": -29.2,
+              "LRA": 20.0,
+              "TP": -18.2
+            },
+            "dialnorm": [
+              -31
+            ],
+            "stamp_mode": "linear"
+          }
+        }
+      },
+      "gap_before_dolby_LU": 6.0,
+      "gap_after_dolby_LU": -7.0,
+      "gap_before_raw_LU": 6.0,
+      "gap_after_raw_LU": 0.0
+    },
+    "eac3": {
+      "target": -29.2,
+      "cli_exit": 0,
+      "files": {
+        "near_target": {
+          "before": {
+            "raw": {
+              "I": -29.2,
+              "LRA": 20.0,
+              "TP": -18.2
+            },
+            "dolby": {
+              "I": -36.2,
+              "LRA": 20.0,
+              "TP": -25.2
+            }
+          },
+          "after": {
+            "raw": {
+              "I": -29.2,
+              "LRA": 20.0,
+              "TP": -18.2
+            },
+            "dolby": {
+              "I": -36.2,
+              "LRA": 20.0,
+              "TP": -25.2
+            },
+            "dialnorm": [
+              -24
+            ],
+            "stamp_mode": null
+          }
+        },
+        "quiet": {
+          "before": {
+            "raw": {
+              "I": -35.2,
+              "LRA": 20.0,
+              "TP": -23.8
+            },
+            "dolby": {
+              "I": -42.2,
+              "LRA": 20.0,
+              "TP": -30.9
+            }
+          },
+          "after": {
+            "raw": {
+              "I": -29.2,
+              "LRA": 20.0,
+              "TP": -18.3
+            },
+            "dolby": {
+              "I": -29.2,
+              "LRA": 20.0,
+              "TP": -18.3
+            },
+            "dialnorm": [
+              -31
+            ],
+            "stamp_mode": "linear"
+          }
+        }
+      },
+      "gap_before_dolby_LU": 6.0,
+      "gap_after_dolby_LU": -7.0,
+      "gap_before_raw_LU": 6.0,
+      "gap_after_raw_LU": 0.0
+    }
+  },
+  "T4 DRC words and the constant-gain path": {
+    "edit_is_clean": {
+      "pcm_identical_at_drc0_with_vs_without_word": true,
+      "crc_clean": true
+    },
+    "source_drc_off": {
+      "I": -29.2,
+      "LRA": 20.0,
+      "TP": -18.1
+    },
+    "source_default_decode": {
+      "I": -42.8,
+      "LRA": 12.0,
+      "TP": -21.8
+    },
+    "after_run_default_decode": {
+      "I": -39.7,
+      "LRA": 12.1,
+      "TP": -18.9
+    },
+    "after_run_drc_off": {
+      "I": -39.7,
+      "LRA": 12.1,
+      "TP": -18.9
+    },
+    "output_has_dynrng_words": false,
+    "stamp": {
+      "NEUTRALISER_MODE": "linear",
+      "NEUTRALISER_GAIN_DB": "3.17",
+      "NEUTRALISER_MEASURED_I": "-42.97",
+      "NEUTRALISER_MEASURED_LRA": "12.00"
+    },
+    "control_no_drc_words_before": {
+      "I": -29.2,
+      "LRA": 20.0,
+      "TP": -18.1
+    },
+    "control_no_drc_words_after_default": {
+      "I": -39.8,
+      "LRA": 20.0,
+      "TP": -28.6
+    },
+    "control_stamp": {
+      "NEUTRALISER_MODE": "linear",
+      "NEUTRALISER_GAIN_DB": "-10.61",
+      "NEUTRALISER_MEASURED_LRA": "20.00"
+    },
+    "cli_exit": 0
+  },
+  "T5 Opus output gain": {
+    "bsf_exit": 0,
+    "bsf_error": null,
+    "before_I": -29.1,
+    "after_I": -35.1
+  }
+}

@@ -1,0 +1,194 @@
+id	url	quote
+nf-target	jina:https://partnerhelp.netflixstudios.com/hc/en-us/articles/360001794307	Set average loudness at -27 LKFS with a tolerance of ±2 LU, dialog-gated
+nf-method	jina:https://partnerhelp.netflixstudios.com/hc/en-us/articles/360001794307	dialog-gated using ITU-R BS.1770-1
+nf-fallback	jina:https://partnerhelp.netflixstudios.com/hc/en-us/articles/360001794307	less than 15% dialogue
+nf-fallback2	jina:https://partnerhelp.netflixstudios.com/hc/en-us/articles/360001794307	-24 LKFS +/- 2 LU
+nf-peak	jina:https://partnerhelp.netflixstudios.com/hc/en-us/articles/360001794307	Peaks must not exceed -2dB True Peak
+nf-lra	jina:https://partnerhelp.netflixstudios.com/hc/en-us/articles/360001794307	5.1 program LRA between 4 and 18 LU
+nf-dlra	jina:https://partnerhelp.netflixstudios.com/hc/en-us/articles/360001794307	Dialog LRA of 10 LU or less
+nf-room	jina:https://partnerhelp.netflixstudios.com/hc/en-us/articles/360001794307	similar in size to a typical living room
+nf-theatrical	jina:https://partnerhelp.netflixstudios.com/hc/en-us/articles/360001794307	no LKFS loudness requirement
+nf-tool	jina:https://studiopartner.netflix.net/studio/loudness-and-true-peaks-how-to-measure-and-when-to-flag	Dolby speech-gating dialogue loudness algorithm
+apple-range	https://help.apple.com/itc/videoaudioassetguide/en.lproj/static.html	-31 LKFS to -10 LKFS
+apple-ideal	https://help.apple.com/itc/videoaudioassetguide/en.lproj/static.html	between -30 LKFS and -18 LKFS
+apple-method	https://help.apple.com/itc/videoaudioassetguide/en.lproj/static.html	BS.1770 + Dialogue Intelligence
+apple-fallback	https://help.apple.com/itc/videoaudioassetguide/en.lproj/static.html	If it is less than 10%, dialogue may not be the anchor element
+hls-actual	jina:https://developer.apple.com/documentation/http-live-streaming/hls-authoring-specification-for-apple-devices	MUST indicate the actual loudness of the content
+hls-should	jina:https://developer.apple.com/documentation/http-live-streaming/hls-authoring-specification-for-apple-devices	Loudness management or Dynamic range control SHOULD be present
+hls-dialnorm	jina:https://developer.apple.com/documentation/http-live-streaming/hls-authoring-specification-for-apple-devices	SHOULD be specified by the
+amazon-a85	jina:https://videocentral.amazon.com/support/welcome-to-prime-video-slate/supply-chain-updates-june-2026	written certifications confirming ATSC A/85 compliance
+amazon-check	jina:https://videocentral.amazon.com/support/welcome-to-prime-video-slate/supply-chain-updates-june-2026	quarterly validation checks
+paramount-us	https://pop.paramount.com/?p=1006	-24 LKFS +/-2 dB
+paramount-nf	https://pop.paramount.com/?p=1006	near field mix is preferred over a Theatrical mix
+a85-target	https://www.atsc.org/wp-content/uploads/2026/07/A85-2026-07.pdf	should be -24 LKFS
+a85-tp	https://www.atsc.org/wp-content/uploads/2026/07/A85-2026-07.pdf	below -2 dBTP
+a85-anchor	https://www.atsc.org/wp-content/uploads/2026/07/A85-2026-07.pdf	reference point or element around which other elements are balanced
+a85-lra	https://www.atsc.org/wp-content/uploads/2026/07/A85-2026-07.pdf	LRA values should not be enforced in Content specifications
+a85-streaming	https://www.atsc.org/wp-content/uploads/2026/07/A85-2026-07.pdf	-23 to -27 LKFS represents a practical range
+a85-bias	https://www.atsc.org/wp-content/uploads/2026/07/A85-2026-07.pdf	tend to underestimate the Loudness of the Anchor Element
+a85-dialnorm	https://www.atsc.org/wp-content/uploads/2026/07/A85-2026-07.pdf	how far the average Dialogue Level of the Content is below 0 LKFS
+a85-gate	https://www.atsc.org/wp-content/uploads/2026/07/A85-2026-07.pdf	dialogue-gated
+r128-target	https://tech.ebu.ch/files/live/sites/tech/files/shared/r/r128v5_0.pdf	normalised to a Target Level of -23.0 LUFS
+r128-speech	https://tech.ebu.ch/files/live/sites/tech/files/shared/r/r128v5_0.pdf	without emphasis on specific foreground elements such as speech
+r128-tp	https://tech.ebu.ch/files/live/sites/tech/files/shared/r/r128v5_0.pdf	shall not exceed -1 dBTP
+s4-unsat	https://tech.ebu.ch/docs/r/r128s4.pdf	Both solutions are not satisfactory
+s4-limit	https://tech.ebu.ch/docs/r/r128s4.pdf	should not exceed 5 LU
+s4-15	https://tech.ebu.ch/docs/r/r128s4.pdf	sometimes reaching 15 LU or more
+s2-range	https://tech.ebu.ch/docs/r/r128s2.pdf	-20.0 to -16.0 LUFS
+t3343-15	https://tech.ebu.ch/docs/tech/tech3343.pdf	sometimes more than 15 LU
+t3343-adapted	https://tech.ebu.ch/docs/tech/tech3343.pdf	already dynamically adapted
+t3343-di	https://tech.ebu.ch/docs/tech/tech3343.pdf	small (0.4 LU)
+t3343-lra	https://tech.ebu.ch/docs/tech/tech3343.pdf	does not include a maximum permitted LRA value
+t3343-anchor	https://tech.ebu.ch/docs/tech/tech3343.pdf	editing the Centre channel of a particular film
+t3343-domestic	https://tech.ebu.ch/docs/tech/tech3343.pdf	not suitable for a typical domestic listening environment
+bs1770-gate	https://www.itu.int/dms_pubrec/itu-r/rec/bs/R-REC-BS.1770-5-202311-I!!PDF-E.pdf	not just the speech component
+td1006-anchor	https://aes.org/wp-content/uploads/2024/01/AESTD1006_1_17_10.pdf	An Anchor Element (for instance, dialog) should be used
+td1009-drc	https://aes.org/wp-content/uploads/2025/12/5297fea6-25ba-4865-92f6-dc1d0ba52ce4.pdf	DRC does not change the balance between dialogue and simultaneously competing elements in the mix, so it cannot reduce masking
+td1009-lra	https://aes.org/wp-content/uploads/2025/12/5297fea6-25ba-4865-92f6-dc1d0ba52ce4.pdf	specifying an LRA target value is misleading, ineffective and discouraged
+td1009-tv	https://aes.org/wp-content/uploads/2025/12/5297fea6-25ba-4865-92f6-dc1d0ba52ce4.pdf	Many modern flat-screen television designs compromise dialogue intelligibility
+td1009-centre	https://aes.org/wp-content/uploads/2025/12/5297fea6-25ba-4865-92f6-dc1d0ba52ce4.pdf	the least desirable method
+td1009-disparate	https://aes.org/wp-content/uploads/2025/12/5297fea6-25ba-4865-92f6-dc1d0ba52ce4.pdf	disparate loudness specifications
+td1009-acting	https://aes.org/wp-content/uploads/2025/12/5297fea6-25ba-4865-92f6-dc1d0ba52ce4.pdf	Acting styles have become more subdued and dialogue performances have become quieter
+td1009-afterthought	https://aes.org/wp-content/uploads/2025/12/5297fea6-25ba-4865-92f6-dc1d0ba52ce4.pdf	afterthought
+torcoli24-over	https://arxiv.org/html/2405.17364v1	Speech-gated loudness consistently overestimates
+torcoli24-local	https://arxiv.org/html/2405.17364v1	cannot prevent the program or the speech signal from having local passages that are too low
+torcoli24-lra	https://arxiv.org/html/2405.17364v1	Controlling the LRA can bring great advantages
+torcoli24-mae	https://arxiv.org/html/2405.17364v1	MAE is below 1.0
+torcoli22	https://ar5iv.labs.arxiv.org/html/2207.14240	a consistent trend of decreasing LE along with decreasing background level
+may18	https://pmc.ncbi.nlm.nih.gov/articles/PMC6100123	All tested compression systems led to a reduction in the output SNR
+dialogplus	https://arxiv.org/pdf/2112.09494	coincided with publication dates
+amazon-cloud	https://www.amazon.science/blog/dialogue-boost-how-amazon-is-using-ai-to-enhance-tv-and-movie-dialogue	relied on cloud-based processing to pre-enhance audio tracks
+amazon-device	https://www.amazon.science/blog/dialogue-boost-how-amazon-is-using-ai-to-enhance-tv-and-movie-dialogue	to run directly on-device
+amazon-86	https://www.amazon.science/blog/dialogue-boost-how-amazon-is-using-ai-to-enhance-tv-and-movie-dialogue	over 86% of participants preferred the clarity
+apple-rls	https://support.apple.com/guide/tv/change-audio-settings-atvba773c3c9/tvos	lower the overall sound level for all audio by reducing the dynamic range
+apple-enhance	https://support.apple.com/guide/tv/change-audio-settings-atvba773c3c9/tvos	Enhance More makes dialogue very prominent, but may alter the original audio mix
+nfblog-metadata	jina:https://netflixtechblog.com/optimizing-the-aural-experience-on-android-devices-with-xhe-aac-c27714292a33	The measured dialog level is delivered in MPEG-D DRC metadata in the xHE-AAC bitstream
+nfblog-goal	jina:https://netflixtechblog.com/optimizing-the-aural-experience-on-android-devices-with-xhe-aac-c27714292a33	play all titles at a consistent volume, relative to each other
+nfblog-device	jina:https://netflixtechblog.com/optimizing-the-aural-experience-on-android-devices-with-xhe-aac-c27714292a33	Each device can set a target output level
+nfblog-android	jina:https://netflixtechblog.com/optimizing-the-aural-experience-on-android-devices-with-xhe-aac-c27714292a33	Android 9 and newer
+nfblog-key	jina:https://netflixtechblog.com/optimizing-the-aural-experience-on-android-devices-with-xhe-aac-c27714292a33	KEY_AAC_DRC_TARGET_REFERENCE_LEVEL
+pe-ab	https://www.production-expert.com/production-expert-1/netflix-loudness-and-dynamic-range-developments-update	volume change interactions are noticeably reduced
+nf-help	https://help.netflix.com/en/node/116198	We're looking into this problem
+atsc-dialnorm	https://www.atsc.org/atsc-glossary/dialnorm/	The decoder applies an amount of gain reduction equal to the difference between -31 and the dialnorm value
+plex-transcode	https://forums.plex.tv/t/audio-enhancements-boost-dialog-normalize-loudness/942925.md	enabling either option will cause the audio to be transcoded
+plex-boost	https://forums.plex.tv/t/audio-enhancements-boost-dialog-normalize-loudness/942925.md	Isolates the frequencies where dialog lives and brings them forward
+jf-music	https://raw.githubusercontent.com/jellyfin/jellyfin/master/Emby.Server.Implementations/ScheduledTasks/Tasks/AudioNormalizationTask.cs	MediaTypes = [MediaType.Audio]
+jf-night	https://raw.githubusercontent.com/jellyfin/jellyfin/master/MediaBrowser.Controller/MediaEncoding/DownMixAlgorithmsHelper.cs	c0=c2+0.30*c0+0.30*c4
+jf-boost	https://jellyfin.org/docs/general/post-install/transcoding/downmix/	applies a volume gain in normalized ratio when performing a stereo downmix
+emby-boost	https://emby.media/support/articles/Transcoding.html	meaning the volume will be doubled when converting surround audio to stereo
+kodi-drc	https://raw.githubusercontent.com/xbmc/xbmc/master/xbmc/cores/VideoPlayer/DVDCodecs/Audio/DVDAudioCodecFFmpeg.cpp	applyDrc >= 0.0f
+kodi-amp	https://raw.githubusercontent.com/xbmc/xbmc/master/xbmc/cores/VideoPlayer/AudioSinkAE.cpp	SetAmplification
+mpv-drc	https://raw.githubusercontent.com/mpv-player/mpv/master/DOCS/man/options.rst	where 0 means no compression (which is the default)
+mpv-rg	https://raw.githubusercontent.com/mpv-player/mpv/master/DOCS/man/options.rst	With --replaygain=no (the default), perform no adjustment
+mpv-std	https://raw.githubusercontent.com/mpv-player/mpv/master/DOCS/man/options.rst	The standard mandates that DRC is enabled by default
+vlc-a52	https://raw.githubusercontent.com/videolan/vlc/3.0.x/modules/codec/a52.c	a52-dynrng
+infuse-boost	https://support.firecore.com/hc/en-us/articles/360015608854-Settings-Overview	up to 300%
+infuse-decode	https://support.firecore.com/hc/en-us/articles/217735707-Audio-Options-Capabilities	Infuse will first decompress this audio before sending it to your receiver as LPCM
+denon-lm	https://manuals.denon.com/AVRX2800H/EU/EN/GFNFSYvdfworfs.php	Dialogue normalization are disabled
+ff-level	https://raw.githubusercontent.com/FFmpeg/FFmpeg/master/libavcodec/ac3dec_float.c	target level in -dBFS (0 not applied)
+ff-drc	https://raw.githubusercontent.com/FFmpeg/FFmpeg/master/doc/decoders.texi	The default value is 1
+ff-dn	https://raw.githubusercontent.com/FFmpeg/FFmpeg/master/doc/encoders.texi	with -31 being the default
+ff-enc	https://raw.githubusercontent.com/FFmpeg/FFmpeg/master/libavcodec/ac3enc.c	no compression control word
+ff-usac	https://raw.githubusercontent.com/FFmpeg/FFmpeg/master/libavcodec/aac/aacdec_usac.c	DRC is not applied
+rfc7845	https://www.rfc-editor.org/rfc/rfc7845.txt	Players and media frameworks SHOULD apply it by default
+aosp-16	https://raw.githubusercontent.com/aosp-mirror/platform_frameworks_base/master/media/java/android/media/MediaFormat.java	The default value on mobile devices is 64 (-16 LKFS)
+yougov-uk	https://yougov.com/en-gb/articles/55819-most-young-people-now-watch-tv-and-movies-with-the-subtitles-on	poor sound mixing, loud music and a more naturalistic, mumbled style of acting
+preply	https://preply.com/en/blog/americas-subtitles-use/	A whopping 78% have difficulty hearing dialogue due to loud background music
+yt-stable	https://support.google.com/youtube/answer/14106294?hl=en	stable volume
+roku-speech	https://support.roku.com/article/learn-about-sound-modes	only available when using a Roku audio device
+samsung-auto	https://www.samsung.com/au/support/tv-audio-video/use-auto-volume-on-a-samsung-tv/	can equalise the volume up to 12db
+sharma-webrtc	https://cdn.amazon.science/61/88/7d000a8041e1a0fd4a92976b1e86/a-comprehensive-empirical-review-of-modern-voice-activity-detection-approaches-for-movies-and-tv-shows.pdf	WebRTC VAD results in a low accuracy of 61%
+inagvad	https://arxiv.org/html/2406.04429v1	strictly restricting corpus access to academic research
+silero-license	https://raw.githubusercontent.com/snakers4/silero-vad/master/LICENSE	MIT License
+silero-size	https://github.com/snakers4/silero-vad	JIT model is around two megabytes in size
+dolby-ref	https://professional.dolby.com/support/dolbys-speech-gating-reference-code/	the reference code for the algorithm behind our unique Dialogue Intelligence as a free download
+plvs	https://raw.githubusercontent.com/SounDoer/PLVS/main/CHANGELOG.md	Dialogue-gated CLI analysis with selectable VAD engines
+sdx	https://arxiv.org/html/2308.06981v4	approximately 6 dB was observed for dialogue
+nf-normalise	jina:https://partnerhelp.netflixstudios.com/hc/en-us/articles/360001794307	We raise or lower the overall mix level to ensure consistent playback between titles
+nf-normalise2	jina:https://partnerhelp.netflixstudios.com/hc/en-us/articles/360001794307	Netflix normalizes all audio deliveries to ensure all audio plays at the same level on the service
+nf-intent	jina:https://partnerhelp.netflixstudios.com/hc/en-us/articles/360001794307	refraining from compressing, limiting, or altering audio mixes
+nf-peak-limiter	jina:https://partnerhelp.netflixstudios.com/hc/en-us/articles/360001794307	Set a True Peak limiter at -2.3 dBFS for all audio deliverables
+nf-downmix	jina:https://partnerhelp.netflixstudios.com/hc/en-us/articles/360001794307	5.1 to Stereo with LFE muted
+nf-version	jina:https://partnerhelp.netflixstudios.com/hc/en-us/articles/360001794307	OC-1-6 (2024-10-29)
+nfblog-same	jina:https://netflixtechblog.com/optimizing-the-aural-experience-on-android-devices-with-xhe-aac-c27714292a33	play all dialogue at the same level
+nfblog-gain	jina:https://netflixtechblog.com/optimizing-the-aural-experience-on-android-devices-with-xhe-aac-c27714292a33	The decoder applies a gain equal to the difference between the output level and the
+nfblog-16	jina:https://netflixtechblog.com/optimizing-the-aural-experience-on-android-devices-with-xhe-aac-c27714292a33	such as -16 dBFS
+nfblog-pure	jina:https://netflixtechblog.com/optimizing-the-aural-experience-on-android-devices-with-xhe-aac-c27714292a33	defeat loudness normalization completely
+nfblog-7	jina:https://netflixtechblog.com/optimizing-the-aural-experience-on-android-devices-with-xhe-aac-c27714292a33	switched away from built-in speakers 7% less often
+nfblog-11	jina:https://netflixtechblog.com/optimizing-the-aural-experience-on-android-devices-with-xhe-aac-c27714292a33	the content itself is 11dB louder
+nfblog-dynrange	jina:https://netflixtechblog.com/optimizing-the-aural-experience-on-android-devices-with-xhe-aac-c27714292a33	adjust the volume during the show
+nfsmad	jina:https://netflixtechblog.com/detecting-speech-and-music-in-audio-content-afd64e6a5bf8	speech-gated loudness is computed for every audio master track and used for loudness normalization
+nfintel-points	jina:https://netflixtechblog.com/measuring-dialogue-intelligibility-for-netflix-content-58c13d2a6f6e	Dialogue intelligibility can break down at multiple points
+nfintel-tv	jina:https://netflixtechblog.com/measuring-dialogue-intelligibility-for-netflix-content-58c13d2a6f6e	TVs with inadequate speakers, noisy home environments
+nfintel-acting	jina:https://netflixtechblog.com/measuring-dialogue-intelligibility-for-netflix-content-58c13d2a6f6e	Naturalistic acting styles, diverse speech patterns, and accents
+nfintel-snr	jina:https://netflixtechblog.com/measuring-dialogue-intelligibility-for-netflix-content-58c13d2a6f6e	quantify the degree to which competing Music and Effects can distract the listener
+plex-remote	https://forums.plex.tv/t/audio-enhancements-boost-dialog-normalize-loudness/942925.md	no more reaching for the remote
+plex-pass	https://forums.plex.tv/t/audio-enhancements-boost-dialog-normalize-loudness/942925.md	Plex Pass subscribers
+plex-analysis	https://forums.plex.tv/t/audio-enhancements-boost-dialog-normalize-loudness/942925.md	Normalize Loudness needs the audio analyzed first
+plex-web	https://forums.plex.tv/t/audio-enhancements-boost-dialog-normalize-loudness/942925.md	Plex Web (Coming Soon)
+plex-scenes	https://forums.plex.tv/t/audio-enhancements-boost-dialog-normalize-loudness/942925.md	takes the edge off very loud scenes
+a85-ops	https://www.atsc.org/wp-content/uploads/2026/07/A85-2026-07.pdf	others use -27 LKFS (provides greater headroom)
+s4-adapt	https://tech.ebu.ch/docs/r/r128s4.pdf	Dynamic adaptation of the programme should mainly target this parameter
+s4-none	https://tech.ebu.ch/docs/r/r128s4.pdf	no dynamic adaptation needs to be performed
+s4-ldr	https://tech.ebu.ch/docs/r/r128s4.pdf	Loudness-to-Dialogue Ratio of Cinematic Content should not exceed 5 LU
+s4-centre	https://tech.ebu.ch/docs/r/r128s4.pdf	this is typically the Centre channel
+s4-limit12	https://tech.ebu.ch/docs/r/r128s4.pdf	with 12 dB True-peak limiting necessary
+t3343-ldr	https://tech.ebu.ch/docs/tech/tech3343.pdf	The mean Loudness-to-Dialogue Ratio was for both methods below 4 LU
+t3343-gate	https://tech.ebu.ch/docs/tech/tech3343.pdf	DI does not apply the level gating
+torcoli24-real	https://arxiv.org/html/2405.17364v1	empirical measurements on real-world movies
+torcoli24-oracle	https://arxiv.org/html/2405.17364v1	even considering a perfect ( oracle )
+rtw-disney	https://www.rtw.com/en/blog/worldwide-loudness-delivery-standards.html	Disney Home Entertainment - Online Streaming Loudness Type ATSC A/85 Integrated (I) -27 LKFS (±2,0 LU) True Peak (TPmax) -2 dBTP
+rtw-hbo	https://www.rtw.com/en/blog/worldwide-loudness-delivery-standards.html	HBO Home Office Box - Online Streaming Loudness Type ATSC A/85 Integrated (I) -27 LKFS (±2,0 LU)
+hls-ludt	jina:https://developer.apple.com/documentation/http-live-streaming/hls-authoring-specification-for-apple-devices	When present, the loudness box takes precedence over any loudness information in the audio stream
+hls-actual2	jina:https://developer.apple.com/documentation/http-live-streaming/hls-authoring-specification-for-apple-devices	unless all content (including ads) has been encoded at the same audio levels
+amazon-sb576	jina:https://videocentral.amazon.com/support/welcome-to-prime-video-slate/supply-chain-updates-june-2026	in response to California Senate Bill 576
+td1009-ldc	https://aes.org/wp-content/uploads/2025/12/5297fea6-25ba-4865-92f6-dc1d0ba52ce4.pdf	This is the least desirable method since the center channel may contain other program elements and dialogue may be present in other channels
+nf-gate	jina:https://partnerhelp.netflixstudios.com/hc/en-us/articles/360001794307	Audio should be measured over the full program according to ITU-R BS.1770-1
+cas-disney	https://www.production-expert.com/production-expert-1/atsc-a/85-loudness-spec-updated-whats-changed-and-what-you-need-to-do	Disney+ -27 LKFS dialogue-anchored spec
+cas-hulu	https://www.production-expert.com/production-expert-1/atsc-a/85-loudness-spec-updated-whats-changed-and-what-you-need-to-do	our spec is -24 Full Program
+cas-hbo	https://www.production-expert.com/production-expert-1/atsc-a/85-loudness-spec-updated-whats-changed-and-what-you-need-to-do	adjustment to Full Program Loudness for HBO Max
+smpte-14	https://journal.smpte.org/periodicals/SMPTE%20Motion%20Imaging%20Journal/123/5/17/	not a single film could be broadcast
+fau-10lu	https://cris.fau.de/publications/234640600	at least 10 LU difference
+cinemontage	https://cinemontage.org/?p=59745	A lot of people are hearing the worst possible mix
+dialogplus-46	https://arxiv.org/pdf/2112.09494	46%
+dialogplus-83	https://arxiv.org/pdf/2112.09494	83%
+yougov-us	https://yougov.com/en-us/articles/45987-american-adults-under-30-watching-tv-subtitles	63%
+td1006-na	https://aes.org/wp-content/uploads/2024/01/AESTD1006_1_17_10.pdf	-24 ± 2 LKFS
+s2-unchanged	https://tech.ebu.ch/docs/r/r128s2.pdf	streamed unchanged
+ina-table	https://arxiv.org/html/2406.04429v1	Silero 96.1 97.3 98.6 61.6 23.9 95.7
+ava-webrtc	https://ar5iv.labs.arxiv.org/html/1808.00606	NoSpeech, CleanSpeech, Speech+Music and Speech+Noise
+sdx-dialogue	https://arxiv.org/html/2308.06981v4	14.963
+shield-night	https://support-shield.nvidia.com/android-tv-release-notes/9.1.1/	Night listening mode automatically levels both loud explosions and quiet dialog
+lg-auto	https://www.lg.com/ca_en/support/product-support/troubleshoot/help-library/cs-CT20098005-20150154759710/	Auto Volume and Smart Sound Mode features will have no effect
+roku-modes	https://support.roku.com/article/manage-volume-levels	Volume modes are not available for some audio formats
+apple-tvos18	https://support.apple.com/en-us/106336	Available on TV speakers, HDMI-connected receivers or speakers, and Bluetooth-connected devices
+amazon-help	https://www.primevideo.com/help?nodeId=TYiAAjz4wR2wWsttiy	on Web, Amazon Devices, and Mobile Devices
+kodi-default	https://raw.githubusercontent.com/xbmc/xbmc/master/xbmc/settings/AdvancedSettings.cpp	m_audioApplyDrc = -1.0f
+kodi-rg	https://raw.githubusercontent.com/xbmc/xbmc/master/xbmc/cores/paplayer/PAPlayer.cpp	SetReplayGain
+ina-table2	https://arxiv.org/html/2406.04429v1	InaSpeechSegmenter 95.4 95.5 99.8 98.1 88.4 97.8
+demucs-time	https://github.com/facebookresearch/demucs	roughly equal to 1.5 times the duration of the track
+plex-kb	jina:https://support.plex.tv/articles/audio-track-enhancements-for-video/	Enabling either of these options will cause the audio to be transcoded
+jf-web-none	https://raw.githubusercontent.com/jellyfin/jellyfin-web/master/src/plugins/htmlAudioPlayer/plugin.js	normalizationGain
+ff-bsf	https://raw.githubusercontent.com/FFmpeg/FFmpeg/master/doc/bitstream_filters.texi	Extract the core from a E-AC-3 stream, dropping extra channels
+denon-dyn	https://manuals.denon.com/AVRX2800H/EU/EN/GFNFSYvdfworfs.php	Compress dynamic range (difference between loud and soft sounds)
+mpv-tags2	https://raw.githubusercontent.com/mpv-player/mpv/master/demux/demux.c	REPLAYGAIN_TRACK_GAIN
+pe-di	https://www.production-expert.com/home-page/2018/11/10/is-dolby-dialog-intelligence-still-fit-for-purpose-for-netflix-to-use-for-speech-gating	a typical difference of 4.5 dB, with the automatic measurement producing the highest level
+netflix-auphonic	https://auphonic.com/blog/2020/10/08/dialog-loudness-normalization/	dialog levels clustered around -27 LKFS
+demucs-gpu	https://github.com/facebookresearch/demucs	3GB
+s2-metadata	https://tech.ebu.ch/docs/r/r128s2.pdf	streaming platforms increasingly use metadata to perform loudness normalisation
+android-effect	https://raw.githubusercontent.com/aosp-mirror/platform_frameworks_base/master/media/java/android/media/MediaFormat.java	The default DRC effect type is 3
+smpte-majority	https://journal.smpte.org/periodicals/SMPTE%20Motion%20Imaging%20Journal/123/5/17/	All programs and a majority of the films could be broadcast
+smpte-14db	https://journal.smpte.org/periodicals/SMPTE%20Motion%20Imaging%20Journal/123/5/17/	The difference in normalization level between the two measures was up to 14 dB
+nf-label	jina:https://partnerhelp.netflixstudios.com/hc/en-us/articles/360001794307	label all beds or objects as Dialog, Music, Effects or Narration
+nf-samsung	https://help.netflix.com/en/node/11650	Set Auto Volume to Normal
+tvtech-six	https://www.tvtechnology.com/miscellaneous/a-closer-look-at-audio-metadata	Six preset DRC profiles are available
+tvtech-line	https://www.tvtechnology.com/miscellaneous/a-closer-look-at-audio-metadata	Line Mode is relatively light dynamic range compression
+cinemontage-name	https://cinemontage.org/?p=59745	Lora Hirschberg
+qomex-28	https://ar5iv.labs.arxiv.org/html/2207.14240	28 normal-hearing participants
+ffaac-fdk	https://raw.githubusercontent.com/FFmpeg/FFmpeg/master/libavcodec/libfdk-aacenc.c	The program reference level or dialog level in dB
+matroska-tags	https://www.matroska.org/technical/tagging.html	The gain to apply to reach 89 dB SPL
+doom9	https://forum.doom9.org/archive/index.php/t-160159.html	Atmos decoding is broken
+channels-forum	https://community.getchannels.com/t/volume-level-much-louder-with-channels-app-than-other-apple-tv-apps/34763	tvOS definitely honors DIALNORM
+firecore-forum	https://community.firecore.com/t/apple-tv-4k-enhanced-dialogue-and-reduced-loud-sounds-dont-work/53098	they do not function in Infuse
+firecore-forum2	https://community.firecore.com/t/apple-tv-4k-enhanced-dialogue-and-reduced-loud-sounds-dont-work/53098	identical behavior when playing files in Infuse and Apple's own apps
+ff-mov-noludt	https://raw.githubusercontent.com/FFmpeg/FFmpeg/master/libavformat/mov.c	mov_default_parse_table

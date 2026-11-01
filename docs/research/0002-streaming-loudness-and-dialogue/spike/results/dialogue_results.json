@@ -1,0 +1,1362 @@
+{
+ "fixtures": {
+  "F1 quiet drama": {
+   "dialogue": -27,
+   "music": null,
+   "burst": null,
+   "share": 0.55,
+   "overlap": 0.0
+  },
+  "F2 drama with score": {
+   "dialogue": -27,
+   "music": -37,
+   "burst": null,
+   "share": 0.45,
+   "overlap": 0.0
+  },
+  "F3 near-field action": {
+   "dialogue": -27,
+   "music": -38,
+   "burst": -20,
+   "share": 0.35,
+   "overlap": 0.1
+  },
+  "F4 theatrical action": {
+   "dialogue": -31,
+   "music": -40,
+   "burst": -18,
+   "share": 0.3,
+   "overlap": 0.1
+  },
+  "F5 war film": {
+   "dialogue": -33,
+   "music": -42,
+   "burst": -17,
+   "share": 0.18,
+   "overlap": 0.3
+  },
+  "F6 loud score under speech": {
+   "dialogue": -24,
+   "music": -29,
+   "burst": null,
+   "share": 0.45,
+   "overlap": 0.0
+  },
+  "F7 crowd under speech": {
+   "dialogue": -28,
+   "music": null,
+   "burst": null,
+   "share": 0.4,
+   "overlap": 0.0,
+   "crowd": -37
+  },
+  "F8 no dialogue": {
+   "dialogue": null,
+   "music": -24,
+   "burst": -19,
+   "share": 0.0,
+   "overlap": 0.0
+  }
+ },
+ "gates": {
+  "F1 quiet drama": {
+   "truth_dialogue": -26.999999999999996,
+   "truth_dialogue_stereo": -27.00008329848048,
+   "programme": -27.261826971192995,
+   "programme_ffmpeg": -27.3,
+   "lra": 15.8,
+   "true_peak": -7.1,
+   "programme_stereo": -27.260261059329107,
+   "centre_ffmpeg": -27.3,
+   "stereo_dialoguenhance": -21.9,
+   "oracle_gate_whole_mix": -26.85083692166017,
+   "oracle_gate_centre": -26.85079536059669,
+   "silero_gate_whole_mix": -26.869349025227784,
+   "silero_gate_centre": -26.871556715004093,
+   "silero_gate_stereo": -26.87307420258498,
+   "webrtc_gate_whole_mix": -26.860754698662628,
+   "webrtc_gate_stereo": -26.866055219964593,
+   "silero_trimmed_whole_mix": -28.53106900946677,
+   "silero_trimmed_centre": -28.532429132324076,
+   "silero_trimmed_stereo": -28.533136522888828,
+   "silero_speech_share_centre": 0.527,
+   "silero_speech_share_stereo": 0.526,
+   "truth_share": 0.522,
+   "silero_stats_mix": {
+    "flagged_share": 0.526,
+    "precision": 0.986,
+    "recall": 0.993
+   },
+   "silero_stats_centre": {
+    "flagged_share": 0.527,
+    "precision": 0.985,
+    "recall": 0.994
+   },
+   "webrtc_stats_mix": {
+    "flagged_share": 0.519,
+    "precision": 0.989,
+    "recall": 0.983
+   }
+  },
+  "F2 drama with score": {
+   "truth_dialogue": -27.00000000000011,
+   "truth_dialogue_stereo": -27.000083298480664,
+   "programme": -29.992278817650874,
+   "programme_ffmpeg": -30.0,
+   "lra": 13.2,
+   "true_peak": -5.6,
+   "programme_stereo": -29.337541961041353,
+   "centre_ffmpeg": -27.4,
+   "stereo_dialoguenhance": -25.1,
+   "oracle_gate_whole_mix": -26.84619618420609,
+   "oracle_gate_centre": -26.842734070529268,
+   "silero_gate_whole_mix": -26.35297188300961,
+   "silero_gate_centre": -26.83315890713649,
+   "silero_gate_stereo": -26.01460274391633,
+   "webrtc_gate_whole_mix": -29.91834860666018,
+   "webrtc_gate_stereo": -29.120418571324027,
+   "silero_trimmed_whole_mix": -28.57478646842052,
+   "silero_trimmed_centre": -30.037128059478388,
+   "silero_trimmed_stereo": -27.972091936380657,
+   "silero_speech_share_centre": 0.395,
+   "silero_speech_share_stereo": 0.332,
+   "truth_share": 0.394,
+   "silero_stats_mix": {
+    "flagged_share": 0.342,
+    "precision": 0.983,
+    "recall": 0.851
+   },
+   "silero_stats_centre": {
+    "flagged_share": 0.395,
+    "precision": 0.984,
+    "recall": 0.986
+   },
+   "webrtc_stats_mix": {
+    "flagged_share": 0.933,
+    "precision": 0.416,
+    "recall": 0.985
+   }
+  },
+  "F3 near-field action": {
+   "truth_dialogue": -26.99999999999943,
+   "truth_dialogue_stereo": -27.000083298479982,
+   "programme": -27.37059223552517,
+   "programme_ffmpeg": -27.4,
+   "lra": 16.6,
+   "true_peak": -2.8,
+   "programme_stereo": -27.817288752082217,
+   "centre_ffmpeg": -27.7,
+   "stereo_dialoguenhance": -26.2,
+   "oracle_gate_whole_mix": -26.77257260349065,
+   "oracle_gate_centre": -26.832255000381945,
+   "silero_gate_whole_mix": -26.47880571015561,
+   "silero_gate_centre": -26.80273948467673,
+   "silero_gate_stereo": -26.109288884158854,
+   "webrtc_gate_whole_mix": -24.452816193898215,
+   "webrtc_gate_stereo": -27.456670904768774,
+   "silero_trimmed_whole_mix": -26.948861597681862,
+   "silero_trimmed_centre": -27.935980056261972,
+   "silero_trimmed_stereo": -26.41491652970976,
+   "silero_speech_share_centre": 0.295,
+   "silero_speech_share_stereo": 0.251,
+   "truth_share": 0.296,
+   "silero_stats_mix": {
+    "flagged_share": 0.269,
+    "precision": 0.983,
+    "recall": 0.892
+   },
+   "silero_stats_centre": {
+    "flagged_share": 0.295,
+    "precision": 0.982,
+    "recall": 0.978
+   },
+   "webrtc_stats_mix": {
+    "flagged_share": 0.821,
+    "precision": 0.357,
+    "recall": 0.989
+   }
+  },
+  "F4 theatrical action": {
+   "truth_dialogue": -30.999999999999925,
+   "truth_dialogue_stereo": -31.000083298480924,
+   "programme": -23.445378484998947,
+   "programme_ffmpeg": -23.5,
+   "lra": 20.9,
+   "true_peak": -1.4,
+   "programme_stereo": -27.192569165711557,
+   "centre_ffmpeg": -29.9,
+   "stereo_dialoguenhance": -29.2,
+   "oracle_gate_whole_mix": -29.884813367302993,
+   "oracle_gate_centre": -30.698958590671854,
+   "silero_gate_whole_mix": -29.23501885605363,
+   "silero_gate_centre": -30.60179112846016,
+   "silero_gate_stereo": -28.851578896964682,
+   "webrtc_gate_whole_mix": -23.393746393155237,
+   "webrtc_gate_stereo": -24.26218222359397,
+   "silero_trimmed_whole_mix": -31.35012052848558,
+   "silero_trimmed_centre": -33.1898842277744,
+   "silero_trimmed_stereo": -30.397171738628185,
+   "silero_speech_share_centre": 0.326,
+   "silero_speech_share_stereo": 0.268,
+   "truth_share": 0.327,
+   "silero_stats_mix": {
+    "flagged_share": 0.281,
+    "precision": 0.985,
+    "recall": 0.848
+   },
+   "silero_stats_centre": {
+    "flagged_share": 0.326,
+    "precision": 0.98,
+    "recall": 0.978
+   },
+   "webrtc_stats_mix": {
+    "flagged_share": 0.93,
+    "precision": 0.344,
+    "recall": 0.978
+   }
+  },
+  "F5 war film": {
+   "truth_dialogue": -33.000000000000114,
+   "truth_dialogue_stereo": -33.00008329848069,
+   "programme": -21.029901060108372,
+   "programme_ffmpeg": -21.0,
+   "lra": 24.0,
+   "true_peak": -0.1,
+   "programme_stereo": -22.590723378818883,
+   "centre_ffmpeg": -29.6,
+   "stereo_dialoguenhance": -31.5,
+   "oracle_gate_whole_mix": -29.77533525581062,
+   "oracle_gate_centre": -32.35967872810991,
+   "silero_gate_whole_mix": -27.272175750542537,
+   "silero_gate_centre": -32.12920471564677,
+   "silero_gate_stereo": -28.01866806138606,
+   "webrtc_gate_whole_mix": -20.828730557497042,
+   "webrtc_gate_stereo": -21.869638079352317,
+   "silero_trimmed_whole_mix": -31.697297033696064,
+   "silero_trimmed_centre": -33.12053052691031,
+   "silero_trimmed_stereo": -31.397406412326443,
+   "silero_speech_share_centre": 0.206,
+   "silero_speech_share_stereo": 0.177,
+   "truth_share": 0.214,
+   "silero_stats_mix": {
+    "flagged_share": 0.179,
+    "precision": 0.965,
+    "recall": 0.807
+   },
+   "silero_stats_centre": {
+    "flagged_share": 0.206,
+    "precision": 0.983,
+    "recall": 0.947
+   },
+   "webrtc_stats_mix": {
+    "flagged_share": 0.806,
+    "precision": 0.259,
+    "recall": 0.976
+   }
+  },
+  "F6 loud score under speech": {
+   "truth_dialogue": -24.000000000000387,
+   "truth_dialogue_stereo": -24.000083298480646,
+   "programme": -24.769234809873513,
+   "programme_ffmpeg": -24.8,
+   "lra": 8.2,
+   "true_peak": -1.3,
+   "programme_stereo": -23.6344482607343,
+   "centre_ffmpeg": -24.2,
+   "stereo_dialoguenhance": -20.3,
+   "oracle_gate_whole_mix": -22.924723525995987,
+   "oracle_gate_centre": -23.863574386405556,
+   "silero_gate_whole_mix": -21.97882794517668,
+   "silero_gate_centre": -23.883334213944668,
+   "silero_gate_stereo": -21.374086863358805,
+   "webrtc_gate_whole_mix": -24.68795859568323,
+   "webrtc_gate_stereo": -23.553175560150603,
+   "silero_trimmed_whole_mix": -22.601296343648116,
+   "silero_trimmed_centre": -25.59752378191592,
+   "silero_trimmed_stereo": -21.893295626014737,
+   "silero_speech_share_centre": 0.517,
+   "silero_speech_share_stereo": 0.344,
+   "truth_share": 0.51,
+   "silero_stats_mix": {
+    "flagged_share": 0.349,
+    "precision": 0.98,
+    "recall": 0.67
+   },
+   "silero_stats_centre": {
+    "flagged_share": 0.517,
+    "precision": 0.977,
+    "recall": 0.991
+   },
+   "webrtc_stats_mix": {
+    "flagged_share": 0.958,
+    "precision": 0.529,
+    "recall": 0.994
+   }
+  },
+  "F7 crowd under speech": {
+   "truth_dialogue": -27.999999999999073,
+   "truth_dialogue_stereo": -28.000083298479957,
+   "programme": -31.302888102684364,
+   "programme_ffmpeg": -31.3,
+   "lra": 11.3,
+   "true_peak": -4.4,
+   "programme_stereo": -31.736986788195455,
+   "centre_ffmpeg": -28.3,
+   "stereo_dialoguenhance": -25.4,
+   "oracle_gate_whole_mix": -27.603364523190315,
+   "oracle_gate_centre": -27.866689010848223,
+   "silero_gate_whole_mix": -27.58187348150602,
+   "silero_gate_centre": -27.86928968922562,
+   "silero_gate_stereo": -27.693633205156456,
+   "webrtc_gate_whole_mix": -27.7411604015646,
+   "webrtc_gate_stereo": -27.59400952598102,
+   "silero_trimmed_whole_mix": -28.39315190497007,
+   "silero_trimmed_centre": -28.9396987967031,
+   "silero_trimmed_stereo": -28.58730944659793,
+   "silero_speech_share_centre": 0.346,
+   "silero_speech_share_stereo": 0.33,
+   "truth_share": 0.344,
+   "silero_stats_mix": {
+    "flagged_share": 0.334,
+    "precision": 0.961,
+    "recall": 0.932
+   },
+   "silero_stats_centre": {
+    "flagged_share": 0.346,
+    "precision": 0.983,
+    "recall": 0.988
+   },
+   "webrtc_stats_mix": {
+    "flagged_share": 0.355,
+    "precision": 0.927,
+    "recall": 0.957
+   }
+  },
+  "F8 no dialogue": {
+   "truth_dialogue": null,
+   "truth_dialogue_stereo": null,
+   "programme": -22.856885635637887,
+   "programme_ffmpeg": -22.9,
+   "lra": 5.5,
+   "true_peak": -2.0,
+   "programme_stereo": -20.900980452055904,
+   "centre_ffmpeg": -34.1,
+   "stereo_dialoguenhance": -21.9,
+   "oracle_gate_whole_mix": null,
+   "oracle_gate_centre": null,
+   "silero_gate_whole_mix": null,
+   "silero_gate_centre": null,
+   "silero_gate_stereo": null,
+   "webrtc_gate_whole_mix": -22.642125510518515,
+   "webrtc_gate_stereo": -20.70718451153234,
+   "silero_trimmed_whole_mix": null,
+   "silero_trimmed_centre": null,
+   "silero_trimmed_stereo": null,
+   "silero_speech_share_centre": 0.0,
+   "silero_speech_share_stereo": 0.0,
+   "truth_share": 0.0,
+   "silero_stats_mix": {
+    "flagged_share": 0.0,
+    "precision": null,
+    "recall": null
+   },
+   "silero_stats_centre": {
+    "flagged_share": 0.0,
+    "precision": null,
+    "recall": null
+   },
+   "webrtc_stats_mix": {
+    "flagged_share": 0.94,
+    "precision": 0.0,
+    "recall": null
+   }
+  }
+ },
+ "errors_LU": {
+  "programme": {
+   "F1 quiet drama": -0.26,
+   "F2 drama with score": -2.99,
+   "F3 near-field action": -0.37,
+   "F4 theatrical action": 7.55,
+   "F5 war film": 11.97,
+   "F6 loud score under speech": -0.77,
+   "F7 crowd under speech": -3.3
+  },
+  "centre_ffmpeg": {
+   "F1 quiet drama": -0.3,
+   "F2 drama with score": -0.4,
+   "F3 near-field action": -0.7,
+   "F4 theatrical action": 1.1,
+   "F5 war film": 3.4,
+   "F6 loud score under speech": -0.2,
+   "F7 crowd under speech": -0.3
+  },
+  "oracle_gate_whole_mix": {
+   "F1 quiet drama": 0.15,
+   "F2 drama with score": 0.15,
+   "F3 near-field action": 0.23,
+   "F4 theatrical action": 1.12,
+   "F5 war film": 3.22,
+   "F6 loud score under speech": 1.08,
+   "F7 crowd under speech": 0.4
+  },
+  "oracle_gate_centre": {
+   "F1 quiet drama": 0.15,
+   "F2 drama with score": 0.16,
+   "F3 near-field action": 0.17,
+   "F4 theatrical action": 0.3,
+   "F5 war film": 0.64,
+   "F6 loud score under speech": 0.14,
+   "F7 crowd under speech": 0.13
+  },
+  "silero_gate_whole_mix": {
+   "F1 quiet drama": 0.13,
+   "F2 drama with score": 0.65,
+   "F3 near-field action": 0.52,
+   "F4 theatrical action": 1.76,
+   "F5 war film": 5.73,
+   "F6 loud score under speech": 2.02,
+   "F7 crowd under speech": 0.42
+  },
+  "silero_gate_centre": {
+   "F1 quiet drama": 0.13,
+   "F2 drama with score": 0.17,
+   "F3 near-field action": 0.2,
+   "F4 theatrical action": 0.4,
+   "F5 war film": 0.87,
+   "F6 loud score under speech": 0.12,
+   "F7 crowd under speech": 0.13
+  },
+  "webrtc_gate_whole_mix": {
+   "F1 quiet drama": 0.14,
+   "F2 drama with score": -2.92,
+   "F3 near-field action": 2.55,
+   "F4 theatrical action": 7.61,
+   "F5 war film": 12.17,
+   "F6 loud score under speech": -0.69,
+   "F7 crowd under speech": 0.26
+  },
+  "silero_trimmed_whole_mix": {
+   "F1 quiet drama": -1.53,
+   "F2 drama with score": -1.57,
+   "F3 near-field action": 0.05,
+   "F4 theatrical action": -0.35,
+   "F5 war film": 1.3,
+   "F6 loud score under speech": 1.4,
+   "F7 crowd under speech": -0.39
+  },
+  "silero_trimmed_centre": {
+   "F1 quiet drama": -1.53,
+   "F2 drama with score": -3.04,
+   "F3 near-field action": -0.94,
+   "F4 theatrical action": -2.19,
+   "F5 war film": -0.12,
+   "F6 loud score under speech": -1.6,
+   "F7 crowd under speech": -0.94
+  },
+  "programme_stereo": {
+   "F1 quiet drama": -0.26,
+   "F2 drama with score": -2.34,
+   "F3 near-field action": -0.82,
+   "F4 theatrical action": 3.81,
+   "F5 war film": 10.41,
+   "F6 loud score under speech": 0.37,
+   "F7 crowd under speech": -3.74
+  },
+  "stereo_dialoguenhance": {
+   "F1 quiet drama": 5.1,
+   "F2 drama with score": 1.9,
+   "F3 near-field action": 0.8,
+   "F4 theatrical action": 1.8,
+   "F5 war film": 1.5,
+   "F6 loud score under speech": 3.7,
+   "F7 crowd under speech": 2.6
+  },
+  "silero_gate_stereo": {
+   "F1 quiet drama": 0.13,
+   "F2 drama with score": 0.99,
+   "F3 near-field action": 0.89,
+   "F4 theatrical action": 2.15,
+   "F5 war film": 4.98,
+   "F6 loud score under speech": 2.63,
+   "F7 crowd under speech": 0.31
+  },
+  "webrtc_gate_stereo": {
+   "F1 quiet drama": 0.13,
+   "F2 drama with score": -2.12,
+   "F3 near-field action": -0.46,
+   "F4 theatrical action": 6.74,
+   "F5 war film": 11.13,
+   "F6 loud score under speech": 0.45,
+   "F7 crowd under speech": 0.41
+  },
+  "silero_trimmed_stereo": {
+   "F1 quiet drama": -1.53,
+   "F2 drama with score": -0.97,
+   "F3 near-field action": 0.59,
+   "F4 theatrical action": 0.6,
+   "F5 war film": 1.6,
+   "F6 loud score under speech": 2.11,
+   "F7 crowd under speech": -0.59
+  }
+ },
+ "error_summary_LU": {
+  "programme": {
+   "min": -3.3,
+   "max": 11.97,
+   "spread": 15.27,
+   "mean_abs": 3.89
+  },
+  "centre_ffmpeg": {
+   "min": -0.7,
+   "max": 3.4,
+   "spread": 4.1,
+   "mean_abs": 0.91
+  },
+  "oracle_gate_whole_mix": {
+   "min": 0.15,
+   "max": 3.22,
+   "spread": 3.07,
+   "mean_abs": 0.91
+  },
+  "oracle_gate_centre": {
+   "min": 0.13,
+   "max": 0.64,
+   "spread": 0.51,
+   "mean_abs": 0.24
+  },
+  "silero_gate_whole_mix": {
+   "min": 0.13,
+   "max": 5.73,
+   "spread": 5.6,
+   "mean_abs": 1.6
+  },
+  "silero_gate_centre": {
+   "min": 0.12,
+   "max": 0.87,
+   "spread": 0.75,
+   "mean_abs": 0.29
+  },
+  "webrtc_gate_whole_mix": {
+   "min": -2.92,
+   "max": 12.17,
+   "spread": 15.09,
+   "mean_abs": 3.76
+  },
+  "silero_trimmed_whole_mix": {
+   "min": -1.57,
+   "max": 1.4,
+   "spread": 2.97,
+   "mean_abs": 0.94
+  },
+  "silero_trimmed_centre": {
+   "min": -3.04,
+   "max": -0.12,
+   "spread": 2.92,
+   "mean_abs": 1.48
+  },
+  "programme_stereo": {
+   "min": -3.74,
+   "max": 10.41,
+   "spread": 14.15,
+   "mean_abs": 3.11
+  },
+  "stereo_dialoguenhance": {
+   "min": 0.8,
+   "max": 5.1,
+   "spread": 4.3,
+   "mean_abs": 2.49
+  },
+  "silero_gate_stereo": {
+   "min": 0.13,
+   "max": 4.98,
+   "spread": 4.85,
+   "mean_abs": 1.73
+  },
+  "webrtc_gate_stereo": {
+   "min": -2.12,
+   "max": 11.13,
+   "spread": 13.25,
+   "mean_abs": 3.06
+  },
+  "silero_trimmed_stereo": {
+   "min": -1.53,
+   "max": 2.11,
+   "spread": 3.64,
+   "mean_abs": 1.14
+  }
+ },
+ "cost": {
+  "silero_s": 4.05,
+  "webrtc_s": 0.17,
+  "audio_s": 1920.0,
+  "stereo_dialoguenhance_s": 4.06,
+  "centre_ffmpeg_s": 1.17,
+  "realtime_factor": {
+   "silero": 474.4,
+   "webrtc": 11219.4,
+   "stereo_dialoguenhance": 472.4,
+   "centre_ffmpeg": 1637.8
+  }
+ },
+ "recipes": {
+  "F1 quiet drama": {
+   "A programme -20, peak-capped gain (today's default)": {
+    "programme": -21.7,
+    "lra": 15.8,
+    "true_peak": -1.5,
+    "chain": "volume=5.60dB",
+    "dialogue": -21.4,
+    "loudness_above_dialogue": -0.3,
+    "speech_to_background_change": 0.0
+   },
+   "B programme -20, limiter up to 6 dB": {
+    "programme": -20.1,
+    "lra": 15.8,
+    "true_peak": -1.7,
+    "chain": "volume=7.26dB,alimiter=limit=0.7943:attack=5:release=50:level=0:latency=1",
+    "dialogue": -19.81,
+    "loudness_above_dialogue": -0.29,
+    "speech_to_background_change": 0.0
+   },
+   "C programme -20, gentle compression then gain and limiter": {
+    "programme": -20.0,
+    "lra": 10.3,
+    "true_peak": -2.2,
+    "chain": "acompressor=threshold=0.0398:ratio=2.5:attack=20:release=300:knee=4:detection=rms:link=maximum,volume=12.60dB,alimiter=limit=0.7943:attack=5:release=50:level=0:latency=1",
+    "dialogue": -19.96,
+    "loudness_above_dialogue": -0.04,
+    "speech_to_background_change": -0.91
+   },
+   "D programme -20, strong compression then gain and limiter": {
+    "programme": -20.0,
+    "lra": 19.7,
+    "true_peak": -2.6,
+    "chain": "acompressor=threshold=0.0200:ratio=4:attack=10:release=250:knee=4:detection=rms:link=maximum,volume=18.50dB,alimiter=limit=0.7943:attack=5:release=50:level=0:latency=1",
+    "dialogue": -19.96,
+    "loudness_above_dialogue": -0.04,
+    "speech_to_background_change": -1.93
+   },
+   "E dialogue -27 (known), peak-capped gain": {
+    "programme": -27.3,
+    "lra": 15.8,
+    "true_peak": -7.1,
+    "chain": "volume=-0.00dB",
+    "dialogue": -27.0,
+    "loudness_above_dialogue": -0.3,
+    "speech_to_background_change": 0.0
+   },
+   "F dialogue -27 (known), limiter up to 6 dB": {
+    "programme": -27.3,
+    "lra": 15.8,
+    "true_peak": -7.1,
+    "chain": "volume=-0.00dB,alimiter=limit=0.7943:attack=5:release=50:level=0:latency=1",
+    "dialogue": -27.0,
+    "loudness_above_dialogue": -0.3,
+    "speech_to_background_change": 0.0
+   },
+   "G dialogue -24 (known), limiter up to 6 dB": {
+    "programme": -24.3,
+    "lra": 15.8,
+    "true_peak": -4.1,
+    "chain": "volume=3.00dB,alimiter=limit=0.7943:attack=5:release=50:level=0:latency=1",
+    "dialogue": -24.0,
+    "loudness_above_dialogue": -0.3,
+    "speech_to_background_change": 0.0
+   },
+   "H dialogue -27 (known), centre +4 dB, limiter up to 6 dB": {
+    "programme": -27.3,
+    "lra": 15.8,
+    "true_peak": -7.1,
+    "chain": "pan=5.1|c0=c0|c1=c1|c2=1.585*c2|c3=c3|c4=c4|c5=c5,volume=-4.00dB,alimiter=limit=0.7943:attack=5:release=50:level=0:latency=1",
+    "dialogue": -27.0,
+    "loudness_above_dialogue": -0.3,
+    "speech_to_background_change": 2.99
+   },
+   "I dialogue -27 (Silero estimate), limiter up to 6 dB": {
+    "programme": -27.4,
+    "lra": 15.8,
+    "true_peak": -7.2,
+    "chain": "volume=-0.13dB,alimiter=limit=0.7943:attack=5:release=50:level=0:latency=1",
+    "dialogue": -27.13,
+    "loudness_above_dialogue": -0.27,
+    "speech_to_background_change": 0.0
+   },
+   "J dialogue -27 (Silero estimate), gentle compression only if over 5 LU above dialogue": {
+    "programme": -27.4,
+    "lra": 15.8,
+    "true_peak": -7.2,
+    "chain": "volume=-0.13dB,alimiter=limit=0.7943:attack=5:release=50:level=0:latency=1",
+    "dialogue": -27.13,
+    "loudness_above_dialogue": -0.27,
+    "speech_to_background_change": 0.0
+   }
+  },
+  "F2 drama with score": {
+   "A programme -20, peak-capped gain (today's default)": {
+    "programme": -25.9,
+    "lra": 13.2,
+    "true_peak": -1.5,
+    "chain": "volume=4.10dB",
+    "dialogue": -22.9,
+    "loudness_above_dialogue": -3.0,
+    "speech_to_background_change": 0.0
+   },
+   "B programme -20, limiter up to 6 dB": {
+    "programme": -20.6,
+    "lra": 12.3,
+    "true_peak": -1.5,
+    "chain": "volume=9.99dB,alimiter=limit=0.7943:attack=5:release=50:level=0:latency=1",
+    "dialogue": -17.84,
+    "loudness_above_dialogue": -2.76,
+    "speech_to_background_change": 0.0
+   },
+   "C programme -20, gentle compression then gain and limiter": {
+    "programme": -20.0,
+    "lra": 6.5,
+    "true_peak": -2.0,
+    "chain": "acompressor=threshold=0.0398:ratio=2.5:attack=20:release=300:knee=4:detection=rms:link=maximum,volume=14.10dB,alimiter=limit=0.7943:attack=5:release=50:level=0:latency=1",
+    "dialogue": -18.73,
+    "loudness_above_dialogue": -1.27,
+    "speech_to_background_change": -0.52
+   },
+   "D programme -20, strong compression then gain and limiter": {
+    "programme": -20.0,
+    "lra": 1.8,
+    "true_peak": -3.9,
+    "chain": "acompressor=threshold=0.0200:ratio=4:attack=10:release=250:knee=4:detection=rms:link=maximum,volume=17.50dB,alimiter=limit=0.7943:attack=5:release=50:level=0:latency=1",
+    "dialogue": -21.13,
+    "loudness_above_dialogue": 1.13,
+    "speech_to_background_change": -1.45
+   },
+   "E dialogue -27 (known), peak-capped gain": {
+    "programme": -30.0,
+    "lra": 13.2,
+    "true_peak": -5.6,
+    "chain": "volume=0.00dB",
+    "dialogue": -27.0,
+    "loudness_above_dialogue": -3.0,
+    "speech_to_background_change": 0.0
+   },
+   "F dialogue -27 (known), limiter up to 6 dB": {
+    "programme": -30.0,
+    "lra": 13.2,
+    "true_peak": -5.6,
+    "chain": "volume=0.00dB,alimiter=limit=0.7943:attack=5:release=50:level=0:latency=1",
+    "dialogue": -27.0,
+    "loudness_above_dialogue": -3.0,
+    "speech_to_background_change": 0.0
+   },
+   "G dialogue -24 (known), limiter up to 6 dB": {
+    "programme": -27.0,
+    "lra": 13.2,
+    "true_peak": -2.6,
+    "chain": "volume=3.00dB,alimiter=limit=0.7943:attack=5:release=50:level=0:latency=1",
+    "dialogue": -24.0,
+    "loudness_above_dialogue": -3.0,
+    "speech_to_background_change": 0.0
+   },
+   "H dialogue -27 (known), centre +4 dB, limiter up to 6 dB": {
+    "programme": -30.3,
+    "lra": 16.8,
+    "true_peak": -5.6,
+    "chain": "pan=5.1|c0=c0|c1=c1|c2=1.585*c2|c3=c3|c4=c4|c5=c5,volume=-4.00dB,alimiter=limit=0.7943:attack=5:release=50:level=0:latency=1",
+    "dialogue": -27.0,
+    "loudness_above_dialogue": -3.3,
+    "speech_to_background_change": 3.65
+   },
+   "I dialogue -27 (Silero estimate), limiter up to 6 dB": {
+    "programme": -30.2,
+    "lra": 13.2,
+    "true_peak": -5.8,
+    "chain": "volume=-0.17dB,alimiter=limit=0.7943:attack=5:release=50:level=0:latency=1",
+    "dialogue": -27.17,
+    "loudness_above_dialogue": -3.03,
+    "speech_to_background_change": -0.0
+   },
+   "J dialogue -27 (Silero estimate), gentle compression only if over 5 LU above dialogue": {
+    "programme": -30.2,
+    "lra": 13.2,
+    "true_peak": -5.8,
+    "chain": "volume=-0.17dB,alimiter=limit=0.7943:attack=5:release=50:level=0:latency=1",
+    "dialogue": -27.17,
+    "loudness_above_dialogue": -3.03,
+    "speech_to_background_change": -0.0
+   }
+  },
+  "F3 near-field action": {
+   "A programme -20, peak-capped gain (today's default)": {
+    "programme": -26.1,
+    "lra": 16.5,
+    "true_peak": -1.5,
+    "chain": "volume=1.30dB",
+    "dialogue": -25.7,
+    "loudness_above_dialogue": -0.4,
+    "speech_to_background_change": -0.0
+   },
+   "B programme -20, limiter up to 6 dB": {
+    "programme": -20.7,
+    "lra": 15.6,
+    "true_peak": -0.9,
+    "chain": "volume=7.30dB,alimiter=limit=0.7943:attack=5:release=50:level=0:latency=1",
+    "dialogue": -19.71,
+    "loudness_above_dialogue": -0.99,
+    "speech_to_background_change": 0.0
+   },
+   "C programme -20, gentle compression then gain and limiter": {
+    "programme": -20.1,
+    "lra": 9.0,
+    "true_peak": -1.0,
+    "chain": "acompressor=threshold=0.0398:ratio=2.5:attack=20:release=300:knee=4:detection=rms:link=maximum,volume=13.20dB,alimiter=limit=0.7943:attack=5:release=50:level=0:latency=1",
+    "dialogue": -19.3,
+    "loudness_above_dialogue": -0.8,
+    "speech_to_background_change": -0.62
+   },
+   "D programme -20, strong compression then gain and limiter": {
+    "programme": -20.3,
+    "lra": 3.8,
+    "true_peak": -0.6,
+    "chain": "acompressor=threshold=0.0200:ratio=4:attack=10:release=250:knee=4:detection=rms:link=maximum,volume=17.10dB,alimiter=limit=0.7943:attack=5:release=50:level=0:latency=1",
+    "dialogue": -21.34,
+    "loudness_above_dialogue": 1.04,
+    "speech_to_background_change": -1.83
+   },
+   "E dialogue -27 (known), peak-capped gain": {
+    "programme": -27.4,
+    "lra": 16.6,
+    "true_peak": -2.8,
+    "chain": "volume=-0.00dB",
+    "dialogue": -27.0,
+    "loudness_above_dialogue": -0.4,
+    "speech_to_background_change": -0.0
+   },
+   "F dialogue -27 (known), limiter up to 6 dB": {
+    "programme": -27.4,
+    "lra": 16.6,
+    "true_peak": -2.8,
+    "chain": "volume=-0.00dB,alimiter=limit=0.7943:attack=5:release=50:level=0:latency=1",
+    "dialogue": -27.0,
+    "loudness_above_dialogue": -0.4,
+    "speech_to_background_change": -0.0
+   },
+   "G dialogue -24 (known), limiter up to 6 dB": {
+    "programme": -24.4,
+    "lra": 16.5,
+    "true_peak": -1.3,
+    "chain": "volume=3.00dB,alimiter=limit=0.7943:attack=5:release=50:level=0:latency=1",
+    "dialogue": -24.0,
+    "loudness_above_dialogue": -0.4,
+    "speech_to_background_change": -0.0
+   },
+   "H dialogue -27 (known), centre +4 dB, limiter up to 6 dB": {
+    "programme": -26.2,
+    "lra": 17.8,
+    "true_peak": -6.8,
+    "chain": "pan=5.1|c0=c0|c1=c1|c2=1.585*c2|c3=c3|c4=c4|c5=c5,volume=-4.00dB,alimiter=limit=0.7943:attack=5:release=50:level=0:latency=1",
+    "dialogue": -27.0,
+    "loudness_above_dialogue": 0.8,
+    "speech_to_background_change": 3.64
+   },
+   "I dialogue -27 (Silero estimate), limiter up to 6 dB": {
+    "programme": -27.6,
+    "lra": 16.5,
+    "true_peak": -3.0,
+    "chain": "volume=-0.20dB,alimiter=limit=0.7943:attack=5:release=50:level=0:latency=1",
+    "dialogue": -27.2,
+    "loudness_above_dialogue": -0.4,
+    "speech_to_background_change": -0.0
+   },
+   "J dialogue -27 (Silero estimate), gentle compression only if over 5 LU above dialogue": {
+    "programme": -27.6,
+    "lra": 16.5,
+    "true_peak": -3.0,
+    "chain": "volume=-0.20dB,alimiter=limit=0.7943:attack=5:release=50:level=0:latency=1",
+    "dialogue": -27.2,
+    "loudness_above_dialogue": -0.4,
+    "speech_to_background_change": -0.0
+   }
+  },
+  "F4 theatrical action": {
+   "A programme -20, peak-capped gain (today's default)": {
+    "programme": -23.6,
+    "lra": 20.9,
+    "true_peak": -1.5,
+    "chain": "volume=-0.10dB",
+    "dialogue": -31.1,
+    "loudness_above_dialogue": 7.5,
+    "speech_to_background_change": 0.0
+   },
+   "B programme -20, limiter up to 6 dB": {
+    "programme": -20.4,
+    "lra": 20.6,
+    "true_peak": -0.9,
+    "chain": "volume=3.45dB,alimiter=limit=0.7943:attack=5:release=50:level=0:latency=1",
+    "dialogue": -27.55,
+    "loudness_above_dialogue": 7.15,
+    "speech_to_background_change": 0.0
+   },
+   "C programme -20, gentle compression then gain and limiter": {
+    "programme": -23.9,
+    "lra": 11.9,
+    "true_peak": -1.0,
+    "chain": "acompressor=threshold=0.0398:ratio=2.5:attack=20:release=300:knee=4:detection=rms:link=maximum,volume=9.70dB,alimiter=limit=0.7943:attack=5:release=50:level=0:latency=1",
+    "dialogue": -24.88,
+    "loudness_above_dialogue": 0.98,
+    "speech_to_background_change": -0.42
+   },
+   "D programme -20, strong compression then gain and limiter": {
+    "programme": -22.6,
+    "lra": 5.7,
+    "true_peak": -1.2,
+    "chain": "acompressor=threshold=0.0200:ratio=4:attack=10:release=250:knee=4:detection=rms:link=maximum,volume=15.50dB,alimiter=limit=0.7943:attack=5:release=50:level=0:latency=1",
+    "dialogue": -24.22,
+    "loudness_above_dialogue": 1.62,
+    "speech_to_background_change": -1.25
+   },
+   "E dialogue -27 (known), peak-capped gain": {
+    "programme": -23.6,
+    "lra": 20.9,
+    "true_peak": -1.5,
+    "chain": "volume=-0.10dB",
+    "dialogue": -31.1,
+    "loudness_above_dialogue": 7.5,
+    "speech_to_background_change": 0.0
+   },
+   "F dialogue -27 (known), limiter up to 6 dB": {
+    "programme": -20.1,
+    "lra": 20.4,
+    "true_peak": -0.9,
+    "chain": "volume=4.00dB,alimiter=limit=0.7943:attack=5:release=50:level=0:latency=1",
+    "dialogue": -27.0,
+    "loudness_above_dialogue": 6.9,
+    "speech_to_background_change": 0.0
+   },
+   "G dialogue -24 (known), limiter up to 6 dB": {
+    "programme": -18.8,
+    "lra": 19.7,
+    "true_peak": -0.9,
+    "chain": "volume=5.90dB,alimiter=limit=0.7943:attack=5:release=50:level=0:latency=1",
+    "dialogue": -25.1,
+    "loudness_above_dialogue": 6.3,
+    "speech_to_background_change": -0.0
+   },
+   "H dialogue -27 (known), centre +4 dB, limiter up to 6 dB": {
+    "programme": -22.3,
+    "lra": 21.4,
+    "true_peak": -1.7,
+    "chain": "pan=5.1|c0=c0|c1=c1|c2=1.585*c2|c3=c3|c4=c4|c5=c5,volume=-0.00dB,alimiter=limit=0.7943:attack=5:release=50:level=0:latency=1",
+    "dialogue": -27.0,
+    "loudness_above_dialogue": 4.7,
+    "speech_to_background_change": 3.64
+   },
+   "I dialogue -27 (Silero estimate), limiter up to 6 dB": {
+    "programme": -20.3,
+    "lra": 20.5,
+    "true_peak": -0.9,
+    "chain": "volume=3.60dB,alimiter=limit=0.7943:attack=5:release=50:level=0:latency=1",
+    "dialogue": -27.4,
+    "loudness_above_dialogue": 7.1,
+    "speech_to_background_change": -0.0
+   },
+   "J dialogue -27 (Silero estimate), gentle compression only if over 5 LU above dialogue": {
+    "programme": -26.0,
+    "lra": 12.0,
+    "true_peak": -1.2,
+    "chain": "acompressor=threshold=0.0398:ratio=2.5:attack=20:release=300:knee=4:detection=rms:link=maximum,volume=7.58dB,alimiter=limit=0.7943:attack=5:release=50:level=0:latency=1",
+    "dialogue": -27.0,
+    "loudness_above_dialogue": 1.0,
+    "speech_to_background_change": -0.42
+   }
+  },
+  "F5 war film": {
+   "A programme -20, peak-capped gain (today's default)": {
+    "programme": -22.4,
+    "lra": 24.0,
+    "true_peak": -1.5,
+    "chain": "volume=-1.40dB",
+    "dialogue": -34.4,
+    "loudness_above_dialogue": 12.0,
+    "speech_to_background_change": 0.0
+   },
+   "B programme -20, limiter up to 6 dB": {
+    "programme": -20.2,
+    "lra": 23.8,
+    "true_peak": -1.3,
+    "chain": "volume=1.03dB,alimiter=limit=0.7943:attack=5:release=50:level=0:latency=1",
+    "dialogue": -31.97,
+    "loudness_above_dialogue": 11.77,
+    "speech_to_background_change": -0.0
+   },
+   "C programme -20, gentle compression then gain and limiter": {
+    "programme": -23.5,
+    "lra": 14.4,
+    "true_peak": -1.1,
+    "chain": "acompressor=threshold=0.0398:ratio=2.5:attack=20:release=300:knee=4:detection=rms:link=maximum,volume=10.30dB,alimiter=limit=0.7943:attack=5:release=50:level=0:latency=1",
+    "dialogue": -24.94,
+    "loudness_above_dialogue": 1.44,
+    "speech_to_background_change": -0.27
+   },
+   "D programme -20, strong compression then gain and limiter": {
+    "programme": -22.6,
+    "lra": 7.8,
+    "true_peak": -1.2,
+    "chain": "acompressor=threshold=0.0200:ratio=4:attack=10:release=250:knee=4:detection=rms:link=maximum,volume=16.30dB,alimiter=limit=0.7943:attack=5:release=50:level=0:latency=1",
+    "dialogue": -23.55,
+    "loudness_above_dialogue": 0.95,
+    "speech_to_background_change": -0.91
+   },
+   "E dialogue -27 (known), peak-capped gain": {
+    "programme": -22.4,
+    "lra": 24.0,
+    "true_peak": -1.5,
+    "chain": "volume=-1.40dB",
+    "dialogue": -34.4,
+    "loudness_above_dialogue": 12.0,
+    "speech_to_background_change": 0.0
+   },
+   "F dialogue -27 (known), limiter up to 6 dB": {
+    "programme": -17.7,
+    "lra": 22.9,
+    "true_peak": -0.6,
+    "chain": "volume=4.60dB,alimiter=limit=0.7943:attack=5:release=50:level=0:latency=1",
+    "dialogue": -28.4,
+    "loudness_above_dialogue": 10.7,
+    "speech_to_background_change": 0.0
+   },
+   "G dialogue -24 (known), limiter up to 6 dB": {
+    "programme": -17.7,
+    "lra": 22.9,
+    "true_peak": -0.6,
+    "chain": "volume=4.60dB,alimiter=limit=0.7943:attack=5:release=50:level=0:latency=1",
+    "dialogue": -28.4,
+    "loudness_above_dialogue": 10.7,
+    "speech_to_background_change": 0.0
+   },
+   "H dialogue -27 (known), centre +4 dB, limiter up to 6 dB": {
+    "programme": -18.8,
+    "lra": 24.1,
+    "true_peak": -0.6,
+    "chain": "pan=5.1|c0=c0|c1=c1|c2=1.585*c2|c3=c3|c4=c4|c5=c5,volume=2.00dB,alimiter=limit=0.7943:attack=5:release=50:level=0:latency=1",
+    "dialogue": -27.0,
+    "loudness_above_dialogue": 8.2,
+    "speech_to_background_change": 3.63
+   },
+   "I dialogue -27 (Silero estimate), limiter up to 6 dB": {
+    "programme": -17.7,
+    "lra": 22.9,
+    "true_peak": -0.6,
+    "chain": "volume=4.60dB,alimiter=limit=0.7943:attack=5:release=50:level=0:latency=1",
+    "dialogue": -28.4,
+    "loudness_above_dialogue": 10.7,
+    "speech_to_background_change": 0.0
+   },
+   "J dialogue -27 (Silero estimate), gentle compression only if over 5 LU above dialogue": {
+    "programme": -25.6,
+    "lra": 14.5,
+    "true_peak": -1.1,
+    "chain": "acompressor=threshold=0.0398:ratio=2.5:attack=20:release=300:knee=4:detection=rms:link=maximum,volume=8.24dB,alimiter=limit=0.7943:attack=5:release=50:level=0:latency=1",
+    "dialogue": -27.0,
+    "loudness_above_dialogue": 1.4,
+    "speech_to_background_change": -0.27
+   }
+  },
+  "F6 loud score under speech": {
+   "A programme -20, peak-capped gain (today's default)": {
+    "programme": -25.0,
+    "lra": 8.2,
+    "true_peak": -1.5,
+    "chain": "volume=-0.20dB",
+    "dialogue": -24.2,
+    "loudness_above_dialogue": -0.8,
+    "speech_to_background_change": -0.0
+   },
+   "B programme -20, limiter up to 6 dB": {
+    "programme": -20.2,
+    "lra": 8.1,
+    "true_peak": -1.9,
+    "chain": "volume=4.77dB,alimiter=limit=0.7943:attack=5:release=50:level=0:latency=1",
+    "dialogue": -19.6,
+    "loudness_above_dialogue": -0.6,
+    "speech_to_background_change": -0.0
+   },
+   "C programme -20, gentle compression then gain and limiter": {
+    "programme": -20.0,
+    "lra": 2.0,
+    "true_peak": -3.4,
+    "chain": "acompressor=threshold=0.0398:ratio=2.5:attack=20:release=300:knee=4:detection=rms:link=maximum,volume=9.50dB,alimiter=limit=0.7943:attack=5:release=50:level=0:latency=1",
+    "dialogue": -21.82,
+    "loudness_above_dialogue": 1.82,
+    "speech_to_background_change": -0.92
+   },
+   "D programme -20, strong compression then gain and limiter": {
+    "programme": -20.0,
+    "lra": 1.4,
+    "true_peak": -5.4,
+    "chain": "acompressor=threshold=0.0200:ratio=4:attack=10:release=250:knee=4:detection=rms:link=maximum,volume=14.50dB,alimiter=limit=0.7943:attack=5:release=50:level=0:latency=1",
+    "dialogue": -23.32,
+    "loudness_above_dialogue": 3.32,
+    "speech_to_background_change": -1.48
+   },
+   "E dialogue -27 (known), peak-capped gain": {
+    "programme": -27.8,
+    "lra": 8.2,
+    "true_peak": -4.3,
+    "chain": "volume=-3.00dB",
+    "dialogue": -27.0,
+    "loudness_above_dialogue": -0.8,
+    "speech_to_background_change": -0.0
+   },
+   "F dialogue -27 (known), limiter up to 6 dB": {
+    "programme": -27.8,
+    "lra": 8.2,
+    "true_peak": -4.3,
+    "chain": "volume=-3.00dB,alimiter=limit=0.7943:attack=5:release=50:level=0:latency=1",
+    "dialogue": -27.0,
+    "loudness_above_dialogue": -0.8,
+    "speech_to_background_change": -0.0
+   },
+   "G dialogue -24 (known), limiter up to 6 dB": {
+    "programme": -24.8,
+    "lra": 8.2,
+    "true_peak": -2.0,
+    "chain": "volume=0.00dB,alimiter=limit=0.7943:attack=5:release=50:level=0:latency=1",
+    "dialogue": -24.0,
+    "loudness_above_dialogue": -0.8,
+    "speech_to_background_change": -0.0
+   },
+   "H dialogue -27 (known), centre +4 dB, limiter up to 6 dB": {
+    "programme": -28.8,
+    "lra": 11.2,
+    "true_peak": -4.3,
+    "chain": "pan=5.1|c0=c0|c1=c1|c2=1.585*c2|c3=c3|c4=c4|c5=c5,volume=-7.00dB,alimiter=limit=0.7943:attack=5:release=50:level=0:latency=1",
+    "dialogue": -27.0,
+    "loudness_above_dialogue": -1.8,
+    "speech_to_background_change": 3.65
+   },
+   "I dialogue -27 (Silero estimate), limiter up to 6 dB": {
+    "programme": -27.9,
+    "lra": 8.2,
+    "true_peak": -4.4,
+    "chain": "volume=-3.12dB,alimiter=limit=0.7943:attack=5:release=50:level=0:latency=1",
+    "dialogue": -27.12,
+    "loudness_above_dialogue": -0.78,
+    "speech_to_background_change": 0.0
+   },
+   "J dialogue -27 (Silero estimate), gentle compression only if over 5 LU above dialogue": {
+    "programme": -27.9,
+    "lra": 8.2,
+    "true_peak": -4.4,
+    "chain": "volume=-3.12dB,alimiter=limit=0.7943:attack=5:release=50:level=0:latency=1",
+    "dialogue": -27.12,
+    "loudness_above_dialogue": -0.78,
+    "speech_to_background_change": 0.0
+   }
+  },
+  "F7 crowd under speech": {
+   "A programme -20, peak-capped gain (today's default)": {
+    "programme": -28.4,
+    "lra": 11.3,
+    "true_peak": -1.5,
+    "chain": "volume=2.90dB",
+    "dialogue": -25.1,
+    "loudness_above_dialogue": -3.3,
+    "speech_to_background_change": -0.0
+   },
+   "B programme -20, limiter up to 6 dB": {
+    "programme": -22.5,
+    "lra": 11.1,
+    "true_peak": -1.7,
+    "chain": "volume=8.90dB,alimiter=limit=0.7943:attack=5:release=50:level=0:latency=1",
+    "dialogue": -19.3,
+    "loudness_above_dialogue": -3.2,
+    "speech_to_background_change": -0.0
+   },
+   "C programme -20, gentle compression then gain and limiter": {
+    "programme": -20.0,
+    "lra": 5.9,
+    "true_peak": -1.7,
+    "chain": "acompressor=threshold=0.0398:ratio=2.5:attack=20:release=300:knee=4:detection=rms:link=maximum,volume=14.50dB,alimiter=limit=0.7943:attack=5:release=50:level=0:latency=1",
+    "dialogue": -18.45,
+    "loudness_above_dialogue": -1.55,
+    "speech_to_background_change": -0.73
+   },
+   "D programme -20, strong compression then gain and limiter": {
+    "programme": -20.0,
+    "lra": 1.6,
+    "true_peak": -2.0,
+    "chain": "acompressor=threshold=0.0200:ratio=4:attack=10:release=250:knee=4:detection=rms:link=maximum,volume=17.70dB,alimiter=limit=0.7943:attack=5:release=50:level=0:latency=1",
+    "dialogue": -21.05,
+    "loudness_above_dialogue": 1.05,
+    "speech_to_background_change": -1.71
+   },
+   "E dialogue -27 (known), peak-capped gain": {
+    "programme": -30.3,
+    "lra": 11.3,
+    "true_peak": -3.4,
+    "chain": "volume=1.00dB",
+    "dialogue": -27.0,
+    "loudness_above_dialogue": -3.3,
+    "speech_to_background_change": -0.0
+   },
+   "F dialogue -27 (known), limiter up to 6 dB": {
+    "programme": -30.3,
+    "lra": 11.3,
+    "true_peak": -3.4,
+    "chain": "volume=1.00dB,alimiter=limit=0.7943:attack=5:release=50:level=0:latency=1",
+    "dialogue": -27.0,
+    "loudness_above_dialogue": -3.3,
+    "speech_to_background_change": -0.0
+   },
+   "G dialogue -24 (known), limiter up to 6 dB": {
+    "programme": -27.3,
+    "lra": 11.3,
+    "true_peak": -2.0,
+    "chain": "volume=4.00dB,alimiter=limit=0.7943:attack=5:release=50:level=0:latency=1",
+    "dialogue": -24.01,
+    "loudness_above_dialogue": -3.29,
+    "speech_to_background_change": 0.0
+   },
+   "H dialogue -27 (known), centre +4 dB, limiter up to 6 dB": {
+    "programme": -30.6,
+    "lra": 15.0,
+    "true_peak": -3.4,
+    "chain": "pan=5.1|c0=c0|c1=c1|c2=1.585*c2|c3=c3|c4=c4|c5=c5,volume=-3.00dB,alimiter=limit=0.7943:attack=5:release=50:level=0:latency=1",
+    "dialogue": -27.0,
+    "loudness_above_dialogue": -3.6,
+    "speech_to_background_change": 3.99
+   },
+   "I dialogue -27 (Silero estimate), limiter up to 6 dB": {
+    "programme": -30.4,
+    "lra": 11.3,
+    "true_peak": -3.5,
+    "chain": "volume=0.87dB,alimiter=limit=0.7943:attack=5:release=50:level=0:latency=1",
+    "dialogue": -27.13,
+    "loudness_above_dialogue": -3.27,
+    "speech_to_background_change": -0.0
+   },
+   "J dialogue -27 (Silero estimate), gentle compression only if over 5 LU above dialogue": {
+    "programme": -30.4,
+    "lra": 11.3,
+    "true_peak": -3.5,
+    "chain": "volume=0.87dB,alimiter=limit=0.7943:attack=5:release=50:level=0:latency=1",
+    "dialogue": -27.13,
+    "loudness_above_dialogue": -3.27,
+    "speech_to_background_change": -0.0
+   }
+  },
+  "F8 no dialogue": {
+   "A programme -20, peak-capped gain (today's default)": {
+    "programme": -22.4,
+    "lra": 5.5,
+    "true_peak": -1.5,
+    "chain": "volume=0.50dB"
+   },
+   "B programme -20, limiter up to 6 dB": {
+    "programme": -20.0,
+    "lra": 5.5,
+    "true_peak": -1.3,
+    "chain": "volume=2.86dB,alimiter=limit=0.7943:attack=5:release=50:level=0:latency=1"
+   },
+   "C programme -20, gentle compression then gain and limiter": {
+    "programme": -20.0,
+    "lra": 1.5,
+    "true_peak": -2.7,
+    "chain": "acompressor=threshold=0.0398:ratio=2.5:attack=20:release=300:knee=4:detection=rms:link=maximum,volume=7.10dB,alimiter=limit=0.7943:attack=5:release=50:level=0:latency=1"
+   },
+   "D programme -20, strong compression then gain and limiter": {
+    "programme": -20.0,
+    "lra": 1.1,
+    "true_peak": -3.5,
+    "chain": "acompressor=threshold=0.0200:ratio=4:attack=10:release=250:knee=4:detection=rms:link=maximum,volume=12.80dB,alimiter=limit=0.7943:attack=5:release=50:level=0:latency=1"
+   },
+   "E dialogue -27 (known), peak-capped gain": {
+    "programme": -24.0,
+    "lra": 5.5,
+    "true_peak": -3.1,
+    "chain": "volume=-1.14dB"
+   },
+   "F dialogue -27 (known), limiter up to 6 dB": {
+    "programme": -24.0,
+    "lra": 5.5,
+    "true_peak": -3.1,
+    "chain": "volume=-1.14dB,alimiter=limit=0.7943:attack=5:release=50:level=0:latency=1"
+   },
+   "G dialogue -24 (known), limiter up to 6 dB": {
+    "programme": -24.0,
+    "lra": 5.5,
+    "true_peak": -3.1,
+    "chain": "volume=-1.14dB,alimiter=limit=0.7943:attack=5:release=50:level=0:latency=1"
+   },
+   "H dialogue -27 (known), centre +4 dB, limiter up to 6 dB": {
+    "programme": -24.0,
+    "lra": 5.8,
+    "true_peak": -3.6,
+    "chain": "pan=5.1|c0=c0|c1=c1|c2=1.585*c2|c3=c3|c4=c4|c5=c5,volume=-1.60dB,alimiter=limit=0.7943:attack=5:release=50:level=0:latency=1"
+   },
+   "I dialogue -27 (Silero estimate), limiter up to 6 dB": {
+    "programme": -24.0,
+    "lra": 5.5,
+    "true_peak": -3.1,
+    "chain": "volume=-1.14dB,alimiter=limit=0.7943:attack=5:release=50:level=0:latency=1"
+   },
+   "J dialogue -27 (Silero estimate), gentle compression only if over 5 LU above dialogue": {
+    "programme": -24.0,
+    "lra": 5.5,
+    "true_peak": -3.1,
+    "chain": "volume=-1.14dB,alimiter=limit=0.7943:attack=5:release=50:level=0:latency=1"
+   }
+  }
+ },
+ "dialogue_landing": {
+  "A programme -20, peak-capped gain (today's default)": {
+   "dialogue_min": -34.4,
+   "dialogue_max": -21.4,
+   "dialogue_spread": 13.0
+  },
+  "B programme -20, limiter up to 6 dB": {
+   "dialogue_min": -31.97,
+   "dialogue_max": -17.84,
+   "dialogue_spread": 14.13
+  },
+  "C programme -20, gentle compression then gain and limiter": {
+   "dialogue_min": -24.94,
+   "dialogue_max": -18.45,
+   "dialogue_spread": 6.49
+  },
+  "D programme -20, strong compression then gain and limiter": {
+   "dialogue_min": -24.22,
+   "dialogue_max": -19.96,
+   "dialogue_spread": 4.26
+  },
+  "E dialogue -27 (known), peak-capped gain": {
+   "dialogue_min": -34.4,
+   "dialogue_max": -27.0,
+   "dialogue_spread": 7.4
+  },
+  "F dialogue -27 (known), limiter up to 6 dB": {
+   "dialogue_min": -28.4,
+   "dialogue_max": -27.0,
+   "dialogue_spread": 1.4
+  },
+  "G dialogue -24 (known), limiter up to 6 dB": {
+   "dialogue_min": -28.4,
+   "dialogue_max": -24.0,
+   "dialogue_spread": 4.4
+  },
+  "H dialogue -27 (known), centre +4 dB, limiter up to 6 dB": {
+   "dialogue_min": -27.0,
+   "dialogue_max": -27.0,
+   "dialogue_spread": 0.0
+  },
+  "I dialogue -27 (Silero estimate), limiter up to 6 dB": {
+   "dialogue_min": -28.4,
+   "dialogue_max": -27.12,
+   "dialogue_spread": 1.28
+  },
+  "J dialogue -27 (Silero estimate), gentle compression only if over 5 LU above dialogue": {
+   "dialogue_min": -27.2,
+   "dialogue_max": -27.0,
+   "dialogue_spread": 0.2
+  }
+ }
+}
