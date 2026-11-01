@@ -19,6 +19,14 @@ All notable changes to this project are documented here. The format follows
   records, or measured from the files with `--measure`.
 - `rate-sample ROOT...` runs a recipe on copies of a random sample (an equal share per root, so
   films aren't drowned by episodes) and reports that rate. The library is only read.
+- `--lra-target N` — opt-in compression, off by default. A file whose loudness range is over N LU
+  (by more than `--tolerance`) goes through `acompressor` at the gentlest of six settings that
+  brings it under N, then is levelled to the profile target (with `--limit-db` limiting as
+  needed). Stamped `compressed` with the setting and the range before and after
+  (`NEUTRALISER_COMPRESSION`, `NEUTRALISER_LRA_AFTER`). `--centre-boost DB` lifts a 5.1 centre
+  channel first. Refuses `--allow-dynamic`, `--fast`, `--fast-verify` and the `night` profile.
+  The default and the profiles are unchanged. Measured on a synthetic fixture only:
+  `docs/research/compression-ladder-fixtures-2026-11.md`.
 
 ## [0.1.0] — 2026-10-31
 

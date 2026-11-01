@@ -131,19 +131,21 @@ module Neutraliser
     # duration, when given, caps how much of the input is read (-t) — useful
     # for a fast preview measurement of a remote stream rather than a full
     # pass.
+    # pre_filter runs ahead of loudnorm, so the measurement is of the signal as the
+    # filter leaves it (--lra-target measures each compression candidate this way).
     # start_offset seeks before decoding (input-side -ss). Callers that measure
     # only a slice of a long file should use it: a film's opening minute is
     # logos and titles and reads several LU quieter than the film itself, so a
     # slice taken from the start systematically under-reports loudness.
     def self.measure_loudness(input_path, target_i: -20.0, target_tp: -1.5, target_lra: 12.0, input_args: [],
-                              duration: nil, start_offset: nil, audio_index: 0)
+                              duration: nil, start_offset: nil, audio_index: 0, pre_filter: nil)
       cmd = ['ffmpeg', '-hide_banner', '-nostats', *input_args]
       cmd += ['-ss', start_offset.round.to_s] if start_offset&.positive?
       cmd += ['-i', input_path]
       cmd += ['-t', duration.to_s] if duration
       cmd += [
         '-map', "0:a:#{audio_index}",
-        '-af', "loudnorm=I=#{target_i}:TP=#{target_tp}:LRA=#{loudnorm_lra(target_lra)}:print_format=json",
+        '-af', [pre_filter, "loudnorm=I=#{target_i}:TP=#{target_tp}:LRA=#{loudnorm_lra(target_lra)}:print_format=json"].compact.join(','),
         '-f', 'null', '-'
       ]
 
@@ -330,7 +332,7 @@ module Neutraliser
     end
 
     def self.apply_normalization(input_path, output_path, measured_data, profile, audio_tracks: nil, allow_dynamic: false,
-                                 keep_original: false, limit_db: 0.0)
+                                 keep_original: false, limit_db: 0.0, compression: nil)
       audio_tracks ||= detect_audio_tracks(input_path)
       primary_track = primary_audio_track(audio_tracks)
 
@@ -338,7 +340,8 @@ module Neutraliser
       codec_decision = select_output_codec(primary_track, output_path, input_path, container: container)
       codec_args = build_codec_args(codec_decision, primary_track[:index])
 
-      plan = GainPlan.for(measured_data, profile, limit_db: limit_db) unless allow_dynamic
+      # A CompressionPlan (--lra-target) wraps the GainPlan for the compressed signal.
+      plan = compression || (GainPlan.for(measured_data, profile, limit_db: limit_db) unless allow_dynamic)
       audio_filter = build_audio_filter(measured_data, profile, primary_track[:sample_rate], plan: plan)
       forced_normalization_type = plan&.mode&.capitalize
 
@@ -351,7 +354,7 @@ module Neutraliser
                elsif type == 'Linear'
                  profile[:lufs] - measured_data.input_i
                end
-        build_stamp(profile, type, codec_decision, gain: gain, measured: measured_data)
+        build_stamp(profile, type, codec_decision, gain: gain, measured: measured_data, compression: compression)
       end
       container_opts = container_args(container, output_path)
       mdta = mp4_mdta_safe?(input_path, container)
@@ -487,7 +490,7 @@ module Neutraliser
     def self.detect_audio_tracks(input_path)
       cmd = [
         'ffprobe', '-v', 'error', '-select_streams', 'a',
-        '-show_entries', 'stream=index,codec_name,profile,sample_rate,channels,bit_rate:stream_tags=title,language:stream_disposition',
+        '-show_entries', 'stream=index,codec_name,profile,sample_rate,channels,channel_layout,bit_rate:stream_tags=title,language:stream_disposition',
         '-of', 'json', input_path
       ]
 
@@ -518,6 +521,7 @@ module Neutraliser
           index: idx,
           stream_index: stream['index'].to_i,
           channels: stream['channels'].to_i,
+          channel_layout: stream['channel_layout'],
           codec: stream['codec_name'] || 'unknown',
           profile: parse_profile(stream['profile']),
           title: stream.dig('tags', 'title'),
@@ -813,12 +817,13 @@ module Neutraliser
       valid && fits ? 'Linear' : 'Dynamic'
     end
 
-    def self.build_stamp(profile, normalization_type, codec_decision, gain:, measured:)
+    def self.build_stamp(profile, normalization_type, codec_decision, gain:, measured:, compression: nil)
       Stamp.now(
         profile: profile[:name], mode: normalization_type.downcase, gain_db: gain,
         source_codec: codec_decision[:source_codec],
         source_bitrate: codec_decision[:source_bitrate].to_i.positive? ? codec_decision[:source_bitrate] : nil,
-        measured_i: measured&.input_i, measured_tp: measured&.input_tp, measured_lra: measured&.input_lra
+        measured_i: measured&.input_i, measured_tp: measured&.input_tp, measured_lra: measured&.input_lra,
+        **(compression ? compression.stamp_fields : {})
       )
     end
 

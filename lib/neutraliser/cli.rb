@@ -95,6 +95,10 @@ module Neutraliser
                                  desc: 'Keep the untouched original audio as an extra non-default track (reversible)'
     option :limit_db, type: :numeric, default: 0.0,
                       desc: 'Let a peak limiter take up to N dB off overshooting peaks so quiet-but-peaky files can reach target (0 = off, strict constant gain)'
+    option :lra_target, type: :numeric,
+                        desc: 'Opt-in compression: when a file\'s loudness range is over N LU, compress it (the gentlest acompressor setting that reaches N) before levelling. Off by default'
+    option :centre_boost, type: :numeric,
+                          desc: 'With --lra-target, lift the centre (dialogue) channel of a 5.1 track by N dB before compressing (0-12)'
     option :min_gain, type: :numeric,
                       desc: 'Skip a peak-capped file when the gain towards target would be under N dB (default: --tolerance)'
     option :allow_codec_change, type: :boolean, default: false,
@@ -119,9 +123,11 @@ module Neutraliser
 
       return unless summary.is_a?(Hash)
 
-      puts "Summary: found=#{summary[:found]}, queued=#{summary[:queued]}, resumed=#{summary[:resumed]}, " \
-           "done=#{summary[:done]}, skipped=#{summary[:skipped]}, failed=#{summary[:failed]}, " \
-           "linear=#{summary[:linear]}, dynamic=#{summary[:dynamic]}, limited=#{summary[:limited]}"
+      line = "Summary: found=#{summary[:found]}, queued=#{summary[:queued]}, resumed=#{summary[:resumed]}, " \
+             "done=#{summary[:done]}, skipped=#{summary[:skipped]}, failed=#{summary[:failed]}, " \
+             "linear=#{summary[:linear]}, dynamic=#{summary[:dynamic]}, limited=#{summary[:limited]}"
+      line += ", compressed=#{summary[:compressed]}" if summary[:compressed].to_i.positive?
+      puts line
       if summary[:failed_by_reason]&.any?
         puts "Failed by reason: #{summary[:failed_by_reason].map { |reason, count| "#{reason}=#{count}" }.join(', ')}"
       end
@@ -362,6 +368,8 @@ module Neutraliser
         keep_original_audio: options[:keep_original_audio],
         limit_db: options[:limit_db],
         min_gain: options[:min_gain],
+        lra_target: options[:lra_target],
+        centre_boost: options[:centre_boost],
         allow_codec_change: options[:allow_codec_change],
         disk_guard: guard,
         redo_recipes: options[:redo_recipe].to_s.split(',').map { |text| Recipe.parse(text) }

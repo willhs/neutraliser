@@ -39,6 +39,7 @@ Entry point and navigation map for the neutraliser documentation set. Neutralise
 - [`research/pre-release-review-2026-11.md`](research/pre-release-review-2026-11.md) — Pre-release code and security review: findings ranked by severity, what was fixed, what needs Will's call
 - [`research/architecture-review-2026-11.md`](research/architecture-review-2026-11.md) — Architecture review after the October burst: four shallow modules to deepen in FFmpegWrapper and Processor (Remux plan, Source, Codec choice, Guards), each a Steady task; 15 ffprobe calls per file measured
 
+- [`research/compression-ladder-fixtures-2026-11.md`](research/compression-ladder-fixtures-2026-11.md) — What the opt-in `--lra-target` compression ladder does on a synthetic 5.1 fixture (rung, LRA, level, peak) and where the two LRA readings differ; no perceptual claims
 - [`research/plex-sampling-error-2026-10.md`](research/plex-sampling-error-2026-10.md) — How far a sampled loudness estimate sits from a film's true loudness (10 real Plex films); why analyze-plex gives "Unclear" instead of guessing, and `--full`
 
 ## Tasks
@@ -57,6 +58,7 @@ Entry point and navigation map for the neutraliser documentation set. Neutralise
 - [`front-matter-schema.json`](front-matter-schema.json) — JSON Schema for validating doc frontmatter
 
 ### Change Log
+- 2026-11-01 (agent:lra-target): Added compression-ladder-fixtures-2026-11.md research note
 - 2026-11-01 (agent:architecture-review): Added architecture-review-2026-11.md research note
 - 2026-11-01 (agent:analyze-plex-figures): Added plex-sampling-error-2026-10.md research note
 - 2026-10-20 (agent:prod-parity): Added prod-parity audit and task 0006

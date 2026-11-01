@@ -624,7 +624,7 @@ RSpec.describe Neutraliser::FFmpegWrapper do
       # regardless of the order requested in -show_entries — parsing must be name-based.
       ffprobe_json = {
         streams: [
-          { index: 1, codec_name: 'ac3', sample_rate: '48000', channels: 6, bit_rate: '640000' },
+          { index: 1, codec_name: 'ac3', sample_rate: '48000', channels: 6, channel_layout: '5.1(side)', bit_rate: '640000' },
           { index: 2, codec_name: 'aac', sample_rate: '44100', channels: 2, bit_rate: '256000' }
         ]
       }.to_json
@@ -636,9 +636,9 @@ RSpec.describe Neutraliser::FFmpegWrapper do
         array_including('-of', 'json'), described_class::PROBE_TIMEOUT, 'Audio track detection'
       )
       expect(result).to eq([
-                             { index: 0, stream_index: 1, channels: 6, codec: 'ac3', profile: nil, title: nil, language: nil, default: false, dispositions: [], bit_rate: 640_000,
+                             { index: 0, stream_index: 1, channels: 6, channel_layout: '5.1(side)', codec: 'ac3', profile: nil, title: nil, language: nil, default: false, dispositions: [], bit_rate: 640_000,
                                sample_rate: 48_000 },
-                             { index: 1, stream_index: 2, channels: 2, codec: 'aac', profile: nil, title: nil, language: nil, default: false, dispositions: [], bit_rate: 256_000,
+                             { index: 1, stream_index: 2, channels: 2, channel_layout: nil, codec: 'aac', profile: nil, title: nil, language: nil, default: false, dispositions: [], bit_rate: 256_000,
                                sample_rate: 44_100 }
                            ])
     end

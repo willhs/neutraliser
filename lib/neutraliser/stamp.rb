@@ -8,19 +8,29 @@ module Neutraliser
   # encoding (both directions). Schema: docs/ops/data_contracts.md.
   #
   # mode is 'linear' (constant gain), 'limited' (constant gain plus a peak
-  # limiter, --limit-db) or 'dynamic' (loudnorm compressed the dynamic range).
-  # gain_db is only meaningful for linear and limited; measured_* are the
-  # pre-normalisation loudnorm values, absent in --fast mode (no analysis).
+  # limiter, --limit-db), 'compressed' (--lra-target: acompressor, then constant
+  # gain) or 'dynamic' (loudnorm compressed the dynamic range).
+  # gain_db is only meaningful for linear, limited and compressed; measured_* are
+  # the pre-normalisation loudnorm values, absent in --fast mode (no analysis).
+  # compression, centre_boost_db and lra_after are set only when mode is
+  # 'compressed': the rung used, the centre boost applied and the LRA the
+  # compressed signal measured before the final encode.
   #
   # recipe is the leveling method's version (Recipe); nil on a stamp from before
   # versioning, which stays valid.
   Stamp = Data.define(:version, :profile, :recipe, :mode, :gain_db, :source_codec, :source_bitrate,
-                      :measured_i, :measured_tp, :measured_lra, :date)
+                      :measured_i, :measured_tp, :measured_lra, :date,
+                      :compression, :centre_boost_db, :lra_after)
 
   class Stamp
+    # The compression fields are absent from every non-compressed stamp.
+    def initialize(compression: nil, centre_boost_db: nil, lra_after: nil, **fields)
+      super
+    end
+
     def self.tag_name(field) = "NEUTRALISER_#{field.upcase}"
 
-    FLOAT_FIELDS = %i[gain_db measured_i measured_tp measured_lra].freeze
+    FLOAT_FIELDS = %i[gain_db measured_i measured_tp measured_lra centre_boost_db lra_after].freeze
     INTEGER_FIELDS = %i[source_bitrate recipe].freeze
 
     # Builds a Stamp from probed tags (stream or container level). Tag-name
@@ -58,6 +68,7 @@ module Neutraliser
 
     def linear? = mode == 'linear'
     def limited? = mode == 'limited'
+    def compressed? = mode == 'compressed'
     def dynamic? = mode == 'dynamic'
   end
 end

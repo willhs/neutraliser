@@ -20,6 +20,9 @@ module Neutraliser
                                         'it cannot combine with --allow-dynamic, --fast or the night profile'.freeze
     LIMIT_NEEDS_NEWER_FFMPEG_MESSAGE = '--limit-db needs ffmpeg 5.1 or newer (its limiter has no latency option before that); ' \
                                        'upgrade ffmpeg or use the Docker image'.freeze
+    LRA_TARGET_NEEDS_CONSTANT_GAIN_MESSAGE = '--lra-target compresses with acompressor and then levels with constant gain; ' \
+                                             'it cannot combine with --allow-dynamic, --fast, --fast-verify or the night profile'.freeze
+    CENTRE_BOOST_NEEDS_LRA_TARGET_MESSAGE = '--centre-boost is part of --lra-target compression; add --lra-target N'.freeze
     # The only manifest records --resume takes as the last word on a file. Every
     # other outcome depends on something that can change between runs (a flag,
     # free space, the ffmpeg version, or a dry run that did nothing) and goes
@@ -29,7 +32,8 @@ module Neutraliser
     def initialize(replace: false, target_level: nil, profile: 'livingroom', tolerance: 1.0, cache: true,
                    dry_run: false, fast_verify: false, resume: false, fast: false, local_stage: false,
                    allow_dynamic: false, allow_object_audio_loss: false, keep_original_audio: false,
-                   limit_db: 0.0, min_gain: nil, allow_codec_change: false, disk_guard: nil, redo_recipes: [])
+                   limit_db: 0.0, min_gain: nil, allow_codec_change: false, disk_guard: nil, redo_recipes: [],
+                   lra_target: nil, centre_boost: nil)
       @replace = replace
       base_profile = profile.is_a?(Hash) ? profile : Profiles.get_profile(profile)
       @profile = if target_level
@@ -54,10 +58,14 @@ module Neutraliser
       Recipe.check_redoable!(@redo_recipes)
       @limit_db = limit_db.to_f
       @min_gain = (min_gain || tolerance).to_f
+      @lra_target = lra_target&.to_f
+      @centre_boost = centre_boost&.to_f
       raise ArgumentError, FAST_REQUIRES_DYNAMIC_MESSAGE if @fast && !@allow_dynamic
       raise ArgumentError, LIMIT_NEEDS_CONSTANT_GAIN_MESSAGE if @limit_db.positive? && @allow_dynamic
       raise ArgumentError, '--limit-db cannot be negative' if @limit_db.negative?
       raise ArgumentError, LIMIT_NEEDS_NEWER_FFMPEG_MESSAGE if @limit_db.positive? && !FFmpegWrapper.wide_filter_options?
+
+      validate_compression!(fast_verify)
 
       @stager = LocalStager.new(enabled: local_stage)
     end
@@ -87,12 +95,28 @@ module Neutraliser
 
     private
 
+    # --lra-target replaces the constant-gain-only default with "compress, then
+    # constant gain", so it refuses every option that already decides the dynamics
+    # some other way, and --centre-boost, which only means something inside it.
+    def validate_compression!(fast_verify)
+      raise ArgumentError, CENTRE_BOOST_NEEDS_LRA_TARGET_MESSAGE if @centre_boost && !@lra_target
+      return unless @lra_target
+
+      raise ArgumentError, LRA_TARGET_NEEDS_CONSTANT_GAIN_MESSAGE if @allow_dynamic || @fast || fast_verify
+      raise ArgumentError, '--lra-target must be greater than 0' unless @lra_target.positive?
+      return unless @centre_boost
+
+      max = Compression::MAX_CENTRE_BOOST_DB
+      raise ArgumentError, "--centre-boost must be between 0 and #{max} dB" unless @centre_boost.positive? && @centre_boost <= max
+    end
+
     def log(message)
       Neutraliser.logger.log(message)
     end
 
     def new_skip_decider(root)
-      SkipDecider.new(root, fast_verification: @fast_verify, tolerance: @tolerance, redo_recipes: @redo_recipes)
+      SkipDecider.new(root, fast_verification: @fast_verify, tolerance: @tolerance, redo_recipes: @redo_recipes,
+                           lra_target: @lra_target)
     end
 
     # Without a version that can name them, an Atmos track looks like plain
@@ -161,7 +185,7 @@ module Neutraliser
       log(
         "Run summary: queued=#{summary[:queued]}, done=#{summary[:done]}, " \
         "skipped=#{summary[:skipped]}, failed=#{summary[:failed]}, resumed=#{summary[:resumed]}, " \
-        "linear=#{summary[:linear]}, dynamic=#{summary[:dynamic]}, limited=#{summary[:limited]}"
+        "linear=#{summary[:linear]}, dynamic=#{summary[:dynamic]}, limited=#{summary[:limited]}#{compressed_count(summary)}"
       )
       log_failure_groups(summary)
 
@@ -274,6 +298,7 @@ module Neutraliser
       linear = results.count { |result| result[:normalization_type] == 'Linear' }
       dynamic = results.count { |result| result[:normalization_type] == 'Dynamic' }
       limited = results.count { |result| result[:normalization_type] == 'Limited' }
+      compressed = results.count { |result| result[:normalization_type] == 'Compressed' }
       failures = results.select { |result| result[:status] == :failed }
       not_writable = failures.select { |result| result[:reason] == :not_writable }
 
@@ -287,6 +312,7 @@ module Neutraliser
         linear: linear,
         dynamic: dynamic,
         limited: limited,
+        compressed: compressed,
         aborted: aborted,
         failed_by_reason: failures.map { |result| result[:reason] }.tally,
         not_writable_dirs: not_writable.map { |result| File.dirname(result[:file]) }.uniq.sort,
@@ -449,6 +475,8 @@ module Neutraliser
       if measurement.silent?
         log '  Primary audio track has no measurable level (silent), skipping'
         file_result(original_path, status: :skipped, reason: :silent)
+      elsif compression_needed?(measurement)
+        process_file_compressed(original_path, working_path, measurement, audio_tracks)
       elsif peak_limited?(measurement)
         log "  Peak-limited: max useful gain #{gain_plan(measurement).applied.round(2)} dB is under " \
             "#{@min_gain} dB towards target, skipping re-encode"
@@ -481,6 +509,65 @@ module Neutraliser
     def peak_limited_message(measurement)
       plan = gain_plan(measurement)
       "peak ceiling allows #{plan.applied.round(2)} dB of the #{plan.desired.round(2)} dB towards #{@profile[:lufs]} LUFS"
+    end
+
+    def compression_needed?(measurement)
+      return false unless @lra_target
+
+      Compression.needed?(measurement, lra_target: @lra_target, tolerance: @tolerance)
+    end
+
+    # --lra-target: the file's loudness range is over the target, so find the
+    # gentlest compression that brings it under, level the result to the profile
+    # target (peak limiter per --limit-db) and stamp what was done. The plan costs
+    # a few extra decodes of the file (see Compression); a dry run does them too,
+    # because what it would pick is the thing worth seeing.
+    def process_file_compressed(original_path, working_path, measurement, audio_tracks)
+      primary = FFmpegWrapper.primary_audio_track(audio_tracks || FFmpegWrapper.detect_audio_tracks(working_path))
+      log "  Loudness range #{measurement.input_lra.round(1)} LU is over --lra-target #{@lra_target} " \
+          "(+#{@tolerance} tolerance): finding the gentlest compression that reaches it"
+      plan = Compression.plan(working_path, primary, measurement, @profile, lra_target: @lra_target,
+                                                                            tolerance: @tolerance,
+                                                                            centre_boost_db: @centre_boost.to_f,
+                                                                            limit_db: @limit_db)
+      log_compression_plan(plan, primary)
+
+      if @dry_run
+        log "  [DRY RUN] Would compress (#{plan.label}) and level to #{@profile[:lufs]} LUFS"
+        return file_result(original_path, status: :done, reason: :dry_run)
+      end
+
+      codec_decision = render_normalization(
+        original_path, working_path, audio_tracks,
+        log_message: "  Compressing (#{plan.rung.name}), then levelling #{plan.after.input_i.round(1)} LUFS " \
+                     "to #{@profile[:lufs]} LUFS (#{plan.applied.round(1)} dB)"
+      ) do |wp, out, tracks|
+        FFmpegWrapper.apply_normalization(wp, out, measurement, @profile, audio_tracks: tracks,
+                                                                          keep_original: @keep_original_audio,
+                                                                          limit_db: @limit_db, compression: plan)
+      end
+      file_result(original_path, status: :done, reason: :normalized,
+                                 normalization_type: codec_decision[:normalization_type])
+    end
+
+    def log_compression_plan(plan, primary)
+      rung = plan.rung
+      log "  Compression: #{rung.name} (#{rung.ratio}:1, threshold #{rung.threshold_offset_db} dB from the file's level)" \
+          "#{centre_note(plan)}; " \
+          "LRA #{plan.before.input_lra.round(1)} -> #{plan.after.input_lra.round(1)} LU (measured before the final encode)"
+      if @centre_boost && !plan.centre_boost_db.positive?
+        log "  Note: --centre-boost skipped, the primary track is not 5.1 (layout: #{primary[:channel_layout] || 'unknown'})"
+      end
+      log "  Warning: even the strongest compression (#{rung.name}) leaves LRA above --lra-target #{@lra_target}" unless plan.reached?
+      log '  Note: peaks will be held by a limiter (--limit-db); this pass changes dynamics a little more' if plan.limited
+    end
+
+    def centre_note(plan)
+      plan.centre_boost_db.positive? ? ", centre +#{plan.centre_boost_db} dB" : nil
+    end
+
+    def compressed_count(summary)
+      summary[:compressed].to_i.positive? ? ", compressed=#{summary[:compressed]}" : ''
     end
 
     # Constant-gain mode only: a file far from target whose peak ceiling

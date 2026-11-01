@@ -199,6 +199,15 @@ neutraliser process --replace --fast --allow-dynamic --resume /media/movies
 neutraliser process --profile night --replace /media/movies
 ```
 
+**Compress the loudest swings, only where a file needs it** (off unless you ask). Files whose loudness range is over 12 LU are compressed just enough to get under it, then levelled to -20 LUFS like any other; the rest get plain constant gain. Try `--dry-run` first to see which setting each file would get, and add `--centre-boost 3` to favour dialogue on 5.1:
+
+```bash
+neutraliser process --dry-run --lra-target 12 movie.mkv
+neutraliser process --lra-target 12 --centre-boost 3 movie.mkv
+```
+
+On the synthetic 5.1 clip in `spec/support/lra_fixture.rb` (pink-noise scenes, loudness range 15.3 LU) this takes the range to 10.0 LU at `--lra-target 12`, and to 7.9 LU with `--centre-boost 4`. Those are measurements, not a claim about how any film sounds; the table is in [the fixture note](docs/research/compression-ladder-fixtures-2026-11.md). Compression is applied once: a file stamped `compressed` is skipped on later runs, and a file normalised earlier without compression is picked up if its recorded range is over the target.
+
 **Hit an exact LUFS target** instead of a named profile:
 
 ```bash
@@ -271,6 +280,8 @@ Normalise a file or every video under a directory.
 | `--min-gain` | `--tolerance` | A peak-capped file is re-encoded only if the gain **towards** target is at least this many dB; otherwise skipped (`peak_limited`) |
 | `--limit-db` | `0` | Let a peak limiter take up to N dB off overshooting peaks so quiet-but-peaky files can reach target. Off = strict constant gain. Such files are stamped `limited` and reported; not combinable with `--allow-dynamic`/`--fast`/`night` |
 | `--redo-recipe` | none | Process files again when an older recipe made them: comma-separated numbers, or `unversioned` for files stamped before recipes existed. Without it a file counts as done whatever recipe made it, so a new default never re-levels a library by itself |
+| `--lra-target` | off | **Opt-in compression.** When a file's loudness range is over N LU (by more than `--tolerance`), run it through `acompressor` first, using the gentlest of six settings that brings the range down to N, then level to the profile target as usual. Stamped `compressed` with the setting and the range before and after. Costs a few extra reads of the file to choose the setting; `--dry-run` shows the choice. A target the strongest setting can't reach is applied at the strongest and logged as not reached. Not combinable with `--allow-dynamic`/`--fast`/`--fast-verify`/`night` |
+| `--centre-boost` | off | With `--lra-target`: lift the centre (dialogue) channel of a 5.1 primary track by N dB (0 to 12) before compressing. Skipped, with a log note, for any other layout |
 | `--allow-codec-change` | `false` | Process files whose codec can't be re-encoded to itself (DTS, TrueHD ... become FLAC/E-AC3). Default skips them with reason `codec_change` |
 | `--min-free-gb` | off | Skip a file while the output volume has less than N GiB free (or less than the file's size); reason `low_disk` |
 | `--abort-free-gb` | off | Stop the run, exit `4`, when the output volume has less than N GiB free |
@@ -279,7 +290,7 @@ Normalise a file or every video under a directory.
 | `--local-stage` | `false` | Copy to local disk before processing; helps on slow mounts |
 | `--linear-only` | `false` | Deprecated no-op (constant gain is now the default); prints a warning |
 
-The run summary reports `linear=N, dynamic=N, limited=N` counts; each file that went Dynamic logs a warning, and each peak-capped file logs how many LU it landed short of target.
+The run summary reports `linear=N, dynamic=N, limited=N` counts (plus `compressed=N` when `--lra-target` compressed any); each file that went Dynamic logs a warning, and each peak-capped file logs how many LU it landed short of target.
 
 Exits `1` if any file fails, so batch runners can detect partial failure, `3` if `--lock-file` is held by another run, `4` if the run stopped on `--abort-free-gb`, and `130` or `143` if stopped by Ctrl-C or SIGTERM.
 
@@ -321,7 +332,7 @@ Copy `.env.example` to `.env` and add your token. Only `analyze-plex` reads that
 
 ### `report PATH`
 
-Reads the `NEUTRALISER_*` tags from every video under PATH (or one file) with ffprobe and changes nothing. By default it prints counts: normalised linear, normalised dynamic, untouched, the profile mix and the recipe mix, then the remote-free rate.
+Reads the `NEUTRALISER_*` tags from every video under PATH (or one file) with ffprobe and changes nothing. By default it prints counts: normalised linear, limited, compressed (only when there are any), normalised dynamic, untouched, the profile mix and the recipe mix, then the remote-free rate.
 
 **Untouched files say why.** A file a run looked at and left alone is recorded in the `.neutraliser` sidecar: peak-limited (with its measured levels), Atmos / DTS:X, a DTS / TrueHD codec change, or already within tolerance (with its levels). `report` shows the reason, and the levels in `tsv` and `json`. Files from before recipes were stamped show as `unversioned`.
 

@@ -32,8 +32,8 @@ RSpec.describe Neutraliser::Report do
 
   it 'counts linear, dynamic and untouched files and the profile mix' do
     expect(described_class.new(dir).counts).to eq(
-      total: 4, linear: 2, limited: 0, dynamic: 1, untouched: 1, profiles: { 'livingroom' => 2, 'night' => 1 },
-      recipes: { '1' => 3 }, left: {}
+      total: 4, linear: 2, limited: 0, compressed: 0, dynamic: 1, untouched: 1,
+      profiles: { 'livingroom' => 2, 'night' => 1 }, recipes: { '1' => 3 }, left: {}
     )
   end
 
@@ -42,6 +42,7 @@ RSpec.describe Neutraliser::Report do
 
     expect(summary).to include('Files: 4', 'normalised linear:  2', 'normalised dynamic: 1', 'untouched:          1',
                                'Profiles: livingroom=2, night=1')
+    expect(summary).not_to include('compressed')
   end
 
   it 'prints one TSV row per file' do
@@ -144,5 +145,18 @@ RSpec.describe Neutraliser::Report do
       expect { Neutraliser::CLI.start(['report', dir, '--format', 'json']) }
         .to output(/"remote_free_rate": \{\s+"rate": 0.6/).to_stdout
     end
+  end
+
+  it 'counts compressed files and shows them only when there are some' do
+    compressed = Neutraliser::Stamp.now(profile: 'livingroom', mode: 'compressed', gain_db: 6.0, source_codec: 'ac3',
+                                        source_bitrate: nil, measured_i: -22.0, measured_tp: -8.0, measured_lra: 16.0,
+                                        compression: 'gentle', centre_boost_db: nil, lra_after: 10.0)
+    allow(Neutraliser::FFmpegWrapper).to receive(:read_stamp).and_return(compressed)
+
+    report = described_class.new(File.join(dir, 'a.mkv'))
+
+    expect(report.counts).to include(total: 1, compressed: 1, linear: 0)
+    expect(report.summary).to include('normalised compressed: 1')
+    expect(report.to_tsv).to include("gentle\t\t10.0")
   end
 end

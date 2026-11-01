@@ -284,4 +284,54 @@ RSpec.describe Neutraliser::SkipDecider do
       expect(described_class.new(temp_dir).left_record(video_path)).to eq(within)
     end
   end
+
+  describe 'with --lra-target' do
+    def stamp(mode:, measured_lra:)
+      Neutraliser::Stamp.now(profile: 'livingroom', mode: mode, gain_db: 1.0, source_codec: 'aac', source_bitrate: nil,
+                             measured_i: -22.0, measured_tp: -5.0, measured_lra: measured_lra)
+    end
+
+    def decider(lra_target: 10.0) = described_class.new(temp_dir, tolerance: 1.0, lra_target: lra_target)
+
+    it 'does not take a file normalised without compression as done when its LRA was over the target' do
+      allow(Neutraliser::FFmpegWrapper).to receive(:read_stamp).and_return(stamp(mode: 'linear', measured_lra: 16.0))
+
+      expect(decider.already_processed?(video_path, profile)).to be false
+      expect(described_class.new(temp_dir).already_processed?(video_path, profile)).to be true
+    end
+
+    it 'takes one whose recorded LRA was already within target + tolerance' do
+      allow(Neutraliser::FFmpegWrapper).to receive(:read_stamp).and_return(stamp(mode: 'linear', measured_lra: 11.0))
+
+      expect(decider.already_processed?(video_path, profile)).to be true
+    end
+
+    it 'takes a compressed file as done, so compression is not stacked on a re-run' do
+      allow(Neutraliser::FFmpegWrapper).to receive(:read_stamp).and_return(stamp(mode: 'compressed', measured_lra: 16.0))
+
+      expect(decider.already_processed?(video_path, profile)).to be true
+    end
+
+    it 'takes a dynamic or LRA-less stamp as done: loudnorm already worked on it, or nothing says otherwise' do
+      allow(Neutraliser::FFmpegWrapper).to receive(:read_stamp).and_return(stamp(mode: 'dynamic', measured_lra: 16.0),
+                                                                           stamp(mode: 'linear', measured_lra: nil))
+
+      expect(decider.already_processed?(video_path, profile)).to be true
+      expect(decider.already_processed?(video_path, profile)).to be true
+    end
+
+    it 'trusts a sidecar entry only if it was written under a target at least as strict' do
+      described_class.new(temp_dir).mark_processed(video_path, profile)
+      described_class.new(temp_dir, lra_target: 8.0).mark_processed(video_path, profile)
+
+      expect(described_class.new(temp_dir, lra_target: 10.0).already_processed?(video_path, profile)).to be true
+      expect(described_class.new(temp_dir, lra_target: 6.0).already_processed?(video_path, profile)).to be false
+    end
+
+    it 'does not trust a sidecar entry written without a target' do
+      described_class.new(temp_dir).mark_processed(video_path, profile)
+
+      expect(decider.already_processed?(video_path, profile)).to be false
+    end
+  end
 end

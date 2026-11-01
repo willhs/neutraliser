@@ -102,6 +102,7 @@ Both flags are independent and can be combined.
 | CacheManager | `lib/neutraliser/cache_manager.rb` | Sidecar `.loudnorm_{profile}.json` analysis cache read/write |
 | SkipDecider | `lib/neutraliser/skip_decider.rb` | Single authority for "already normalised?" — the in-file Stamp for the same profile, cached in one `.neutraliser` sidecar (size+mtime+profile, never expires), quick LUFS sampling as an internal fallback strategy |
 | Stamp | `lib/neutraliser/stamp.rb` | Value object for the `NEUTRALISER_*` tags: what was done to a file, both directions of the tag encoding |
+| Compression | `lib/neutraliser/compression.rb` | Opt-in `--lra-target`: the six-rung `acompressor` ladder (thresholds relative to the file's loudness), a bisection over it that measures each candidate through `FFmpegWrapper.measure_loudness(pre_filter:)`, the optional 5.1 centre boost, and the `Plan` that wraps a `GainPlan` for the compressed signal and answers the same questions as one |
 | GainPlan | `lib/neutraliser/gain_plan.rb` | The constant-gain decision for a measurement: applied gain capped by the true-peak headroom (plus `--limit-db`), limiter filter, shortfall, direction-aware `worthwhile?` |
 | DiskGuard / RunLock | `lib/neutraliser/disk_guard.rb`, `run_lock.rb` | Free-space floors (skip a file / abort the run) and the flock run lock, for unattended NAS sweeps |
 | ManifestImport | `lib/neutraliser/manifest_import.rb` | Carries the retired `neutralise.sh` manifest into `.neutraliser` sidecars |

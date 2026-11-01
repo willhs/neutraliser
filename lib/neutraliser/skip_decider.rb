@@ -37,12 +37,16 @@ module Neutraliser
     # made by any other recipe counts as done under the same profile, so a new
     # default never re-levels a library on its own; naming the old recipe
     # (or Recipe::UNVERSIONED) is the deliberate re-run.
-    def initialize(root_dir, fast_verification: true, tolerance: nil, redo_recipes: [])
+    #
+    # lra_target is this run's --lra-target. A file only counts as processed if it
+    # also meets it: compressed, or measured under the target when it was normalised.
+    def initialize(root_dir, fast_verification: true, tolerance: nil, redo_recipes: [], lra_target: nil)
       @path = File.join(root_dir, FILENAME)
       @entries = load
       @fast_verification = fast_verification
       @tolerance = tolerance
       @redo_recipes = redo_recipes
+      @lra_target = lra_target
     end
 
     # Cheap pre-check: has this exact file+profile been fully processed
@@ -52,7 +56,8 @@ module Neutraliser
       return true if sidecar_hit?(file_path, profile)
 
       stamp = File.exist?(file_path) ? FFmpegWrapper.read_stamp(file_path) : nil
-      return false unless stamp&.profile == profile[:name] && !redo?(stamp.recipe)
+      return false unless stamp&.profile == profile[:name] && !redo?(stamp.recipe) &&
+                    stamp_meets_lra_target?(stamp)
 
       mark_processed(file_path, profile, recipe: stamp.recipe)
       true
@@ -92,6 +97,7 @@ module Neutraliser
       entry['recipe'] = recipe if recipe
       entry['tolerance'] = tolerance if tolerance
       entry['left'] = left.to_h_for_entry if left
+      entry['lra_target'] = @lra_target if @lra_target
       @entries[tracker_key(file_path)] = entry
       save
     end
@@ -161,11 +167,24 @@ module Neutraliser
       return false if entry['profile'] != profile[:name]
       return false if redo?(entry['recipe'])
       return false if entry['tolerance'] && @tolerance && @tolerance < entry['tolerance']
+      return false if @lra_target && !(entry['lra_target'] && entry['lra_target'] <= @lra_target)
 
       true
     end
 
     def redo?(recipe) = @redo_recipes.include?(recipe)
+
+    # Without --lra-target any stamp for the profile is enough. With it, a
+    # compressed file is done (compression is applied once, not stacked), and a
+    # file normalised without compression is done only if its recorded LRA was
+    # already within the target. A stamp with no LRA (dynamic, --fast) can't be
+    # judged, and loudnorm has already worked on its dynamics.
+    def stamp_meets_lra_target?(stamp)
+      return true unless @lra_target
+      return true if stamp.compressed? || stamp.dynamic? || stamp.measured_lra.nil?
+
+      stamp.measured_lra <= @lra_target + @tolerance.to_f
+    end
 
     def quick_sample_verified?(file_path, profile, tolerance:)
       quick_result = FFmpegWrapper.quick_loudness_sample(

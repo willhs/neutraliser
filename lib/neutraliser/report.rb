@@ -11,11 +11,12 @@ module Neutraliser
   # what the records say happened, or from reading each file when `measure:`.
   class Report
     FORMATS = %w[summary tsv json].freeze
-    RECORD_FIELDS = %i[profile recipe gain_db source_codec source_bitrate measured_i measured_tp measured_lra].freeze
+    RECORD_FIELDS = %i[profile recipe gain_db source_codec source_bitrate measured_i measured_tp measured_lra
+                       compression centre_boost_db lra_after].freeze
     TSV_FIELDS = (RECORD_FIELDS + %i[version date]).freeze
     OUTPUT_FIELDS = %w[output_i output_lra output_basis remote_free].freeze
 
-    # state is the stamp's mode ('linear' / 'limited' / 'dynamic'), or 'untouched' when
+    # state is the stamp's mode ('linear' / 'limited' / 'compressed' / 'dynamic'), or 'untouched' when
     # the file carries no record. left says why an untouched file was left alone, if known.
     Row = Data.define(:file, :stamp, :left) do
       def state = stamp ? (stamp.mode || 'unknown') : 'untouched'
@@ -51,6 +52,7 @@ module Neutraliser
         total: rows.length,
         linear: states.fetch('linear', 0),
         limited: states.fetch('limited', 0),
+        compressed: states.fetch('compressed', 0),
         dynamic: states.fetch('dynamic', 0),
         untouched: states.fetch('untouched', 0),
         profiles: rows.filter_map { |row| row.stamp&.profile }.tally.sort.to_h,
@@ -69,6 +71,7 @@ module Neutraliser
                "  normalised limited: #{c[:limited]}",
                "  normalised dynamic: #{c[:dynamic]}",
                "  untouched:          #{c[:untouched]}"]
+      lines.insert(3, "  normalised compressed: #{c[:compressed]}") if c[:compressed].positive?
       lines << "    left alone: #{c[:left].map { |reason, n| "#{reason}=#{n}" }.join(', ')}" if c[:left].any?
       lines << "Profiles: #{c[:profiles].map { |name, n| "#{name}=#{n}" }.join(', ')}" if c[:profiles].any?
       lines << "Recipes: #{c[:recipes].map { |label, n| "#{label}=#{n}" }.join(', ')}" if c[:recipes].any?

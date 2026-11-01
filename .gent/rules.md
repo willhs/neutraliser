@@ -18,6 +18,7 @@ A Ruby CLI tool that normalises audio volume in video files using industry-stand
 - **`Processor`**: Main orchestration class handling file/directory processing
 - **`SkipDecider`**: Single authority for "already normalised?" — the in-file `NEUTRALISER_*` stamp for the same profile, cached in one `.neutraliser` sidecar (size+mtime+profile), quick LUFS sampling as an internal fallback
 - **`Stamp`**: Value object for the `NEUTRALISER_*` tags written on the normalised track and container (schema: `docs/ops/data_contracts.md`)
+- **`Compression`**: Opt-in `--lra-target` / `--centre-boost`. A ladder of six `acompressor` rungs (thresholds relative to the file's loudness); the gentlest rung whose measured LRA is within target + tolerance is found by bisection (each candidate is one `loudnorm` read through a `pre_filter`), then `GainPlan` levels the compressed signal. Stamped `compressed`. Off by default; refuses `--allow-dynamic`, `--fast`, `--fast-verify`, the night profile
 - **`GainPlan`**: The constant-gain decision for one measurement — applied gain, shortfall, whether a limiter is needed (`--limit-db`), `worthwhile?(min_gain)` direction-aware skip
 - **`DiskGuard`** / **`RunLock`**: `--min-free-gb`/`--abort-free-gb` floors; `--lock-file` flock run lock
 - **`ManifestImport`**: `neutraliser import-manifest` — carries the retired `neutralise.sh` manifest into `.neutraliser` sidecars
@@ -92,6 +93,7 @@ A Ruby CLI tool that normalises audio volume in video files using industry-stand
 - `--keep-original-audio` - Also keep the untouched original track (stream copy, not default) so processing is reversible
 - `--min-gain N` - Peak-capped files are re-encoded only if the gain towards target is at least N dB (default: `--tolerance`)
 - `--limit-db N` - Opt-in peak limiter: gain may exceed the peak headroom by N dB (stamped `limited`)
+- `--lra-target N` / `--centre-boost DB` - Opt-in compression: files whose LRA is over N get `acompressor` (gentlest of six rungs that reaches N), then level to target; `--centre-boost` lifts a 5.1 centre channel first. Off by default
 - `--allow-codec-change` - Process DTS/TrueHD/etc. (codec can't be kept); skipped by default
 - `--min-free-gb N` / `--abort-free-gb N` - Disk floors (skip file / stop run, exit 4); `--lock-file PATH` - one run at a time (exit 3)
 - `--redo-recipe N,unversioned` - Process again files an older recipe made (a run never does this by itself)

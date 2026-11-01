@@ -45,4 +45,26 @@ RSpec.describe Neutraliser::Stamp do
     expect(described_class.from_tags(nil)).to be_nil
     expect(described_class.from_tags('NEUTRALISER_PROFILE' => '')).to be_nil
   end
+
+  describe 'compression fields' do
+    let(:compressed) do
+      described_class.now(profile: 'livingroom', mode: 'compressed', gain_db: 6.7, source_codec: 'ac3', source_bitrate: 448_000,
+                          measured_i: -21.8, measured_tp: -8.0, measured_lra: 16.4,
+                          compression: 'gentle+limiter', centre_boost_db: 4.0, lra_after: 10.7)
+    end
+
+    it 'round-trips the rung, centre boost and LRA after' do
+      restored = described_class.from_tags(compressed.to_tags)
+
+      expect(restored).to be_compressed
+      expect(restored).to have_attributes(compression: 'gentle+limiter', centre_boost_db: 4.0, lra_after: 10.7, measured_lra: 16.4)
+    end
+
+    it 'leaves them empty on every other stamp, so a re-run clears stale values' do
+      tags = stamp.to_tags
+
+      expect(tags).to include('NEUTRALISER_COMPRESSION' => '', 'NEUTRALISER_CENTRE_BOOST_DB' => '', 'NEUTRALISER_LRA_AFTER' => '')
+      expect(described_class.from_tags(tags)).to have_attributes(compression: nil, lra_after: nil)
+    end
+  end
 end
