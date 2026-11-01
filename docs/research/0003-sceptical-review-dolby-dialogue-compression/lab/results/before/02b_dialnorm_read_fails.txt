@@ -1,0 +1,3 @@
+source dialnorm -24; the read of the first frames fails with 'No space left on device'
+exit 0; Could not read the source dialnorm (Dialnorm read failed (exit 1): No space left on device); the output gets the encoder's -31
+file REPLACED; dialnorm now -31; stamp "linear", stamped dialnorm nil

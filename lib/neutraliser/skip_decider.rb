@@ -183,7 +183,7 @@ module Neutraliser
     # judged, and loudnorm has already worked on its dynamics.
     def stamp_meets_lra_target?(stamp)
       return true unless @lra_target
-      return true if stamp.compressed? || stamp.dynamic? || stamp.measured_lra.nil?
+      return true if stamp.ever_compressed? || stamp.dynamic? || stamp.measured_lra.nil?
 
       stamp.measured_lra <= @lra_target + @tolerance.to_f
     end

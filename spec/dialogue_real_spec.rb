@@ -30,7 +30,7 @@ RSpec.describe 'Dialogue estimate, read-only', :real_ffmpeg do
     ffmpeg!('-f', 'lavfi', '-i', 'color=c=blue:size=64x64:duration=8:rate=10',
             '-f', 'lavfi', '-i', 'anoisesrc=color=pink:duration=8:sample_rate=48000:amplitude=0.05',
             '-f', 'lavfi', '-i', 'anoisesrc=color=pink:duration=8:sample_rate=48000:amplitude=0.2',
-            '-filter_complex', '[1:a]pan=5.1|c2=c0[dia];[2:a]pan=5.1|c0=c0|c1=c0|c4=c0|c5=c0[fx];[dia][fx]amix=inputs=2:normalize=0[mix]',
+            '-filter_complex', '[1:a][2:a]amerge=inputs=2,pan=5.1|c0=c1|c1=c1|c2=c0|c4=c1|c5=c1[mix]',
             '-map', '0:v', '-map', '[mix]', '-c:v', 'libx264', '-preset', 'ultrafast', '-c:a', 'ac3', '-b:a', '448k',
             *options, path)
   end

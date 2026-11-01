@@ -43,6 +43,7 @@ Entry point and navigation map for the neutraliser documentation set. Neutralise
 
 - [`research/compression-ladder-fixtures-2026-11.md`](research/compression-ladder-fixtures-2026-11.md) — What the opt-in `--lra-target` compression ladder does on a synthetic 5.1 fixture (rung, LRA, level, peak) and where the two LRA readings differ; no perceptual claims
 - [`research/plex-sampling-error-2026-10.md`](research/plex-sampling-error-2026-10.md) — How far a sampled loudness estimate sits from a film's true loudness (10 real Plex films); why analyze-plex gives "Unclear" instead of guessing, and `--full`
+- [`research/0003-sceptical-review-dolby-dialogue-compression/research.md`](research/0003-sceptical-review-dolby-dialogue-compression/research.md) — Sceptical review, on real-ffmpeg fixtures, of the Dolby fix, dialogue estimate, opt-in compression and recipes before a library sweep restarts: findings by severity, what was fixed, what only real files or ears can settle, and the restart verdict
 - [`research/0002-streaming-loudness-and-dialogue/research.md`](research/0002-streaming-loudness-and-dialogue/research.md) — What streamers do about volume jumps and quiet dialogue, and whether it works. Recommends anchoring on dialogue, and found two bugs: stream DRC baked in and dialnorm reset on Dolby tracks
 
 ## Tasks
@@ -61,6 +62,7 @@ Entry point and navigation map for the neutraliser documentation set. Neutralise
 - [`front-matter-schema.json`](front-matter-schema.json) — JSON Schema for validating doc frontmatter
 
 ### Change Log
+- 2026-11-02 (agent:sceptical-review): Added research/0003-sceptical-review-dolby-dialogue-compression
 - 2026-11-01 (agent:dialogue-estimate): Added design/adr/0003-optional-voice-gate-for-dialogue
 - 2026-11-01 (agent:lra-target): Added compression-ladder-fixtures-2026-11.md research note
 - 2026-11-01 (agent:streaming-research): Added research/0002-streaming-loudness-and-dialogue

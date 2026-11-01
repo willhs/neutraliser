@@ -230,13 +230,14 @@ module Neutraliser
       # Tags go into the same encode, so loudnorm's Linear/Dynamic choice has
       # to be predicted up front; its summary afterwards is the truth.
       predicted_mode = forced_mode || predict_mode(measured_data, profile)
+      prior = source.stamp&.history
       stamp_for = lambda do |mode|
         gain = if plan
                  plan.applied
                elsif mode == Mode::LINEAR
                  profile[:lufs] - measured_data.input_i
                end
-        build_stamp(profile, mode, codec_decision, gain: gain, measured: measured_data, compression: compression)
+        build_stamp(profile, mode, codec_decision, gain: gain, measured: measured_data, compression: compression, prior: prior)
       end
       remux = remux_plan(source, output_path, audio_filter, codec_decision, stamp_for.call(predicted_mode),
                          keep_original: keep_original)
@@ -265,7 +266,7 @@ module Neutraliser
       # Single-pass loudnorm has no prior measurement pass, so it always
       # behaves as dynamic (per-frame) normalization regardless of the
       # filter's default linear setting.
-      stamp = build_stamp(profile, Mode::DYNAMIC, codec_decision, gain: nil, measured: nil)
+      stamp = build_stamp(profile, Mode::DYNAMIC, codec_decision, gain: nil, measured: nil, prior: source.stamp&.history)
       remux = remux_plan(source, output_path, loudnorm_filter, codec_decision, stamp, keep_original: keep_original)
 
       ffmpeg_output = execute_with_progress(remux.argv)
@@ -397,7 +398,7 @@ module Neutraliser
 
     # The Dolby encoders write dialnorm -31 unless told otherwise, which would strip a source's
     # attenuation (see DolbyStream). Adds the source's own value to the decision when both ends are
-    # Dolby and it can be read; a track it can't be read from gets the encoder's default, as before.
+    # Dolby; a track that holds none gets the encoder's default.
     def self.carry_dialnorm(codec_decision, input_path, track)
       return codec_decision unless DolbyStream.dolby_codec?(track[:codec]) && DolbyStream.dolby_encoder?(codec_decision[:encoder])
 
@@ -405,16 +406,18 @@ module Neutraliser
       dialnorm ? codec_decision.merge(dialnorm: dialnorm) : codec_decision
     end
 
-    # The track's dialnorm in dB for the re-encode, or nil (logged) when it can't be read.
+    # The track's dialnorm in dB for the re-encode, or nil (logged) when its frames hold none. A read that
+    # failed says nothing about the track, so it raises: the file fails, is left alone and is tried again
+    # next run, where carrying on would write -31 over the source's value for good.
     def self.source_dialnorm(input_path, track)
       read_dialnorm(input_path, track)
-    rescue StandardError => e
-      Neutraliser.logger.log "  Could not read the source dialnorm (#{e.message.lines.first&.strip}); the output gets the encoder's -31"
+    rescue NoDialnormError => e
+      Neutraliser.logger.log "  Source has no dialnorm to carry (#{e.message.lines.first&.strip}); the output gets the encoder's -31"
       nil
     end
 
     # The track's dialnorm in dB, read from its first few frames stream-copied to a raw file (ffprobe
-    # doesn't report it). Raises FFmpegError when they can't be read.
+    # doesn't report it). Raises FFmpegError when they can't be read, NoDialnormError when they hold none.
     def self.read_dialnorm(input_path, track)
       format = DolbyStream.raw_format(track[:codec])
       Dir.mktmpdir('neutraliser-dialnorm') do |dir|
@@ -424,7 +427,7 @@ module Neutraliser
         _, stderr, status = execute_with_timeout(cmd, QUICK_TIMEOUT, 'Dialnorm read')
         raise FFmpegError.from_run('Dialnorm read', stderr, status) unless status.success?
 
-        DolbyStream.dialnorm(File.binread(raw)) || raise(FFmpegError, 'no dialnorm in the first frames')
+        DolbyStream.dialnorm(File.binread(raw)) || raise(NoDialnormError, 'no dialnorm in the first frames')
       end
     end
     DIALNORM_PROBE_FRAMES = 8
@@ -469,10 +472,11 @@ module Neutraliser
       valid && fits ? Mode::LINEAR : Mode::DYNAMIC
     end
 
-    def self.build_stamp(profile, mode, codec_decision, gain:, measured:, compression: nil)
+    def self.build_stamp(profile, mode, codec_decision, gain:, measured:, compression: nil, prior: nil)
       Stamp.now(
-        profile: profile[:name], mode: mode.to_s, gain_db: gain,
+        profile: profile[:name], mode: mode.to_s, gain_db: gain, prior: prior,
         source_codec: codec_decision[:source_codec], source_dialnorm: codec_decision[:dialnorm],
+        source_profile: codec_decision[:source_profile],
         source_bitrate: codec_decision[:source_bitrate].to_i.positive? ? codec_decision[:source_bitrate] : nil,
         measured_i: measured&.input_i, measured_tp: measured&.input_tp, measured_lra: measured&.input_lra,
         **(compression ? compression.stamp_fields : {})

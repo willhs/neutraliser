@@ -1,0 +1,77 @@
+source: I -29.2 LRA 20.0 dialnorm -24 (DRC off)
+Imported: 1
+Not imported: changed since=0, missing=0, legacy (no size/mtime)=0, other statuses=0
+sidecar recipe for a neutralise.sh file imported today: 2 (nil = unversioned)
+
+## What each generation left in the file
+file              mode    recipe       stamp_dialnorm  stream_dialnorm  LRA   I    
+untouched.mkv     -       -            -               -24              20.0  -29.2
+legacy_stamp.mkv  linear  unversioned  -               -31              12.0  -22.5
+recipe1.mkv       linear  1            -               -31              12.0  -22.5
+recipe2.mkv       linear  2            -24             -24              20.1  -20.0
+imported.mkv      -       -            -               -24              20.0  -29.2
+
+## Plain run: only the untouched file should change (exit 0)
+file          bytes    what                          mode    recipe       stamp_dialnorm  stream_dialnorm
+untouched     CHANGED  Replaced                      linear  2            -24             -24            
+legacy_stamp  same     skipped at the sidecar/stamp  linear  unversioned  -               -31            
+recipe1       same     skipped at the sidecar/stamp  linear  1            -               -31            
+recipe2       same     skipped at the sidecar/stamp  linear  2            -24             -24            
+imported      same     skipped at the sidecar/stamp  -       -            -               -24            
+
+## Second plain run: nothing should change (exit 0)
+file          bytes  what                          mode    recipe       stamp_dialnorm  stream_dialnorm
+untouched     same   skipped at the sidecar/stamp  linear  2            -24             -24            
+legacy_stamp  same   skipped at the sidecar/stamp  linear  unversioned  -               -31            
+recipe1       same   skipped at the sidecar/stamp  linear  1            -               -31            
+recipe2       same   skipped at the sidecar/stamp  linear  2            -24             -24            
+imported      same   skipped at the sidecar/stamp  -       -            -               -24            
+Files: 5
+  normalised linear:  4
+  normalised limited: 0
+  normalised dynamic: 0
+  untouched:          1
+Profiles: livingroom=4
+Recipes: 1=1, 2=2, unversioned=1
+Dialnorm carried over (dB): -24=2
+Remote-free rate: 0.0% (0 of 4 judged files within 2.0 LU of target and LRA <= 12.0; computed from records; 1 not judged, no levels on record (--measure reads them))
+
+## --redo-recipe 1 (exit 0)
+file          bytes  what                          mode    recipe       stamp_dialnorm  stream_dialnorm
+untouched     same   skipped at the sidecar/stamp  linear  2            -24             -24            
+legacy_stamp  same   skipped at the sidecar/stamp  linear  unversioned  -               -31            
+recipe1       same   Peak-limited                  linear  1            -               -31            
+recipe2       same   skipped at the sidecar/stamp  linear  2            -24             -24            
+imported      same   skipped at the sidecar/stamp  -       -            -               -24            
+
+## --redo-recipe unversioned (exit 0)
+file          bytes  what                          mode    recipe       stamp_dialnorm  stream_dialnorm
+untouched     same   skipped at the sidecar/stamp  linear  2            -24             -24            
+legacy_stamp  same   Peak-limited                  linear  unversioned  -               -31            
+recipe1       same   skipped at the sidecar/stamp  linear  1            -               -31            
+recipe2       same   skipped at the sidecar/stamp  linear  2            -24             -24            
+imported      same   skipped at the sidecar/stamp  -       -            -               -24            
+
+## --redo-recipe 1,unversioned again: terminates (exit 0)
+file          bytes  what                          mode    recipe       stamp_dialnorm  stream_dialnorm
+untouched     same   skipped at the sidecar/stamp  linear  2            -24             -24            
+legacy_stamp  same   Peak-limited                  linear  unversioned  -               -31            
+recipe1       same   Peak-limited                  linear  1            -               -31            
+recipe2       same   skipped at the sidecar/stamp  linear  2            -24             -24            
+imported      same   skipped at the sidecar/stamp  -       -            -               -24            
+
+--redo-recipe 2: Error: Recipe 2 is the current one (2) or newer; --redo-recipe is for older recipes and for files with none
+
+## Re-encoding a recipe-1 file: the new stamp against the audio
+file      mode    recipe  stamp_dialnorm  stream_dialnorm  LRA   I    
+film.mkv  linear  1       -               -31              12.0  -23.8
+film.mkv  linear  2       -31             -31              12.1  -22.7
+
+## A second run at another target: does the stamp remember?
+first_flags  first_mode  first_rung  src_LRA  after_LRA  second_mode  second_rung  final_LRA
+compressed   compressed  severe      26.0     7.2        linear                    7.2      
+limited      limited                 26.0     25.9       linear                    25.9     
+
+recipe-1 run wrote a manifest entry: "reason":"normalized"
+--resume --redo-recipe 1: looked at the recipe-1 file? false (Resume mode: skipping 1 completed file(s))
+--resume --lra-target 8 over an uncompressed LRA 12.0 file: looked at it? false (Resume mode: skipping 1 completed file(s)); bytes same

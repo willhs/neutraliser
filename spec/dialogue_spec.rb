@@ -112,7 +112,9 @@ RSpec.describe 'Dialogue figures' do
       'mono' => [{ channels: 1, channel_layout: 'mono' }, 'mono, no centre channel'],
       'stereo' => [{ channels: 2, channel_layout: 'stereo' }, 'stereo, no centre channel'],
       'quad' => [{ channels: 4, channel_layout: 'quad' }, 'no centre channel in quad'],
-      '2.1' => [{ channels: 3, channel_layout: '2.1' }, 'no centre channel in 2.1']
+      '2.1' => [{ channels: 3, channel_layout: '2.1' }, 'no centre channel in 2.1'],
+      '6.0(front)' => [{ channels: 6, channel_layout: '6.0(front)' }, 'no centre channel in 6.0(front)'],
+      '6.1(front)' => [{ channels: 7, channel_layout: '6.1(front)' }, 'no centre channel in 6.1(front)']
     }.each do |name, (track, reason)|
       it "gives no figure for #{name}, and does not read the file" do
         allow(Neutraliser::FFmpegWrapper).to receive(:measure_loudness)

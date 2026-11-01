@@ -15,7 +15,7 @@ module Neutraliser
   class Report
     FORMATS = %w[summary tsv json].freeze
     RECORD_FIELDS = %i[profile recipe gain_db source_codec source_bitrate measured_i measured_tp measured_lra
-                       compression centre_boost_db lra_after source_dialnorm].freeze
+                       compression centre_boost_db lra_after source_dialnorm source_profile prior].freeze
     TSV_FIELDS = (RECORD_FIELDS + %i[version date]).freeze
     OUTPUT_FIELDS = %w[output_i output_lra output_basis remote_free].freeze
     DIALOGUE_FIELDS = %w[dialogue_i dialogue_method dialogue_confidence speech_share ldr dialnorm dialogue_remote_free].freeze
@@ -64,6 +64,7 @@ module Neutraliser
         compressed: states.fetch(Mode::COMPRESSED.to_s, 0),
         dynamic: states.fetch(Mode::DYNAMIC.to_s, 0),
         untouched: states.fetch('untouched', 0),
+        reencoded: rows.count { |row| row.stamp&.prior },
         profiles: rows.filter_map { |row| row.stamp&.profile }.tally.sort.to_h,
         recipes: rows.filter_map(&:recipe_label).tally.sort_by { |label, _| label }.to_h,
         dialnorms: rows.filter_map { |row| row.stamp&.source_dialnorm }.tally.sort.to_h,
@@ -89,6 +90,7 @@ module Neutraliser
                "  untouched:          #{c[:untouched]}"]
       lines.insert(3, "  normalised compressed: #{c[:compressed]}") if c[:compressed].positive?
       lines << "    left alone: #{c[:left].map { |reason, n| "#{reason}=#{n}" }.join(', ')}" if c[:left].any?
+      lines << "Re-encoded over an earlier pass: #{c[:reencoded]} (mode and recipe say what the last pass did; prior holds the rest)" if c[:reencoded].positive?
       lines << "Profiles: #{c[:profiles].map { |name, n| "#{name}=#{n}" }.join(', ')}" if c[:profiles].any?
       lines << "Recipes: #{c[:recipes].map { |label, n| "#{label}=#{n}" }.join(', ')}" if c[:recipes].any?
       lines << "Dialnorm carried over (dB): #{c[:dialnorms].map { |db, n| "#{db}=#{n}" }.join(', ')}" if c[:dialnorms].any?

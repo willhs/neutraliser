@@ -26,6 +26,9 @@ module Neutraliser
     # ffmpeg version, or a dry run that did nothing) and goes back through
     # SkipDecider, which costs one probe.
     FINAL_REASONS = %i[normalized already_processed no_audio_track unsupported_format].freeze
+    # Final only for a run that asks for what the earlier one did: a recipe redo or
+    # --lra-target can want more from a file an earlier run called done.
+    DONE_REASONS = %i[normalized already_processed].freeze
 
     # An exception out of a file's processing, in the order they are tried: the
     # reason it becomes (nil: the error names its own) and how the log says it.
@@ -73,6 +76,7 @@ module Neutraliser
     # or one it takes as final.
     def self.reason?(text, reason) = text == reason.to_s
     def self.final_reason?(text) = FINAL_REASONS.any? { |reason| reason?(text, reason) }
+    def self.done_reason?(text) = DONE_REASONS.any? { |reason| reason?(text, reason) }
 
     def done? = status == :done
     def skipped? = status == :skipped

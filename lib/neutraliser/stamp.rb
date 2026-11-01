@@ -19,16 +19,25 @@ module Neutraliser
   # source_dialnorm is the Dolby dialnorm (dB, -31 to -1) the source track carried and the output
   # carries too (DolbyStream); nil when the source wasn't AC-3 / E-AC-3.
   #
+  # source_profile is what ffprobe called the source track ("DTS-HD MA", "Dolby Digital Plus + Dolby
+  # Atmos"): after a codec change or a flatten, the only record of what the file used to hold.
+  #
+  # mode, recipe and gain_db are this pass's. prior is every earlier pass the audio went through,
+  # oldest first ("1:linear,2:compressed/gentle"), nil on a first pass: a `linear` over compressed
+  # audio, or a recipe 2 over a recipe 1's baked-in DRC and reset dialnorm, doesn't undo them.
+  #
   # recipe is the leveling method's version (Recipe); nil on a stamp from before
   # versioning, which stays valid.
   Stamp = Data.define(:version, :profile, :recipe, :mode, :gain_db, :source_codec, :source_bitrate,
                       :measured_i, :measured_tp, :measured_lra, :date,
-                      :compression, :centre_boost_db, :lra_after, :source_dialnorm)
+                      :compression, :centre_boost_db, :lra_after, :source_dialnorm, :source_profile, :prior)
 
   class Stamp
     # The compression fields are absent from every non-compressed stamp; source_dialnorm from every
-    # one whose source wasn't AC-3 / E-AC-3 (or whose dialnorm couldn't be read).
-    def initialize(compression: nil, centre_boost_db: nil, lra_after: nil, source_dialnorm: nil, **fields)
+    # one whose source wasn't AC-3 / E-AC-3 (or whose frames held none); source_profile and
+    # prior from stamps that predate them, and those with no profile or earlier pass to name.
+    def initialize(compression: nil, centre_boost_db: nil, lra_after: nil, source_dialnorm: nil, source_profile: nil,
+                   prior: nil, **fields)
       super
     end
 
@@ -74,5 +83,11 @@ module Neutraliser
     def limited? = mode == Mode::LIMITED.to_s
     def compressed? = mode == Mode::COMPRESSED.to_s
     def dynamic? = mode == Mode::DYNAMIC.to_s
+
+    # This pass and the ones before it, as the next re-encode's prior records them.
+    def history = [prior, "#{Recipe.label(recipe)}:#{[mode, compression].compact.join('/')}"].compact.join(',')
+
+    # Compression is applied once, whichever pass did it.
+    def ever_compressed? = compressed? || prior.to_s.include?(':compressed')
   end
 end

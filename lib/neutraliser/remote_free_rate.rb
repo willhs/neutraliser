@@ -20,23 +20,19 @@ module Neutraliser
       new(integrated: measurement.input_i, lra: measurement.input_lra, target: target, basis: :measured)
     end
 
-    # Constant gain moves loudness one-for-one and leaves the range alone.
-    # Dynamic loudnorm aims at the target and holds the range to the profile's
-    # (or to the source's, when that was already narrower). A limited file
-    # cannot be computed: the limiter takes loudness off the gain the stamp
-    # records by an amount only the file itself shows (a test clip aimed at
-    # -20 LUFS landed at -26), so it waits for a measurement.
+    # Constant gain moves loudness one-for-one and leaves the range alone, so only a
+    # linear stamp can be computed. The others wait for a measurement, because the
+    # record can't say where they landed: a limiter takes loudness off the gain the
+    # stamp records (a test clip aimed at -20 LUFS landed at -26), compression moves
+    # the level between the measured_i and the gain_db it records, and loudnorm's
+    # dynamic mode doesn't hold the profile's target or range (measured: -26 LUFS and
+    # LRA 15.4 on a clip aimed at -20 and 12).
     def self.from_stamp(stamp)
       profile = Profiles.find(stamp.profile)
-      return nil if profile.nil? || stamp.limited?
+      return nil unless profile && stamp.linear? && stamp.measured_i && stamp.measured_lra
 
-      if stamp.dynamic?
-        lra = [stamp.measured_lra, profile[:lra]].compact.min
-        new(integrated: profile[:lufs], lra: lra, target: profile[:lufs], basis: :computed)
-      elsif stamp.measured_i && stamp.measured_lra
-        new(integrated: stamp.measured_i + stamp.gain_db.to_f, lra: stamp.measured_lra, target: profile[:lufs],
-            basis: :computed)
-      end
+      new(integrated: stamp.measured_i + stamp.gain_db.to_f, lra: stamp.measured_lra, target: profile[:lufs],
+          basis: :computed)
     end
 
     # Left alone, so the output is the input.
@@ -83,8 +79,11 @@ module Neutraliser
     # Fraction 0.0..1.0, or nil when no file could be judged.
     def rate = judged.empty? ? nil : remote_free.fdiv(judged.size)
 
+    # The rate if every file that couldn't be judged would fail: what the library can be sure of.
+    def floor = @levels.empty? ? nil : remote_free.fdiv(@levels.size)
+
     def to_h
-      { rate: rate&.round(4), remote_free: remote_free, judged: judged.size, not_judged: not_judged,
+      { rate: rate&.round(4), floor: floor&.round(4), remote_free: remote_free, judged: judged.size, not_judged: not_judged,
         off_level: off_level, wide_range: wide_range, measured: measured,
         within_lu: within_lu, lra_limit: lra_limit }
     end
@@ -93,7 +92,7 @@ module Neutraliser
       return "Remote-free rate: n/a (no file could be judged#{not_judged_note})" unless rate
 
       "Remote-free rate: #{(rate * 100).round(1)}% (#{remote_free} of #{judged.size} judged files within #{within_lu} LU " \
-        "of target and LRA <= #{lra_limit}; #{basis_note}#{not_judged_note})"
+        "of target and LRA <= #{lra_limit}; #{basis_note}#{not_judged_note}#{floor_note})"
     end
 
     private
@@ -106,5 +105,6 @@ module Neutraliser
     end
 
     def not_judged_note = not_judged.positive? ? "; #{not_judged} not judged, no levels on record (--measure reads them)" : ''
+    def floor_note = not_judged.positive? ? "; at worst #{(floor * 100).round(1)}% of all #{@levels.size} files" : ''
   end
 end

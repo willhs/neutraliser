@@ -1,0 +1,18 @@
+
+## Null test: output minus source * stamped gain (peak residual, dBFS)
+source              mode             exit  stamp    gain  log                     same length  residual  output     
+flac s16, wide LRA  default          0     linear   3.06  Normalization: Linear   true         -138.5    flac/s32/24
+flac s16, wide LRA  --allow-dynamic  0     dynamic        Normalization: Dynamic               -         flac/s32/24
+flac s24, wide LRA  default          0     linear   3.06  Normalization: Linear   true         -138.5    flac/s32/24
+flac s24, wide LRA  --allow-dynamic  0     dynamic        Normalization: Dynamic               -         flac/s32/24
+flac s24, steady    default          0     linear   3.07  Normalization: Linear   true         -138.5    flac/s32/24
+flac s24, steady    --allow-dynamic  0     dynamic        Normalization: Dynamic               -         flac/s32/24
+
+## Stamped mode against the filter chain
+case                                        mode        compression      filters                              
+gain under ceiling                          linear                       volume aresample                     
+gain over ceiling, no limiter               linear                       volume aresample                     
+gain within --limit-db reach, no overshoot  linear                       volume aresample                     
+gain needs --limit-db                       limited                      volume alimiter aresample            
+--lra-target                                compressed  extreme          acompressor volume aresample         
+--lra-target --limit-db                     compressed  extreme+limiter  acompressor volume alimiter aresample

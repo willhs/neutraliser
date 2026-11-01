@@ -274,6 +274,27 @@ RSpec.describe 'Recipe versions, left-alone records and the remote-free rate', :
       expect(dynamic.rate.rate).to eq(1.0)
     end
 
+    # A part-swept library: the stamped copies are skipped, so measuring them would credit the recipe with an older run's work.
+    it 'leaves files an earlier run normalised out of the rate, and says how many' do
+      library = File.join(dir, 'partly swept')
+      done = File.join(library, 'done.mkv')
+      make_clip(done, quiet, seconds: 4)
+      make_clip(File.join(library, 'fresh.mkv'), peaky, seconds: 4)
+      process(done)
+
+      result = run_quietly_harness(Neutraliser::RateHarness.new(roots: [library], size: 2, seed: 1, work_dir: work,
+                                                                processor_options: { allow_dynamic: true }))
+
+      expect(result.already_done).to eq(1)
+      expect(result.report.rows.map { |row| File.basename(row.file) }).to eq(['fresh.mkv'])
+      expect(result.rate.to_h).to include(judged: 1)
+
+      output = capture_stdout do
+        Neutraliser::CLI.start(['rate-sample', library, '--sample', '2', '--seed', '1', '--work-dir', work])
+      end
+      expect(output).to include('1 sampled file(s) were already normalised by an earlier run')
+    end
+
     it 'repeats a sample for the same seed, and varies it across seeds' do
       files = ->(seed) { Neutraliser::RateHarness.new(roots: [tv, movies], size: 3, seed: seed, work_dir: work).plan.map(&:file) }
 

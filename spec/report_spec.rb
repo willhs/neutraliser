@@ -30,7 +30,7 @@ RSpec.describe Neutraliser::Report do
 
   it 'counts linear, dynamic and untouched files and the profile mix' do
     expect(described_class.new(dir).counts).to eq(
-      total: 4, linear: 2, limited: 0, compressed: 0, dynamic: 1, untouched: 1,
+      total: 4, linear: 2, limited: 0, compressed: 0, dynamic: 1, untouched: 1, reencoded: 0,
       profiles: { 'livingroom' => 2, 'night' => 1 }, recipes: { Neutraliser::Recipe::CURRENT.to_s => 3 }, dialnorms: {}, left: {}
     )
   end
@@ -113,8 +113,8 @@ RSpec.describe Neutraliser::Report do
     it 'judges what it can from the records and counts the rest apart' do
       rate = described_class.new(dir).rate
 
-      # a: -24+2.5=-21.5 ok; b: dynamic, night -16 ok; c: -30 off; d: -20 ok; sub/d: -24-1=-25 off
-      expect(rate.to_h).to include(judged: 5, remote_free: 3, off_level: 2, not_judged: 0, measured: 0)
+      # a: -24+2.5=-21.5 ok; b: dynamic, the record can't place it; c: -30 off; d: -20 ok; sub/d: -24-1=-25 off
+      expect(rate.to_h).to include(judged: 4, remote_free: 2, off_level: 2, not_judged: 1, measured: 0, floor: 0.4)
     end
 
     it 'measures every file instead when asked, against the profile for files with no record' do
@@ -143,14 +143,14 @@ RSpec.describe Neutraliser::Report do
       loose = described_class.new(dir, within_lu: 20.0, lra_limit: 100.0)
       tight = described_class.new(dir, within_lu: 0.1)
 
-      expect(loose.rate.remote_free).to eq(5)
-      expect(tight.rate.remote_free).to eq(2) # only the two landing exactly on target
+      expect(loose.rate.remote_free).to eq(4)
+      expect(tight.rate.remote_free).to eq(1) # only the one landing exactly on target
     end
 
     it 'prints the rate through the CLI, in JSON too' do
-      expect { Neutraliser::CLI.start(['report', dir]) }.to output(/Remote-free rate: 60.0% \(3 of 5/).to_stdout
+      expect { Neutraliser::CLI.start(['report', dir]) }.to output(/Remote-free rate: 50.0% \(2 of 4.*at worst 40.0% of all 5 files/).to_stdout
       expect { Neutraliser::CLI.start(['report', dir, '--format', 'json']) }
-        .to output(/"remote_free_rate": \{\s+"rate": 0.6/).to_stdout
+        .to output(/"remote_free_rate": \{\s+"rate": 0.5,\s+"floor": 0.4/).to_stdout
     end
   end
 

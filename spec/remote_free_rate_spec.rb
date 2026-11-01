@@ -17,13 +17,15 @@ RSpec.describe Neutraliser::FinalLevels do
         .to have_attributes(integrated: -20.0, lra: 5.0, target: -20.0, basis: :computed)
     end
 
-    it 'puts a dynamic file on target, with the narrower of its range and the profile\'s' do
-      expect(described_class.computed(stamp: stamp(profile: 'night', mode: 'dynamic', gain: nil, lra: 14.0), left: nil))
-        .to have_attributes(integrated: -16.0, lra: 10.0, target: -16.0)
-      expect(described_class.computed(stamp: stamp(profile: 'night', mode: 'dynamic', gain: nil, lra: 3.0), left: nil).lra)
-        .to eq(3.0)
-      expect(described_class.computed(stamp: stamp(profile: 'night', mode: 'dynamic', gain: nil, loudness: nil, lra: nil), left: nil).lra)
-        .to eq(10.0)
+    # Measured: loudnorm's dynamic mode landed at -26 LUFS and LRA 15.4 on a clip the old figure called -20 and 12, remote-free.
+    it 'does not assume a dynamic file landed on target at the profile\'s range' do
+      expect(described_class.computed(stamp: stamp(profile: 'night', mode: 'dynamic', gain: nil, lra: 14.0), left: nil)).to be_nil
+      expect(described_class.computed(stamp: stamp(profile: 'night', mode: 'dynamic', gain: nil, loudness: nil, lra: nil), left: nil)).to be_nil
+    end
+
+    # measured_i and measured_lra are from before the compressor and gain_db from after it: added up they read 14 LU high.
+    it 'does not add a compressed file\'s pre-compression level to its post-compression gain' do
+      expect(described_class.computed(stamp: stamp(mode: 'compressed', gain: 23.4, loudness: -29.1, lra: 20.0), left: nil)).to be_nil
     end
 
     it 'reads a custom profile\'s target from its name' do
@@ -67,6 +69,25 @@ RSpec.describe Neutraliser::FinalLevels do
 end
 
 RSpec.describe Neutraliser::RemoteFreeRate do
+  describe 'a library the records can only partly place' do
+    let(:good) { Neutraliser::FinalLevels.new(integrated: -20.0, lra: 8.0, target: -20.0, basis: :computed) }
+    let(:rate) { described_class.new({ 'a' => good, 'b' => good, 'c' => nil, 'd' => nil }) }
+
+    it 'says what the rate would be if every file it could not judge fails' do
+      expect(rate.rate).to eq(1.0)
+      expect(rate.floor).to eq(0.5)
+      expect(rate.to_h).to include(rate: 1.0, floor: 0.5, not_judged: 2)
+      expect(rate.summary).to include('Remote-free rate: 100.0%', 'at worst 50.0% of all 4 files')
+    end
+
+    it 'has nothing to add when every file was judged' do
+      judged = described_class.new({ 'a' => good })
+
+      expect(judged.floor).to eq(1.0)
+      expect(judged.summary).not_to include('at worst')
+    end
+  end
+
   def levels(integrated, range, basis: :computed)
     Neutraliser::FinalLevels.new(integrated: integrated, lra: range, target: -20.0, basis: basis)
   end

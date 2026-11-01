@@ -69,6 +69,10 @@ module Neutraliser
   # with one message instead of failing every file the same way.
   class FFmpegNotFoundError < StandardError; end
 
+  # A track whose first frames hold no dialnorm to read. Unlike a read that failed (a full temp disk, a timeout), that
+  # is a fact about the track, so it doesn't stop the track being processed. See FFmpegWrapper.source_dialnorm.
+  class NoDialnormError < FFmpegError; end
+
   # The subprocess ran out of time: retryable, not evidence the file is bad.
   class FFmpegTimeoutError < FFmpegError
     def initialize(message = nil, **)

@@ -1,8 +1,14 @@
 inherit_from: .rubocop_todo.yml
 
+inherit_mode:
+  merge:
+    - Exclude
+
 AllCops:
   NewCops: enable
   SuggestExtensions: false
+  Exclude:
+    - 'docs/research/**/lab/*.rb' # one-off evidence scripts
 
 Layout/LineLength:
   Exclude:

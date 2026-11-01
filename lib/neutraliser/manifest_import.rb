@@ -37,7 +37,8 @@ module Neutraliser
 
         path = File.join(@root, entry['file'])
         deciders[File.dirname(path)] ||= SkipDecider.new(File.dirname(path), fast_verification: false)
-        deciders[File.dirname(path)].mark_processed(path, @profile)
+        # The retired script made these, not a recipe: --redo-recipe unversioned must find them.
+        deciders[File.dirname(path)].mark_processed(path, @profile, recipe: Recipe::UNVERSIONED)
       end
       Result.new(**Result.members.to_h { |key| [key, counts[key]] })
     end

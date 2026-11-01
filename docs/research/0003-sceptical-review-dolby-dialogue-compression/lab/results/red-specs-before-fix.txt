@@ -1,0 +1,34 @@
+Failing-first runs against the code at 68298c7, before any fix. Summary lines only. sceptical_review_spec.rb:63 ran a real clip through the ladder; it was replaced by the measured figures in compression_spec.rb, because such clips sit on the LRA gate's edge (finding 16).
+
+--- First batch
+111 examples, 24 failures
+rspec './spec/dialogue_spec.rb[1:4:8]' # Dialogue figures Neutraliser::DialogueMeter gives no figure for 6.1(front), and does not read the file
+rspec './spec/dialogue_spec.rb[1:4:7]' # Dialogue figures Neutraliser::DialogueMeter gives no figure for 6.0(front), and does not read the file
+rspec ./spec/sceptical_review_spec.rb:73 # Sceptical review regressions the compression ladder, whose LRA does not fall steadily levels without compressing when no rung w
+rspec ./spec/sceptical_review_spec.rb:63 # Sceptical review regressions the compression ladder, whose LRA does not fall steadily takes the gentlest rung that reaches the 
+rspec ./spec/sceptical_review_spec.rb:192 # Sceptical review regressions what the planned flags leave on record names the source profile a codec change converted from
+rspec ./spec/sceptical_review_spec.rb:201 # Sceptical review regressions what the planned flags leave on record names the object audio a flatten dropped, keeps its dialno
+rspec ./spec/sceptical_review_spec.rb:100 # Sceptical review regressions --resume against a manifest from before looks again at a normalised file when the run redoes its 
+rspec ./spec/sceptical_review_spec.rb:104 # Sceptical review regressions --resume against a manifest from before looks again at a normalised file when the run asks for co
+rspec ./spec/sceptical_review_spec.rb:132 # Sceptical review regressions a stamp after a second pass names the older recipe a re-encode went over, whose DRC and dialnorm 
+rspec ./spec/sceptical_review_spec.rb:149 # Sceptical review regressions a stamp after a second pass never compresses twice, even after a linear pass went on top
+rspec ./spec/sceptical_review_spec.rb:141 # Sceptical review regressions a stamp after a second pass chains every earlier pass, oldest first
+rspec ./spec/sceptical_review_spec.rb:115 # Sceptical review regressions a stamp after a second pass has no prior on a first pass
+rspec ./spec/sceptical_review_spec.rb:159 # Sceptical review regressions a stamp after a second pass shows up in report, so the count of `linear` files can be read for wh
+rspec ./spec/sceptical_review_spec.rb:121 # Sceptical review regressions a stamp after a second pass keeps what an earlier pass did, so `linear` on compressed audio does 
+rspec ./spec/remote_free_rate_spec.rb:76 # Neutraliser::RemoteFreeRate a library the records can only partly place says what the rate would be if every file it could not 
+rspec ./spec/remote_free_rate_spec.rb:83 # Neutraliser::RemoteFreeRate a library the records can only partly place has nothing to add when every file was judged
+rspec ./spec/remote_free_rate_spec.rb:21 # Neutraliser::FinalLevels.computed does not assume a dynamic file landed on target at the profile's range
+rspec ./spec/remote_free_rate_spec.rb:27 # Neutraliser::FinalLevels.computed does not add a compressed file's pre-compression level to its post-compression gain
+rspec ./spec/recipe_and_rate_spec.rb:278 # Recipe versions, left-alone records and the remote-free rate rate-sample (the harness) leaves files an earlier run normalised o
+rspec ./spec/compression_spec.rb:119 # Neutraliser::Compression.plan gives no plan when no rung narrows the range by at least the tolerance
+rspec ./spec/compression_spec.rb:97 # Neutraliser::Compression.plan stops at the first rung that reaches the target, so a target the gentlest reaches costs one read
+rspec ./spec/compression_spec.rb:113 # Neutraliser::Compression.plan takes the rung that narrows most when none reaches the target, which need not be the strongest
+rspec ./spec/compression_spec.rb:107 # Neutraliser::Compression.plan finds the gentlest rung when LRA does not fall steadily down the ladder
+rspec ./spec/manifest_import_spec.rb:42 # Neutraliser::ManifestImport records what the retired script made as unversioned, so --redo-recipe unversioned finds it
+
+--- A failed dialnorm read, found later in the review
+3 examples, 3 failures
+rspec ./spec/sceptical_review_spec.rb:176 # Sceptical review regressions a dialnorm read that fails fails the file and leaves it alone on a disk error
+rspec ./spec/sceptical_review_spec.rb:185 # Sceptical review regressions a dialnorm read that fails still processes a track whose bytes hold no dialnorm: that is the trac
+rspec ./spec/sceptical_review_spec.rb:167 # Sceptical review regressions a dialnorm read that fails fails the file and leaves it alone when ffmpeg could not run the read

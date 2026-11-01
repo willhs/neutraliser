@@ -94,12 +94,32 @@ RSpec.describe Neutraliser::Compression do
       expect(plan(lra_target: 14.0)).to have_attributes(rung: have_attributes(name: 'gentle'), reached?: true)
     end
 
-    it 'measures at most log2(rungs) + 1 candidates, not all of them' do
+    it 'stops at the first rung that reaches the target, so a target the gentlest reaches costs one read' do
       calls = stub_measurements(lra_by_rung)
 
-      plan(lra_target: 7.0)
+      plan(lra_target: 14.0)
 
-      expect(calls.uniq.length).to be <= 4
+      expect(calls.length).to eq(1)
+    end
+
+    # Measured on a real clip (docs/research/0003-sceptical-review-dolby-dialogue-compression): LRA jumps once compression
+    # lifts the quiet parts over the LRA gate, so the rung in the middle says nothing about the ones either side.
+    it 'finds the gentlest rung when LRA does not fall steadily down the ladder' do
+      stub_measurements([9.5, 20.9, 17.2, 13.1, 9.2, 5.6])
+
+      expect(plan(lra_target: 8.0, tolerance: 2.0)).to have_attributes(rung: have_attributes(name: 'gentle'), reached?: true)
+    end
+
+    it 'takes the rung that narrows most when none reaches the target, which need not be the strongest' do
+      stub_measurements([9.0, 7.0, 5.5, 6.0, 8.0, 9.0])
+
+      expect(plan(lra_target: 3.0)).to have_attributes(rung: have_attributes(name: 'strong'), reached?: false)
+    end
+
+    it 'gives no plan when no rung narrows the range by at least the tolerance' do
+      stub_measurements([14.5, 14.5, 14.8, 21.1, 17.2, 15.2])
+
+      expect(described_class.plan('film.mkv', track, measurement(input_lra: 14.8), profile, lra_target: 3.0, tolerance: 1.0)).to be_nil
     end
 
     it 'falls back to the strongest rung and says the target was not reached' do

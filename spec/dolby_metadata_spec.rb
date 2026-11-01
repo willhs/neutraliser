@@ -2,6 +2,7 @@
 
 require 'spec_helper'
 require_relative 'support/dolby_fixture'
+require_relative 'support/eac3_bits'
 
 # Constant gain has to be constant gain on Dolby tracks too (research:
 # docs/research/0002-streaming-loudness-and-dialogue/research.md, "Two bugs this research found").
@@ -50,6 +51,27 @@ RSpec.describe 'Dolby loudness metadata through process --replace', :real_ffmpeg
       expect(stamp.measured_lra).to be_within(1.0).of(before_off[:lra])
       expect(stamp.measured_i).to be_within(0.5).of(before_off[:i])
       expect(after_off[:i] - before_off[:i]).to be_within(0.5).of(3.0)
+    end
+  end
+
+  describe 'stream DRC on E-AC-3' do
+    it 'is not baked in either: the same decoder, the same words, in its own frame layout' do
+      wav = DolbyFixture.programme(File.join(tmp, 'programme.wav'))
+      plain = DolbyFixture.encode(wav, File.join(tmp, 'plain.eac3'), codec: 'eac3', dialnorm: -31, options: ['-channel_coupling', '0'])
+      with_drc = Eac3Bits.add_dynrng(plain) do |i|
+        (i * DolbyFixture::FRAME_SECONDS) % DolbyFixture::LOUD_EVERY < DolbyFixture::LOUD_LEN ? DolbyFixture::LOUD_DYNRNG : 0
+      end
+      File.binwrite(File.join(tmp, 'with_drc.eac3'), with_drc)
+      mkv = DolbyFixture.mkv(File.join(tmp, 'with_drc.eac3'), File.join(tmp, 'film.mkv'))
+      before_off = DolbyFixture.measure(mkv, *no_drc)
+      expect(before_off[:lra] - DolbyFixture.measure(mkv)[:lra]).to be > 4, 'fixture: the DRC words should compress the default decode'
+
+      process(mkv, target: (before_off[:i] + 3).round(1), tolerance: 0.5)
+
+      after_off = DolbyFixture.measure(mkv, *no_drc)
+      expect(after_off[:lra]).to be_within(1.0).of(before_off[:lra])
+      expect(after_off[:i] - before_off[:i]).to be_within(0.5).of(3.0)
+      expect(Neutraliser::Source.new(mkv).stamp.measured_lra).to be_within(1.0).of(before_off[:lra])
     end
   end
 

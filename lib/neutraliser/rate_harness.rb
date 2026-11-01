@@ -21,7 +21,8 @@ module Neutraliser
     end
 
     # copies: copy path => the Pick it came from. work_dir is set only when the copies were kept.
-    Result = Data.define(:copies, :work_dir, :summary, :report, :seed) do
+    # already_done: how many picks an earlier run had normalised, left out of the rate.
+    Result = Data.define(:copies, :work_dir, :summary, :report, :seed, :already_done) do
       def rate = report.rate
     end
 
@@ -61,16 +62,25 @@ module Neutraliser
       begin
         copies = copy_all(picks, work)
         summary = @processor.process(work)
+        already_done = drop_already_done(summary)
         report = Report.new(work, measure: @measure, profile: @processor.profile, within_lu: @within_lu,
                                   lra_limit: @lra_limit, dialogue_anchor: @dialogue_anchor)
         Result.new(copies: copies, work_dir: (work if @keep), summary: summary,
-                   report: report, seed: @seed)
+                   report: report, seed: @seed, already_done: already_done)
       ensure
         FileUtils.remove_entry(work) if !@keep && Dir.exist?(work)
       end
     end
 
     private
+
+    # A copy already stamped for this profile is skipped, so the recipe under test never
+    # touched it: measuring it would credit the recipe with what an earlier run did.
+    def drop_already_done(summary)
+      done = Array(summary[:results]).select { |result| result.reason == :already_processed }
+      done.each { |result| FileUtils.rm_f(result.file) }
+      done.size
+    end
 
     def validate!
       raise Error, 'Give at least one root' if @roots.empty?

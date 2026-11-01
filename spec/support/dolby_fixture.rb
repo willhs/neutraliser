@@ -37,8 +37,8 @@ module DolbyFixture
   end
 
   # A raw AC-3 or E-AC-3 stream of the wav, with the given dialnorm in every frame.
-  def encode(wav, out, codec:, dialnorm:)
-    ffmpeg('-i', wav, '-c:a', codec, '-b:a', '192k', '-dialnorm', dialnorm, '-f', codec, out)
+  def encode(wav, out, codec:, dialnorm:, options: [])
+    ffmpeg('-i', wav, '-c:a', codec, '-b:a', '192k', '-dialnorm', dialnorm, *options, '-f', codec, out)
     File.binread(out)
   end
 

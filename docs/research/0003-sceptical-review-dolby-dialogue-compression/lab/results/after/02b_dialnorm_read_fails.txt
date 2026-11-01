@@ -1,0 +1,3 @@
+source dialnorm -24; the read of the first frames fails with 'No space left on device'
+exit 1; FFmpeg error processing file: Dialnorm read failed (exit 1): No space left on device
+file untouched; dialnorm now -24; stamp nil, stamped dialnorm nil

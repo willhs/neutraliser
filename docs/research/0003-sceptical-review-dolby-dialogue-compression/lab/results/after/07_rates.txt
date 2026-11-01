@@ -1,0 +1,35 @@
+hot clip: I -21.3, true peak -2.7, LRA 8.3
+
+## Computed from the record vs measured (target -20, LRA limit 12)
+case                  state       gain  TP    computed_I  computed_LRA  measured_I  measured_LRA  ebur_I  ebur_LRA  computed_verdict  measured_verdict
+linear                linear      9.2   -8.9  -20.0       20.0          -20.0       20.0          -20.0   20.0      false             false           
+linear, peak-capped   linear      1.2   -1.5  -20.3       8.3           -20.3       8.3           -20.1   8.3       true              true            
+limited               limited     1.5   -1.2  n/j         n/j           -20.0       8.3           -19.8   8.3       n/j               true            
+compressed            compressed  23.4  -1.7  n/j         n/j           -21.8       8.9           -21.7   8.8       n/j               true            
+compressed + limiter  compressed  7.4   -1.7  n/j         n/j           -20.0       2.0           -19.9   1.9       n/j               true            
+dynamic               dynamic     -     -3.2  n/j         n/j           -20.2       15.4          -20.0   15.2      n/j               false           
+dynamic --fast        dynamic     -     -9.0  n/j         n/j           -26.0       15.4          -25.7   15.2      n/j               false           
+
+Mixed library, computed:
+  Remote-free rate: 100.0% (3 of 3 judged files within 2.0 LU of target and LRA <= 12.0; computed from records; 1 not judged, no levels on record (--measure reads them); at worst 75.0% of all 4 files)
+Same library, measured:
+  Remote-free rate: 75.0% (3 of 4 judged files within 2.0 LU of target and LRA <= 12.0; measured)
+
+rate-sample with --allow-dynamic over a part-swept library (exit 0):
+  Run summary: queued=4, done=1, skipped=3, failed=0, resumed=0, linear=0, dynamic=1, limited=0
+  stamped-e0fa03/new.mkv	dynamic	-20.2 LUFS (target -20.0), LRA 15.4, measured	needs the remote	dialogue: n/a (stereo, no centre cha
+  Remote-free rate: 0.0% (0 of 1 judged files within 2.0 LU of target and LRA <= 12.0; measured)
+  library unchanged: true
+
+rate-sample --lra-target 8 (exit 1): Error: '--lra-target' is not a directory
+report --lra-target 8 (exit 1): ERROR: "neutraliser report" was called with arguments ["<tmp>", "
+
+report and report --measure left the folder byte and mtime identical: true
+
+## Dialogue estimate against the real speech level
+mix                                                  true_speech  estimate  error  programme  ldr_reported  ldr_true
+speech only in centre, quiet effects                 -39.0        -39.1     -0.1   -34.8      4.3           4.2     
+speech only in centre, loud effects                  -39.0        -39.1     -0.1   -19.5      19.6          19.5    
+centre also carries effects at -30                   -39.0        -31.9     7.1    -19.3      12.6          19.7    
+centre also carries effects at -24                   -39.0        -26.3     12.7   -18.7      7.6           20.3    
+centre carries effects at -18 (score up the middle)  -39.0        -20.3     18.7   -16.9      3.4           22.1    

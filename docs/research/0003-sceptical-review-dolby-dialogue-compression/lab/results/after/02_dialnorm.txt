@@ -1,0 +1,62 @@
+
+## Reader vs decoder: source dialnorm -24
+asked      codec  layout      bits  heard
+mono       ac3    mono        -24   -24.0
+mono       eac3   mono        -24   -24.0
+stereo     ac3    stereo      -24   -24.0
+stereo     eac3   stereo      -24   -24.0
+3.0        ac3    3.0         -24   -24.0
+3.0        eac3   3.0         -24   -24.0
+3.0(back)  ac3    3.0(back)   -24   -24.0
+3.0(back)  eac3   3.0(back)   -24   -24.0
+4.0        ac3    4.0         -24   -23.9
+4.0        eac3   4.0         -24   -23.9
+quad       ac3    quad(side)  -24   -23.9
+quad       eac3   quad(side)  -24   -23.9
+2.1        ac3    2.1         -24   -24.0
+2.1        eac3   2.1         -24   -24.0
+5.0        ac3    5.0(side)   -24   -24.0
+5.0        eac3   5.0(side)   -24   -24.0
+5.1        ac3    5.1(side)   -24   -23.9
+5.1        eac3   5.1(side)   -24   -23.9
+5.1(side)  ac3    5.1(side)   -24   -23.9
+5.1(side)  eac3   5.1(side)   -24   -23.9
+
+## Dialnorm through each mode: source -27
+shape   codec  mode                         exit  stamped     compression      bits  heard  stamp  kept  gain  note
+stereo  ac3    default                      0     linear                       -27   -26.9  -27          6.6       
+stereo  ac3    --limit-db 4                 0     limited                      -27   -27.0  -27          8.7       
+stereo  ac3    --lra-target 3               0     compressed  extreme          -27   -27.0  -27          19.4      
+stereo  ac3    --lra-target 3 --limit-db 4  0     compressed  extreme+limiter  -27   -27.0  -27          23.4      
+stereo  ac3    --fast                       0     dynamic                      -27   -27.0  -27          -         
+stereo  ac3    --keep-original-audio        0     linear                       -27   -26.9  -27    -27   6.6       
+stereo  eac3   default                      0     linear                       -27   -26.9  -27          6.6       
+stereo  eac3   --limit-db 4                 0     limited                      -27   -27.0  -27          8.7       
+stereo  eac3   --lra-target 3               0     compressed  extreme          -27   -27.0  -27          19.4      
+stereo  eac3   --lra-target 3 --limit-db 4  0     compressed  extreme+limiter  -27   -27.0  -27          23.4      
+stereo  eac3   --fast                       0     dynamic                      -27   -27.0  -27          -         
+stereo  eac3   --keep-original-audio        0     linear                       -27   -26.9  -27    -27   6.6       
+5.1     ac3    default                      0     linear                       -27   -26.9  -27          6.2       
+5.1     ac3    --limit-db 4                 0     limited                      -27   -27.0  -27          8.2       
+5.1     ac3    --lra-target 3               0     compressed  extreme          -27   -27.0  -27          19.4      
+5.1     ac3    --lra-target 3 --limit-db 4  0     compressed  extreme+limiter  -27   -27.0  -27          23.4      
+5.1     ac3    --fast                       0     dynamic                      -27   -27.0  -27          -         
+5.1     ac3    --keep-original-audio        0     linear                       -27   -26.9  -27    -27   6.2       
+5.1     eac3   default                      0     linear                       -27   -27.0  -27          6.4       
+5.1     eac3   --limit-db 4                 0     limited                      -27   -27.0  -27          8.4       
+5.1     eac3   --lra-target 3               0     compressed  extreme          -27   -27.0  -27          19.0      
+5.1     eac3   --lra-target 3 --limit-db 4  0     compressed  extreme+limiter  -27   -26.9  -27          23.0      
+5.1     eac3   --fast                       0     dynamic                      -27   -27.0  -27          -         
+5.1     eac3   --keep-original-audio        0     linear                       -27   -27.0  -27    -27   6.4       
+
+Second generation (source -22): after first [-22, -22], after second [-22, -22]
+
+## Reading dialnorm per container: source -26
+container  read  exit  out_codec  out_bits  stamp  note
+.mkv       -26   0     ac3        -26       -26        
+.mp4       -26   0     ac3        -26       -26        
+.mov       -26   0     ac3        -26       -26        
+.avi       -26   0     ac3        -26                  
+.m4v       -26   0     ac3        -26       -26        
+
+Dialnorm that changes partway: head -24, tail -31; after the run head -24, tail -24

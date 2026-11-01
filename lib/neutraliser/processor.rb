@@ -232,8 +232,9 @@ module Neutraliser
     # Only a final outcome, reached by a run asking for the same thing.
     def resume_terminal?(entry)
       return false unless entry && FileResult.final_reason?(entry['reason'])
-      # An earlier run without --redo-recipe called these done; this one was asked to look again.
-      return false if @redo_recipes.any? && FileResult.reason?(entry['reason'], :already_processed)
+      # An earlier run called these done, and this one was asked for more. SkipDecider
+      # decides, on one probe, so a file this redo already did isn't done twice.
+      return false if (@redo_recipes.any? || @lra_target) && FileResult.done_reason?(entry['reason'])
 
       entry['profile'] == @profile[:name] && entry['target_lufs'] == @profile[:lufs] && entry['replace'] == @replace
     end
@@ -423,12 +424,13 @@ module Neutraliser
 
     def process_file_two_pass(original_path, working)
       measurement = analyze_loudness_for_path(working, original_path)
+      plan = compression_plan(working, measurement)
 
       if measurement.silent?
         log '  Primary audio track has no measurable level (silent), skipping'
         FileResult.skipped(original_path, :silent)
-      elsif compression_needed?(measurement)
-        process_file_compressed(original_path, working, measurement)
+      elsif plan
+        process_file_compressed(original_path, working, measurement, plan)
       elsif peak_limited?(measurement)
         log "  Peak-limited: max useful gain #{gain_plan(measurement).applied.round(2)} dB is under " \
             "#{@min_gain} dB towards target, skipping re-encode"
@@ -469,11 +471,13 @@ module Neutraliser
     end
 
     # --lra-target: the file's loudness range is over the target, so find the
-    # gentlest compression that brings it under, level the result to the profile
-    # target (peak limiter per --limit-db) and stamp what was done. The plan costs
-    # a few extra decodes of the file (see Compression); a dry run does them too,
+    # gentlest compression that brings it under. nil when the file needs none, or
+    # none would narrow it: it is then levelled like any other file. The search costs
+    # up to six extra decodes of the file (see Compression); a dry run does them too,
     # because what it would pick is the thing worth seeing.
-    def process_file_compressed(original_path, working, measurement)
+    def compression_plan(working, measurement)
+      return nil unless compression_needed?(measurement)
+
       primary = working.primary_track
       log "  Loudness range #{measurement.input_lra.round(1)} LU is over --lra-target #{@lra_target} " \
           "(+#{@tolerance} tolerance): finding the gentlest compression that reaches it"
@@ -481,8 +485,17 @@ module Neutraliser
                                                                             tolerance: @tolerance,
                                                                             centre_boost_db: @centre_boost.to_f,
                                                                             limit_db: @limit_db)
-      log_compression_plan(plan, primary)
+      if plan
+        log_compression_plan(plan, primary)
+      else
+        log "  No compression narrows the range by #{@tolerance} LU or more, so none is applied"
+      end
+      plan
+    end
 
+    # Levels the compressed signal to the profile target (peak limiter per
+    # --limit-db) and stamps what was done.
+    def process_file_compressed(original_path, working, measurement, plan)
       if @dry_run
         log "  [DRY RUN] Would compress (#{plan.label}) and level to #{@profile[:lufs]} LUFS"
         return FileResult.done(original_path, :dry_run)
@@ -507,7 +520,7 @@ module Neutraliser
       if @centre_boost && !plan.centre_boost_db.positive?
         log "  Note: --centre-boost skipped, the primary track is not 5.1 (layout: #{primary[:channel_layout] || 'unknown'})"
       end
-      log "  Warning: even the strongest compression (#{rung.name}) leaves LRA above --lra-target #{@lra_target}" unless plan.reached?
+      log "  Warning: no compression reaches --lra-target #{@lra_target}; #{rung.name} leaves the narrowest range" unless plan.reached?
       log '  Note: peaks will be held by a limiter (--limit-db); this pass changes dynamics a little more' if plan.limited
     end
 

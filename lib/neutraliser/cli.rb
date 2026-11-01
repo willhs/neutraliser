@@ -365,6 +365,10 @@ module Neutraliser
           .compact.join("\t")
       end
       puts report.summary
+      if result.already_done.positive?
+        puts "#{result.already_done} sampled file(s) were already normalised by an earlier run and are left out: " \
+             'this rate is only of what the recipe did'
+      end
       puts "Copies kept in #{result.work_dir}" if result.work_dir
     end
 

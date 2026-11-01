@@ -38,6 +38,18 @@ RSpec.describe Neutraliser::ManifestImport do
     expect(%w[tv/A/s1/a.mkv tv/A/s1/b.mkv movies/M/m.mkv].map { |rel| processed?(rel) }).to all(be(true))
   end
 
+  # neutralise.sh decoded with DRC on and reset dialnorm: recording its files as the current recipe would hide them from a redo.
+  it 'records what the retired script made as unversioned, so --redo-recipe unversioned finds it' do
+    path = media('m.mkv')
+    write_manifest(entry('m.mkv', 'done'))
+
+    import
+
+    expect(JSON.parse(File.read(File.join(root, '.neutraliser'))).fetch('m.mkv')).not_to have_key('recipe')
+    redo_run = Neutraliser::SkipDecider.new(root, fast_verification: false, redo_recipes: [Neutraliser::Recipe::UNVERSIONED])
+    expect(redo_run.already_processed?(path, profile)).to be(false)
+  end
+
   it 'lets the last entry for a file win' do
     media('m.mkv')
     write_manifest(entry('m.mkv', 'done'), entry('m.mkv', 'fail_encode'))

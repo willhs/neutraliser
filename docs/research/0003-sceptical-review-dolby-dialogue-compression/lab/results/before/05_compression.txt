@@ -1,0 +1,43 @@
+
+## LRA per rung, gentle to extreme (loudnorm through the same chain)
+clip                                                    I      LRA   rungs                        monotonic  bisection_vs_brute_force                                
+film-like 5.1 (LraFixture)                              -22.1  14.6  9.1 8.7 8.4 8.3 8.1 7.9      true       agrees                                                  
+two levels, 20 LU apart                                 -29.1  20.0  15.1 12.4 9.1 6.0 4.0 2.8    true       agrees                                                  
+loud bursts over a very quiet bed (bed under the gate)  -27.0  4.8   4.7 4.7 4.8 21.1 17.2 12.8   false      differs at 5,6,7,8,9,10,11,12,13,14,15,16,17,18,19,20,21
+three levels, quiet tail 30 dB down                     -31.5  11.7  9.5 20.9 17.2 13.1 9.2 5.6   false      differs at 10,11,12,13,14,15,16,17,18,19,20             
+quiet file, -45 LUFS range                              -51.0  4.8   4.7 4.6 4.5 4.4 4.4 4.3      true       agrees                                                  
+hot file, peaks near full scale                         -18.1  4.8   20.1 17.4 14.0 10.0 6.7 4.0  true       agrees                                                  
+narrow steps, 6 LU                                      -34.7  6.1   2.7 2.1 1.6 1.4 1.2 0.9      true       agrees                                                  
+
+## End to end, livingroom (-20 LUFS, -1.5 dBTP)
+clip                      target  flags         exit  mode        rung             src_LRA  lra_after  out_LRA  out_I  gain  TP    sample_peak  note
+film-like 5.1 (LraFixtur  10                    0     compressed  gentle           15.2     9.1        9.9      -19.7  6.8   -9.2  -9.2             
+film-like 5.1 (LraFixtur  10      --limit-db 4  0     compressed  gentle           15.2     9.1        9.9      -19.7  6.8   -9.2  -9.2             
+film-like 5.1 (LraFixtur  6                     0     compressed  extreme          15.2     7.9        8.1      -19.7  24.1  -6.4  -6.5             
+film-like 5.1 (LraFixtur  6       --limit-db 4  0     compressed  extreme          15.2     7.9        8.1      -19.7  24.1  -6.4  -6.5             
+two levels, 20 LU apart   10                    0     compressed  strong           19.7     9.1        8.7      -20.3  23.4  -3.9  -3.9             
+two levels, 20 LU apart   10      --limit-db 4  0     compressed  strong           19.7     9.1        8.7      -20.3  23.4  -3.9  -3.9             
+two levels, 20 LU apart   6                     0     compressed  heavy            19.7     6.0        5.6      -20.2  26.6  -2.9  -3.2             
+two levels, 20 LU apart   6       --limit-db 4  0     compressed  heavy            19.7     6.0        5.6      -20.2  26.6  -2.9  -3.2             
+loud bursts over a very   10                    0     linear                       7.8      -          7.9      -20.0  7.0   -9.6  -9.7             
+loud bursts over a very   10      --limit-db 4  0     linear                       7.8      -          7.9      -20.0  7.0   -9.6  -9.7             
+loud bursts over a very   6                     0     linear                       7.8      -          7.9      -20.0  7.0   -9.6  -9.7             
+loud bursts over a very   6       --limit-db 4  0     linear                       7.8      -          7.9      -20.0  7.0   -9.6  -9.7             
+three levels, quiet tail  10                    0     linear                       13.3     -          13.3     -20.0  11.5  -6.4  -6.8             
+three levels, quiet tail  10      --limit-db 4  0     linear                       13.3     -          13.3     -20.0  11.5  -6.4  -6.8             
+three levels, quiet tail  6                     0     compressed  extreme          13.3     5.6        5.5      -23.9  32.2  -2.7  -3.0             
+three levels, quiet tail  6       --limit-db 4  0     compressed  extreme+limiter  13.3     5.6        5.6      -19.9  36.2  -1.3  -1.7             
+quiet file, -45 LUFS ran  10                    0     linear                       8.6      -          22.1     -20.0  31.0  -8.6  -8.7             
+quiet file, -45 LUFS ran  10      --limit-db 4  0     linear                       8.6      -          22.1     -20.0  31.0  -8.6  -8.7             
+quiet file, -45 LUFS ran  6                     0     linear                       8.6      -          22.1     -20.0  31.0  -8.6  -8.7             
+quiet file, -45 LUFS ran  6       --limit-db 4  0     linear                       8.6      -          22.1     -20.0  31.0  -8.6  -8.7             
+hot file, peaks near ful  10                    0                                  8.8      -          8.8      -18.1  -     -7.1  -7.1             
+hot file, peaks near ful  10      --limit-db 4  0                                  8.8      -          8.8      -18.1  -     -7.1  -7.1             
+hot file, peaks near ful  6                     0                                  8.8      -          8.8      -18.1  -     -7.1  -7.1             
+hot file, peaks near ful  6       --limit-db 4  0                                  8.8      -          8.8      -18.1  -     -7.1  -7.1             
+narrow steps, 6 LU        10                    0     linear                       6.0      -          6.0      -20.1  14.7  -7.2  -7.5             
+narrow steps, 6 LU        10      --limit-db 4  0     linear                       6.0      -          6.0      -20.1  14.7  -7.2  -7.5             
+narrow steps, 6 LU        6                     0     linear                       6.0      -          6.0      -20.1  14.7  -7.2  -7.5             
+narrow steps, 6 LU        6       --limit-db 4  0     linear                       6.0      -          6.0      -20.1  14.7  -7.2  -7.5             
+
+Rerun same target: bytes same; stricter target: same (Already processed); without the flag: same (Already processed)

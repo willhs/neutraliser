@@ -31,7 +31,8 @@ module Neutraliser
   # method => words for a person, with the error the research measured on synthetic 5.1 mixes that had a
   # known dialogue level (real films are untested).
   DialogueEstimate::METHODS = {
-    centre_channel: 'centre channel through the EBU R 128 gate (error -0.7 to +3.4 LU on test mixes)'
+    centre_channel: 'centre channel through the EBU R 128 gate (reads high when effects or music share that channel: ' \
+                    '-0.7 to +3.4 LU on film-shaped test mixes, +18.7 LU on the worst one tried)'
   }.freeze
 
   # One file's dialogue figures: the programme loudness (LUFS), the dialogue estimate, and the dialnorm the

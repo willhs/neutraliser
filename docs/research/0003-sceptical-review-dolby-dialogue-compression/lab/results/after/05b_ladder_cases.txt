@@ -1,0 +1,12 @@
+
+## What the run picked
+clip                             limit  loudnorm_src  rung    lra_after  ebur_src  ebur_out  warning
+three levels, quiet tail         8+2    11.7          gentle  9.5        13.2      9.1              
+loud bursts, bed under the gate  3+1    4.8           -       -          7.6       7.6              
+
+## LRA meters against the known answer (tolerance in the spec: +/-1 LU)
+signal            expected  ebur128  loudnorm  loudnorm_error
+Tech 3342 case 1  10        10.0     10.0      0.0           
+Tech 3342 case 2  5         5.0      5.0       0.0           
+Tech 3342 case 3  20        20.0     20.0      0.0           
+Tech 3342 case 4  15        15.0     15.0      0.0           

@@ -85,23 +85,24 @@ RSpec.describe 'Opt-in compression (--lra-target)' do
       logged = []
       allow(Neutraliser.logger).to receive(:log) { |message| logged << message }
 
-      result = processor.send(:process_file_compressed, '/m/film.mkv', film, measurement(lra: 16.0))
+      plan = processor.send(:compression_plan, film, measurement(lra: 16.0))
+      result = processor.send(:process_file_compressed, '/m/film.mkv', film, measurement(lra: 16.0), plan)
 
       expect(result).to have_attributes(status: :done, reason: :dry_run)
       expect(logged.join("\n")).to include('Compression: gentle', 'LRA 16.0 -> 9.0 LU', '[DRY RUN] Would compress (gentle)')
       expect(Neutraliser::FFmpegWrapper).not_to have_received(:apply_normalization)
     end
 
-    it 'warns when even the strongest rung leaves the LRA over the target, and says a skipped boost was skipped' do
+    it 'warns when no rung reaches the target, and says a skipped boost was skipped' do
       boosting = Neutraliser::Processor.new(lra_target: 10, centre_boost: 4, dry_run: true)
       allow(Neutraliser::FFmpegWrapper).to receive(:measure_loudness).and_return(measurement(lra: 14.0, input_i: -30.0, input_tp: -18.0))
       logged = []
       allow(Neutraliser.logger).to receive(:log) { |message| logged << message }
 
       stereo = ProbeFixture.source('/m/film.mkv', audio: [ProbeFixture.audio(channels: 2, layout: 'stereo')])
-      boosting.send(:process_file_compressed, '/m/film.mkv', stereo, measurement(lra: 16.0))
+      boosting.send(:compression_plan, stereo, measurement(lra: 16.0))
 
-      expect(logged.join("\n")).to include('even the strongest compression (extreme) leaves LRA above --lra-target 10.0',
+      expect(logged.join("\n")).to include('no compression reaches --lra-target 10.0; gentle leaves the narrowest range',
                                            '--centre-boost skipped, the primary track is not 5.1 (layout: stereo)')
     end
   end

@@ -1,0 +1,12 @@
+
+## Same steps, six noise seeds
+seed  I      loudnorm_LRA  ebur128_LRA  gentle  moderate
+1     -31.5  11.7          13.3         23.7    20.8    
+2     -31.5  11.8          13.3         9.6     20.9    
+3     -31.5  11.7          13.3         23.7    20.8    
+4     -31.5  11.7          13.2         9.4     20.8    
+5     -31.5  11.7          13.3         9.6     20.9    
+6     -31.5  11.7          13.2         23.6    20.7    
+
+Two levels on either side of the gate: loudnorm LRA 21.1, ebur128 LRA 9.6
+7.1: loudnorm -27.0, ebur128 -25.3. 5.1: loudnorm -27.0, ebur128 -27.0

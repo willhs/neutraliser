@@ -2,10 +2,14 @@ module Neutraliser
   # Opt-in compression (--lra-target). Nothing here runs unless the caller asks:
   # the default path is constant gain.
   #
-  # The ladder is searched for the gentlest rung whose compressed signal measures
-  # at or under the LRA target (+ tolerance). Each candidate costs one decode of
-  # the file (a loudnorm measurement through the pre-chain), so the search is a
-  # bisection: LRA falls monotonically down the ladder.
+  # The ladder is walked from the gentle end for the first rung whose compressed
+  # signal measures at or under the LRA target (+ tolerance). Each candidate costs
+  # one decode of the file (a loudnorm measurement through the pre-chain): one read
+  # when the gentlest will do, six when nothing does. A bisection would cost three,
+  # but LRA does not fall steadily down the ladder: compressing the loud parts lets
+  # quiet ones back over the LRA gate, so the range can jump at one rung and come
+  # down again further on, and the middle rung says nothing about the gentler ones
+  # (measured: docs/research/0003-sceptical-review-dolby-dialogue-compression).
   module Compression
     KNEE = 4
     # acompressor's accepted threshold range (linear): -60 dB to 0 dB.
@@ -38,7 +42,7 @@ module Neutraliser
     ].freeze
 
     # What --lra-target decided for one file: the rung (gentlest that reaches the
-    # target, else the strongest), the centre boost actually applied, the
+    # target, else the one that narrows most), the centre boost actually applied, the
     # measurement before and after the pre-chain, and the constant-gain plan that
     # levels the compressed signal to the profile target.
     #
@@ -81,8 +85,10 @@ module Neutraliser
     end
 
     # Measures the file through candidate chains (FFmpegWrapper.measure_loudness
-    # with a pre_filter) and returns the Plan. `before` is the original
-    # measurement. The file is not changed.
+    # with a pre_filter) and returns the Plan, or nil when no rung reaches the target
+    # and none narrows the range by at least the tolerance: then compressing would
+    # be a permanent change for nothing, or for a wider range. `before` is the
+    # original measurement. The file is not changed.
     def plan(path, track, before, profile, lra_target:, tolerance:, centre_boost_db: 0.0, limit_db: 0.0)
       boost = centre_boost_filter(track, centre_boost_db)
       chain_for = ->(rung) { [boost, rung.filter(before.input_i)].compact.join(',') }
@@ -96,8 +102,10 @@ module Neutraliser
 
       index = first_rung_within(lra_target + tolerance, measure)
       reached = !index.nil?
-      index ||= LADDER.length - 1
+      index ||= narrowest_rung(measure)
       after = measure.call(index)
+      narrowed = before.input_lra - after.input_lra
+      return nil unless reached || (narrowed.positive? && narrowed >= tolerance)
 
       Plan.new(
         rung: LADDER[index], centre_boost_db: boost ? centre_boost_db.to_f : 0.0, before: before, after: after,
@@ -106,20 +114,15 @@ module Neutraliser
       )
     end
 
-    # Bisection for the lowest rung whose measured LRA is at or under `limit`, or
-    # nil when even the strongest is over it.
+    # The gentlest rung whose measured LRA is at or under `limit`, or nil.
     def first_rung_within(limit, measure)
-      low = 0
-      high = LADDER.length
-      while low < high
-        mid = (low + high) / 2
-        if measure.call(mid).input_lra <= limit
-          high = mid
-        else
-          low = mid + 1
-        end
-      end
-      low == LADDER.length ? nil : low
+      LADDER.each_index.find { |index| measure.call(index).input_lra <= limit }
+    end
+
+    # The rung that leaves the narrowest range, the gentler one on a tie. Not always
+    # the strongest, for the same reason LRA doesn't fall steadily.
+    def narrowest_rung(measure)
+      LADDER.each_index.min_by { |index| measure.call(index).input_lra }
     end
   end
 end

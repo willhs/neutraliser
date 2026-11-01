@@ -1,0 +1,40 @@
+
+## Planned flags, driver flags (target -20)
+source                     probed                                 exit  output             mode    stamp_codec  dialnorm  src_LRA  out_LRA  out_I  rerun         note                                                      
+DTS 5.1 .mkv               dts/DTS/5.1(side)                      0     flac/5.1(side)/24  linear  dts                    20.0     20.0     -19.9  skip                                                                    
+DTS stereo .mkv            dts/DTS/stereo                         0     flac/stereo/24     linear  dts                    20.0     20.0     -19.9  skip                                                                    
+TrueHD 5.1 .mkv            truehd//5.1(side)                      0     flac/5.1(side)/24  linear  truehd                 20.0     20.0     -19.9  skip                                                                    
+PCM 7.1 .mov               pcm_s24le//7.1                         0     pcm_s24le/7.1/24   linear  pcm_s24le              20.0     20.0     -18.2  skip                                                                    
+TrueHD 5.1 .mp4            truehd//5.1(side)                      0     eac3/5.1(side)/    linear  truehd                 20.0     20.0     -20.1  skip                                                                    
+FLAC 7.1 .mp4 (to E-AC-3)  flac//7.1                              1     flac/7.1/24                                       20.0     20.0     -24.5  looked again  Output does not match the source: normalised track has 5 c
+DTS 5.1 .mp4               dts/DTS/5.1(side)                      0     eac3/5.1(side)/    linear  dts                    20.0     20.1     -20.1  skip                                                                    
+E-AC-3 Atmos .mkv          eac3/Dolby Digital Plus + D/5.1(side)  0     eac3/5.1(side)/    linear  eac3         -27       20.0     19.9     -20.0  skip          Warning: primary track is Dolby Digital Plus + Dolby Atmos
+E-AC-3 Atmos .mp4          eac3/Dolby Digital Plus + D/5.1(side)  0     eac3/5.1(side)/    linear  eac3         -27       20.0     19.9     -20.0  skip          Warning: primary track is Dolby Digital Plus + Dolby Atmos
+E-AC-3 Atmos, no flags     eac3/Dolby Digital Plus + D/5.1(side)  0     eac3/5.1(side)/                                   20.0     20.0     -26.4  looked again  Object audio (Dolby Digital Plus + Dolby Atmos)           
+DTS 5.1, no flags          dts/DTS/5.1(side)                      0     dts/5.1(side)/                                    20.0     20.0     -26.3  looked again  Codec change (dts would be re-encoded as flac)            
+
+After flattening Atmos, does anything say it was Atmos? profile now: nil; tags mentioning it: {}
+stamp tags: VERSION PROFILE RECIPE MODE GAIN_DB SOURCE_CODEC SOURCE_BITRATE MEASURED_I MEASURED_TP MEASURED_LRA DATE SOURCE_DIALNORM
+Atmos already within tolerance, flags on: bytes same, profile "Dolby Digital Plus + Dolby Atmos"
+DTS left-alone record "codec_change", then with the flag: stamp "linear", record now nil
+
+## Size on a 30 s clip (audio only matters here)
+source           before_kib  after_kib  ratio
+DTS 5.1 .mkv     5550        15937      2.87 
+DTS stereo .mkv  2836        3224       1.14 
+TrueHD 5.1 .mkv  18095       18076      1.00 
+TrueHD 5.1 .mp4  18000       5628       0.31 
+DTS 5.1 .mp4     5533        5634       1.02 
+
+## First audio packet time, seconds
+source  delay  exit  output  before  after 
+AC-3    0.0    0     ac3     0.000   -0.005
+AC-3    0.5    0     ac3     0.500   0.495 
+E-AC-3  0.0    0     eac3    0.000   -0.005
+E-AC-3  0.5    0     eac3    0.500   0.495 
+DTS     0.0    0     flac    0.000   0.000 
+DTS     0.5    0     flac    0.500   0.500 
+TrueHD  0.0    0     flac    0.000   0.000 
+TrueHD  0.5    0     flac    0.500   0.500 
+FLAC    0.0    0     flac    0.000   0.000 
+FLAC    0.5    0     flac    0.500   0.500 

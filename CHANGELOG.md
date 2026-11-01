@@ -8,6 +8,7 @@ All notable changes to this project are documented here. The format follows
 
 ### Added
 
+- `NEUTRALISER_SOURCE_PROFILE` names what a codec change or `--allow-object-audio-loss` converted from, the only record of it once the track is gone. `NEUTRALISER_PRIOR` lists every earlier pass a re-encode went over, so a `linear` on compressed audio, or a recipe 2 over a recipe 1's baked-in DRC, doesn't read as all that happened; `report` counts them. Nothing re-levels because of either.
 - **Read-only dialogue estimate** in `report --measure` and `rate-sample`; no audio and no default changes. Per file: the dialnorm it carries, an estimated dialogue level with **the method that produced it**, and the loudness above dialogue (programme minus dialogue, EBU R 128 s4's LDR). Beside the usual remote-free rate, a second one anchored on dialogue (within 2 LU of -27 LUFS, programme at most 5 LU above it; `--dialogue-target`, `--ldr-limit`). The only method is the centre channel of 5.1 / 7.1 mixes through the EBU R 128 measurement (medium confidence); stereo and mono get no figure and are counted as not judged. `--no-dialogue` skips the extra read. A voice-activity gate is left as an optional extra ([ADR 0003](docs/design/adr/0003-optional-voice-gate-for-dialogue.md)).
 
 ### Changed
@@ -18,6 +19,14 @@ All notable changes to this project are documented here. The format follows
 
 ### Fixed
 
+- **A failed dialnorm read no longer resets dialnorm for good.** A read that failed for a reason unrelated to the file (a full temp disk, a timeout) was logged and the run went on, so the encoder wrote -31 over the source's value and the file was replaced, exit 0. The file now fails, is left alone and is tried again next run. A track whose frames really hold no dialnorm still gets the encoder's default.
+- **`--lra-target` picks the gentlest setting that works.** Its bisection assumed the loudness range falls steadily with stronger compression. It doesn't: compressing the loud parts lets quiet ones back over the LRA gate, so one test clip read 9.5, 20.9, 17.2, 13.1, 9.2, 5.6 LU down the ladder and got `severe` where `gentle` reached the target. It now walks up from the gentle end (one to six reads of the file). A target nothing reaches gets the setting that narrows most, not the strongest, which had widened another clip from 7.8 to 12.7 LU; when none narrows the range by `--tolerance`, the file is levelled without compression.
+- **`report`'s computed rate no longer flatters.** It assumed a `dynamic` file landed on target at the profile's range (a test clip called remote-free was really -26 LUFS, LRA 15.4), and added a `compressed` file's pre-compression level to its post-compression gain (14 LU out). Only `linear` stamps and left records are computed now; the rest wait for `--measure`. When files can't be judged, the rate also prints what it would be if they all failed.
+- **`rate-sample` rates only the recipe it was asked about.** A file an earlier run had normalised was skipped and then measured anyway, crediting the recipe with that run's work. Those are now left out and counted apart.
+- **`--resume` with `--redo-recipe` or `--lra-target`** skipped a file a manifest said was normalised, without looking at what the run asked for.
+- **`import-manifest` recorded files the retired script made as the current recipe**, hiding them from `--redo-recipe unversioned`. They are now unversioned.
+- **The dialogue estimate read the wrong channel on `6.0(front)` and `6.1(front)`** (a side-front centre and the LFE). They get no figure now, with the reason.
+- The CI fixture for the dialogue specs used an `amix` option ffmpeg 4.2 doesn't have.
 - **Constant gain is now constant gain on Dolby tracks.** FFmpeg's AC-3 / E-AC-3 decoder applies
   the stream's dynamic-range (DRC) words by default and its encoders write none back, so a
   `--replace` run baked the compression into the file for good while the stamp said `linear`

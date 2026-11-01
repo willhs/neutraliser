@@ -1,0 +1,12 @@
+source: DRC off I -29.2 LRA 20.0, dialnorm -24; as a DRC-on decode reads it I -42.8 LRA 12.0
+
+Image under test ghcr.io/willhs/neutraliser:latest, built 2026-10-31T14:58:52.844576113Z: has no dolby_stream.rb
+
+## The driver flags over the DRC clip: source LRA 20, dialnorm -24
+run                           exit  mode    recipe       out_LRA  out_I  dialnorm  note
+image as last pulled          0     linear  unversioned  12.0     -22.5  -31           
+same base, this tree mounted  0     linear  2            20.1     -20.0  -24           
+
+Target -42.8: recipe 1 read the clip with DRC on and left it, sidecar {"recipe"=>1, "tolerance"=>2, "profile"=>"custom-42.8"}. The truth is -29.2, 13.6 LU away.
+Restart, driver flags: bytes same: Already processed
+Restart with --redo-recipe 1: bytes changed, Replaced, now I -42.7 LRA 20.1 dialnorm -24, stamp linear
