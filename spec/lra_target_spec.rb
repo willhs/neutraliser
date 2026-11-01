@@ -229,7 +229,7 @@ RSpec.describe 'Opt-in compression (--lra-target)' do
     it 'works with --limit-db: levels a hot target through the limiter and stamps it' do
       skip 'needs ffmpeg 5.1+ for the limiter' unless Neutraliser::FFmpegWrapper.wide_filter_options?
       path = copy_fixture('limited.mkv')
-      run_cli('--lra-target', '12', '--target-level', '-12', '--limit-db', '10', path)
+      run_cli('--lra-target', '12', '--target-level', '-10', '--limit-db', '10', path)
 
       stamp = stamp_of(path)
       expect(stamp).to be_compressed

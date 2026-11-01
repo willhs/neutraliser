@@ -57,7 +57,7 @@ module Neutraliser
 
       stamp = File.exist?(file_path) ? FFmpegWrapper.read_stamp(file_path) : nil
       return false unless stamp&.profile == profile[:name] && !redo?(stamp.recipe) &&
-                    stamp_meets_lra_target?(stamp)
+                          stamp_meets_lra_target?(stamp)
 
       mark_processed(file_path, profile, recipe: stamp.recipe)
       true

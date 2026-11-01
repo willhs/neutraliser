@@ -116,7 +116,7 @@ module Neutraliser
 
     def new_skip_decider(root)
       SkipDecider.new(root, fast_verification: @fast_verify, tolerance: @tolerance, redo_recipes: @redo_recipes,
-                           lra_target: @lra_target)
+                            lra_target: @lra_target)
     end
 
     # Without a version that can name them, an Atmos track looks like plain
