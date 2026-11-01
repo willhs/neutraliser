@@ -22,11 +22,12 @@ Every file neutraliser writes carries a record of what was done to it. `Neutrali
 | Tag | Example | Meaning |
 |---|---|---|
 | `NEUTRALISER_VERSION` | `0.1.0` | neutraliser version that wrote it |
-| `NEUTRALISER_RECIPE` | `1` | Version of the leveling method that wrote it (`Neutraliser::Recipe::CURRENT`). The profile says where to aim, the recipe how it gets there. Absent on files stamped before recipes existed: those stay valid (a run counts them done) and `report` lists them as `unversioned`. A newer recipe never re-levels a file by itself; `process --redo-recipe N` (or `unversioned`) is the deliberate re-run |
+| `NEUTRALISER_RECIPE` | `2` | Version of the leveling method that wrote it (`Neutraliser::Recipe::CURRENT`). The profile says where to aim, the recipe how it gets there. Absent on files stamped before recipes existed: those stay valid (a run counts them done) and `report` lists them as `unversioned`. A newer recipe never re-levels a file by itself; `process --redo-recipe N` (or `unversioned`) is the deliberate re-run |
 | `NEUTRALISER_PROFILE` | `livingroom` | Profile name (`reference`, `livingroom`, `night`, or `custom<target>` for `--target-level`, e.g. `custom-18`). **Its presence is what marks a file as processed.** |
 | `NEUTRALISER_MODE` | `linear` | `linear` (constant gain, dynamics untouched), `limited` (constant gain plus a peak limiter, `--limit-db`), `compressed` (`--lra-target`: `acompressor`, then constant gain) or `dynamic` (loudnorm compressed the dynamic range) |
 | `NEUTRALISER_GAIN_DB` | `-1.50` | Constant gain applied, in dB (before the limiter, for `limited`). Empty for `dynamic` |
 | `NEUTRALISER_SOURCE_CODEC` | `eac3` | Primary audio codec before re-encoding |
+| `NEUTRALISER_SOURCE_DIALNORM` | `-24` | Only for AC-3 / E-AC-3 sources re-encoded to AC-3 / E-AC-3: the source track's dialnorm in dB, which the output carries too (`-dialnorm`), so it differs from the source by the gain and nothing else. FFmpeg's encoders write -31 otherwise. Empty for other sources, and when the source's could not be read (the output then has -31). Recipe 2 and later |
 | `NEUTRALISER_SOURCE_BITRATE` | `640000` | Source bitrate in bit/s (probed or estimated). Empty if unknown |
 | `NEUTRALISER_MEASURED_I` | `-23.10` | Integrated loudness before, LUFS. Empty in `--fast` mode (no analysis pass) |
 | `NEUTRALISER_MEASURED_TP` | `-6.00` | True peak before, dBTP. Empty in `--fast` mode |
@@ -90,6 +91,7 @@ The record lives in the file because the sidecar is tied to the run's root direc
 - docs/ops/runbook.md
 
 ### Change Log
+- 2026-11-01 (agent:dolby-metadata): Added `NEUTRALISER_SOURCE_DIALNORM`; recipe 2 (AC-3 / E-AC-3 decoded with `-drc_scale 0`, dialnorm carried); analysis cache version 1.2
 - 2026-11-01 (agent:no-regret-groundwork): Added `NEUTRALISER_RECIPE`, the sidecar `recipe` and `left` records
 - 2026-10-20 (agent:prod-parity): Added `limited` mode, `codec_change`/`low_disk`/`peak_limited` skip reasons, output-match verification, sidecar-in-own-folder rule
 - 2026-10-15 (agent:preflight-failures): Documented failure reasons and the one-line failure message

@@ -23,6 +23,7 @@ A Ruby CLI tool that normalises audio volume in video files using industry-stand
 - **`DiskGuard`** / **`RunLock`**: `--min-free-gb`/`--abort-free-gb` floors; `--lock-file` flock run lock
 - **`ManifestImport`**: `neutraliser import-manifest` — carries the retired `neutralise.sh` manifest into `.neutraliser` sidecars
 - **`Report`**: `neutraliser report PATH` — reads stamps and left-alone records, counts linear/dynamic/untouched, profiles and recipes, and the remote-free rate (`--measure` reads the files instead of computing from the records)
+- **`DolbyStream`**: what keeps constant gain constant on AC-3 / E-AC-3: every decode takes `-drc_scale 0` (FFmpeg applies the stream's DRC by default and its encoders write none back), and the source's dialnorm (read from the raw stream's first frames) is passed to the encoder (`-dialnorm`) and stamped, since the encoders write -31 otherwise
 - **`Recipe`**: version of the leveling method (`NEUTRALISER_RECIPE`); a run never re-levels a file because of it, only `process --redo-recipe` does (files from before recipes are `unversioned`)
 - **`LeftRecord`**: why a file was left alone (peak-limited, object audio, codec change, within tolerance) and its measured levels, kept in the sidecar with no top-level `profile` so it never counts as done
 - **`FinalLevels`** / **`RemoteFreeRate`**: where a file ends up, and the share within 2 LU of target at or under an LRA limit; a `limited` file is not computed (a limiter lands short), only measured

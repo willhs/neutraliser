@@ -25,6 +25,15 @@ RSpec.describe Neutraliser::Stamp do
     expect(stamp.with(recipe: nil).recipe).to be_nil
   end
 
+  it 'carries the source dialnorm, and leaves it empty when there was none' do
+    dolby = stamp.with(source_dialnorm: -24)
+
+    expect(dolby.to_tags).to include('NEUTRALISER_SOURCE_DIALNORM' => '-24')
+    expect(described_class.from_tags(dolby.to_tags).source_dialnorm).to eq(-24)
+    expect(stamp.to_tags).to include('NEUTRALISER_SOURCE_DIALNORM' => '')
+    expect(described_class.from_tags(stamp.to_tags).source_dialnorm).to be_nil
+  end
+
   it 'writes every field, empty when unknown, so stale tags from an earlier run are deleted' do
     tags = described_class.now(profile: 'night', mode: 'dynamic', gain_db: nil, source_codec: 'aac',
                                source_bitrate: nil, measured_i: nil, measured_tp: nil, measured_lra: nil).to_tags

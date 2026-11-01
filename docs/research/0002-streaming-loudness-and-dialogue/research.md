@@ -39,7 +39,7 @@ Researched 2026-11-01. Vision alignment: Have an online presence (goal: Release 
 
 **Order of work** (all filed in Steady):
 
-1. Fix the DRC and dialnorm bugs: `bb559c56`
+1. Fix the DRC and dialnorm bugs: `bb559c56` (done)
 2. Update the README and drafts for Plex's new features: `1d89336a`
 3. Add a read-only dialogue estimate to `report` and `rate-sample`: `7b0e5fc9`
 4. Play a [test pair](#test-your-own-clients) on your own clients (your job, ten minutes): `9125b183`
@@ -203,7 +203,7 @@ Neutraliser reports success, while a client honouring dialnorm now hears a bigge
 
 Seven clips show it happens. They can't say how often.
 
-**Fix** (`bb559c56`): decode with `-drc_scale 0` and pass the source's dialnorm through `-dialnorm`, so the output differs from the source by the gain and nothing else. This needs a recipe bump because measured levels change.
+**Fix** (`bb559c56`, done 2026-11-01: `DolbyStream`, recipe 2, `spec/dolby_metadata_spec.rb`): decode with `-drc_scale 0` and pass the source's dialnorm through `-dialnorm`, so the output differs from the source by the gain and nothing else. This needs a recipe bump because measured levels change.
 
 ### (a) Measuring dialogue: feasible?
 

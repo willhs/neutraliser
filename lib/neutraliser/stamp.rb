@@ -16,22 +16,26 @@ module Neutraliser
   # 'compressed': the rung used, the centre boost applied and the LRA the
   # compressed signal measured before the final encode.
   #
+  # source_dialnorm is the Dolby dialnorm (dB, -31 to -1) the source track carried and the output
+  # carries too (DolbyStream); nil when the source wasn't AC-3 / E-AC-3.
+  #
   # recipe is the leveling method's version (Recipe); nil on a stamp from before
   # versioning, which stays valid.
   Stamp = Data.define(:version, :profile, :recipe, :mode, :gain_db, :source_codec, :source_bitrate,
                       :measured_i, :measured_tp, :measured_lra, :date,
-                      :compression, :centre_boost_db, :lra_after)
+                      :compression, :centre_boost_db, :lra_after, :source_dialnorm)
 
   class Stamp
-    # The compression fields are absent from every non-compressed stamp.
-    def initialize(compression: nil, centre_boost_db: nil, lra_after: nil, **fields)
+    # The compression fields are absent from every non-compressed stamp; source_dialnorm from every
+    # one whose source wasn't AC-3 / E-AC-3 (or whose dialnorm couldn't be read).
+    def initialize(compression: nil, centre_boost_db: nil, lra_after: nil, source_dialnorm: nil, **fields)
       super
     end
 
     def self.tag_name(field) = "NEUTRALISER_#{field.upcase}"
 
     FLOAT_FIELDS = %i[gain_db measured_i measured_tp measured_lra centre_boost_db lra_after].freeze
-    INTEGER_FIELDS = %i[source_bitrate recipe].freeze
+    INTEGER_FIELDS = %i[source_bitrate recipe source_dialnorm].freeze
 
     # Builds a Stamp from probed tags (stream or container level). Tag-name
     # case varies by container, so keys are matched case-insensitively.

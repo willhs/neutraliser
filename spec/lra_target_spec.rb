@@ -126,7 +126,8 @@ RSpec.describe 'Opt-in compression (--lra-target)' do
         gain_plan: Neutraliser::GainPlan.for(measurement(lra: 10.0, input_i: -28.0, input_tp: -15.0), profile)
       )
       allow(Neutraliser::FFmpegWrapper).to receive_messages(stream_counts: { video: 0, subtitle: 0 },
-                                                            output_container: '.mkv', execute_with_timeout: ['', '', ok_status])
+                                                            output_container: '.mkv', source_dialnorm: nil,
+                                                            execute_with_timeout: ['', '', ok_status])
 
       result = Neutraliser::FFmpegWrapper.apply_normalization(
         'in.mkv', 'out.mkv', measurement(lra: 16.0), profile, compression: plan,

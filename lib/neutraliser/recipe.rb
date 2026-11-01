@@ -12,7 +12,9 @@ module Neutraliser
   # SkipDecider), because re-leveling a library is a decision, not a side
   # effect of upgrading.
   module Recipe
-    CURRENT = 1
+    # 2: AC-3 / E-AC-3 tracks are decoded with the stream's DRC off and keep their dialnorm
+    # (DolbyStream), so their measured levels, and the gain from them, differ from recipe 1.
+    CURRENT = 2
     UNVERSIONED = nil
     UNVERSIONED_LABEL = 'unversioned'.freeze
 

@@ -139,7 +139,7 @@ module Neutraliser
     # slice taken from the start systematically under-reports loudness.
     def self.measure_loudness(input_path, target_i: -20.0, target_tp: -1.5, target_lra: 12.0, input_args: [],
                               duration: nil, start_offset: nil, audio_index: 0, pre_filter: nil)
-      cmd = ['ffmpeg', '-hide_banner', '-nostats', *input_args]
+      cmd = ['ffmpeg', '-hide_banner', '-nostats', *DolbyStream::DRC_OFF, *input_args]
       cmd += ['-ss', start_offset.round.to_s] if start_offset&.positive?
       cmd += ['-i', input_path]
       cmd += ['-t', duration.to_s] if duration
@@ -250,7 +250,7 @@ module Neutraliser
       start_time = (total_duration - duration) / 2
 
       cmd = [
-        'ffmpeg', '-hide_banner', '-nostats',
+        'ffmpeg', '-hide_banner', '-nostats', *DolbyStream::DRC_OFF,
         '-ss', start_time.to_s, '-i', input_path,
         '-t', duration.to_s,
         '-map', "0:a:#{audio_index}",
@@ -337,7 +337,8 @@ module Neutraliser
       primary_track = primary_audio_track(audio_tracks)
 
       container = output_container(input_path, output_path)
-      codec_decision = select_output_codec(primary_track, output_path, input_path, container: container)
+      codec_decision = carry_dialnorm(select_output_codec(primary_track, output_path, input_path, container: container),
+                                      input_path, primary_track)
       codec_args = build_codec_args(codec_decision, primary_track[:index])
 
       # A CompressionPlan (--lra-target) wraps the GainPlan for the compressed signal.
@@ -385,7 +386,8 @@ module Neutraliser
       primary_track = primary_audio_track(audio_tracks)
 
       container = output_container(input_path, output_path)
-      codec_decision = select_output_codec(primary_track, output_path, input_path, container: container)
+      codec_decision = carry_dialnorm(select_output_codec(primary_track, output_path, input_path, container: container),
+                                      input_path, primary_track)
       codec_args = build_codec_args(codec_decision, primary_track[:index])
 
       loudnorm_filter = "loudnorm=I=#{profile[:lufs]}:TP=#{profile[:tp]}:LRA=#{loudnorm_lra(profile[:lra])}:print_format=summary"
@@ -775,8 +777,38 @@ module Neutraliser
     def self.build_codec_args(codec_decision, output_index = 0)
       args = ["-c:a:#{output_index}", codec_decision[:encoder]]
       args += ["-b:a:#{output_index}", "#{codec_decision[:bitrate] / 1000}k"] if codec_decision[:bitrate]
+      args += ["-dialnorm:a:#{output_index}", codec_decision[:dialnorm].to_s] if codec_decision[:dialnorm]
       args
     end
+
+    # The Dolby encoders write dialnorm -31 unless told otherwise, which would strip a source's
+    # attenuation (see DolbyStream). Adds the source's own value to the decision when both ends are
+    # Dolby and it can be read; a track it can't be read from gets the encoder's default, as before.
+    def self.carry_dialnorm(codec_decision, input_path, track)
+      return codec_decision unless DolbyStream.dolby_codec?(track[:codec]) && DolbyStream.dolby_encoder?(codec_decision[:encoder])
+
+      dialnorm = source_dialnorm(input_path, track)
+      dialnorm ? codec_decision.merge(dialnorm: dialnorm) : codec_decision
+    end
+
+    # The track's dialnorm in dB, read from its first few frames stream-copied to a raw file, or nil
+    # (logged) when that fails: ffprobe doesn't report it.
+    def self.source_dialnorm(input_path, track)
+      format = DolbyStream.raw_format(track[:codec])
+      Dir.mktmpdir('neutraliser-dialnorm') do |dir|
+        raw = File.join(dir, "head.#{format}")
+        cmd = ['ffmpeg', '-hide_banner', '-nostats', '-v', 'error', '-y', '-i', input_path, '-map', "0:a:#{track[:index]}",
+               '-c', 'copy', '-frames:a', DIALNORM_PROBE_FRAMES.to_s, '-f', format, raw]
+        _, stderr, status = execute_with_timeout(cmd, QUICK_TIMEOUT, 'Dialnorm read')
+        raise FFmpegError.from_run('Dialnorm read', stderr, status) unless status.success?
+
+        DolbyStream.dialnorm(File.binread(raw)) || raise(FFmpegError, 'no dialnorm in the first frames')
+      end
+    rescue StandardError => e
+      Neutraliser.logger.log "  Could not read the source dialnorm (#{e.message.lines.first&.strip}); the output gets the encoder's -31"
+      nil
+    end
+    DIALNORM_PROBE_FRAMES = 8
 
     def self.build_loudnorm_filter(measured, target_i, target_tp, target_lra)
       "loudnorm=I=#{target_i}:TP=#{target_tp}:LRA=#{loudnorm_lra(target_lra)}" \
@@ -821,7 +853,7 @@ module Neutraliser
     def self.build_stamp(profile, normalization_type, codec_decision, gain:, measured:, compression: nil)
       Stamp.now(
         profile: profile[:name], mode: normalization_type.downcase, gain_db: gain,
-        source_codec: codec_decision[:source_codec],
+        source_codec: codec_decision[:source_codec], source_dialnorm: codec_decision[:dialnorm],
         source_bitrate: codec_decision[:source_bitrate].to_i.positive? ? codec_decision[:source_bitrate] : nil,
         measured_i: measured&.input_i, measured_tp: measured&.input_tp, measured_lra: measured&.input_lra,
         **(compression ? compression.stamp_fields : {})
@@ -895,7 +927,8 @@ module Neutraliser
                                            stream_counts = { video: 0, subtitle: 0 }, tags: [], keep_original: false,
                                            container_opts: [])
       cmd = [
-        'ffmpeg', '-hide_banner', '-y', '-i', input_path,
+        # The decode hears the stream as the viewer who turned DRC off does, as the measurement did.
+        'ffmpeg', '-hide_banner', '-y', *DolbyStream::DRC_OFF, '-i', input_path,
         # Video stream - always copy
         '-map', '0:v?', '-c:v', 'copy'
       ]
@@ -1041,6 +1074,8 @@ module Neutraliser
                          :build_complete_ffmpeg_command,
                          :original_title,
                          :original_copy?,
+                         :carry_dialnorm,
+                         :source_dialnorm,
                          :execute_with_progress
   end
 end

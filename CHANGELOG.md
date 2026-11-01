@@ -10,6 +10,21 @@ All notable changes to this project are documented here. The format follows
 
 - Docs only: the vision now says dialogue steady across the library with loud moments limited, and the README no longer claims the tool never compresses. No behaviour change. The 0.1 criteria are in `docs/work/roadmap.md`; 0.1 is undated until they pass.
 
+### Fixed
+
+- **Constant gain is now constant gain on Dolby tracks.** FFmpeg's AC-3 / E-AC-3 decoder applies
+  the stream's dynamic-range (DRC) words by default and its encoders write none back, so a
+  `--replace` run baked the compression into the file for good while the stamp said `linear`
+  (a 20 LU test clip came out at 12 LU). Every decode (measurement, sampling, the normalise pass)
+  now uses `-drc_scale 0`. And the encoders write dialnorm -31 unless told otherwise, so a
+  re-encoded track lost its source's attenuation while a left-alone file kept it (two files
+  6 LU apart ended 7 LU apart the other way on a decoder that honours dialnorm). The source's
+  dialnorm is now read and passed to the encoder, recorded as `NEUTRALISER_SOURCE_DIALNORM` and
+  shown by `report`. **Recipe is now 2**, and the analysis cache is invalidated (version 1.2):
+  measured levels change for these tracks. Files already processed keep recipe 1 and any DRC
+  already baked in; `--redo-recipe 1` can level them again but cannot undo it. Only a kept
+  original (`--keep-original-audio`) can.
+
 ### Added
 
 - Stamps record a **recipe version** (`NEUTRALISER_RECIPE`, also in the sidecar). Files stamped

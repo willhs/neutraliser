@@ -12,7 +12,7 @@ module Neutraliser
   class Report
     FORMATS = %w[summary tsv json].freeze
     RECORD_FIELDS = %i[profile recipe gain_db source_codec source_bitrate measured_i measured_tp measured_lra
-                       compression centre_boost_db lra_after].freeze
+                       compression centre_boost_db lra_after source_dialnorm].freeze
     TSV_FIELDS = (RECORD_FIELDS + %i[version date]).freeze
     OUTPUT_FIELDS = %w[output_i output_lra output_basis remote_free].freeze
 
@@ -57,6 +57,7 @@ module Neutraliser
         untouched: states.fetch('untouched', 0),
         profiles: rows.filter_map { |row| row.stamp&.profile }.tally.sort.to_h,
         recipes: rows.filter_map(&:recipe_label).tally.sort_by { |label, _| label }.to_h,
+        dialnorms: rows.filter_map { |row| row.stamp&.source_dialnorm }.tally.sort.to_h,
         left: rows.filter_map { |row| row.left&.reason }.tally.sort.to_h
       }
     end
@@ -75,6 +76,7 @@ module Neutraliser
       lines << "    left alone: #{c[:left].map { |reason, n| "#{reason}=#{n}" }.join(', ')}" if c[:left].any?
       lines << "Profiles: #{c[:profiles].map { |name, n| "#{name}=#{n}" }.join(', ')}" if c[:profiles].any?
       lines << "Recipes: #{c[:recipes].map { |label, n| "#{label}=#{n}" }.join(', ')}" if c[:recipes].any?
+      lines << "Dialnorm carried over (dB): #{c[:dialnorms].map { |db, n| "#{db}=#{n}" }.join(', ')}" if c[:dialnorms].any?
       lines << rate.summary
       lines.join("\n")
     end

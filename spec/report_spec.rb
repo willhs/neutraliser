@@ -33,8 +33,21 @@ RSpec.describe Neutraliser::Report do
   it 'counts linear, dynamic and untouched files and the profile mix' do
     expect(described_class.new(dir).counts).to eq(
       total: 4, linear: 2, limited: 0, compressed: 0, dynamic: 1, untouched: 1,
-      profiles: { 'livingroom' => 2, 'night' => 1 }, recipes: { '1' => 3 }, left: {}
+      profiles: { 'livingroom' => 2, 'night' => 1 }, recipes: { Neutraliser::Recipe::CURRENT.to_s => 3 }, dialnorms: {}, left: {}
     )
+  end
+
+  it 'shows the dialnorm carried over, when any file has one' do
+    expect(described_class.new(dir).summary).not_to include('Dialnorm')
+
+    allow(Neutraliser::FFmpegWrapper).to receive(:read_stamp) do |path|
+      stamps.fetch(path.delete_prefix("#{dir}/"))&.with(source_dialnorm: -24)
+    end
+    report = described_class.new(dir)
+
+    expect(report.counts[:dialnorms]).to eq(-24 => 3)
+    expect(report.summary).to include('Dialnorm carried over (dB): -24=3')
+    expect(report.to_tsv.lines.first.split("\t")).to include('source_dialnorm')
   end
 
   it 'summarises the counts' do
@@ -50,7 +63,7 @@ RSpec.describe Neutraliser::Report do
 
     expect(lines.first).to start_with("file\tstate\tprofile\trecipe\tgain_db")
     expect(lines.size).to eq(5)
-    expect(lines.find { |l| l.include?('a.mkv') }.split("\t")[1..3]).to eq(%w[linear livingroom 1])
+    expect(lines.find { |l| l.include?('a.mkv') }.split("\t")[1..3]).to eq(['linear', 'livingroom', Neutraliser::Recipe::CURRENT.to_s])
     expect(lines.find { |l| l.include?('c.mkv') }.split("\t")[1]).to eq('untouched')
   end
 
@@ -97,8 +110,8 @@ RSpec.describe Neutraliser::Report do
     end
 
     it 'counts recipes, with files from before recipes as unversioned' do
-      expect(described_class.new(dir).counts[:recipes]).to eq('1' => 3, 'unversioned' => 1)
-      expect(described_class.new(dir).summary).to include('Recipes: 1=3, unversioned=1')
+      expect(described_class.new(dir).counts[:recipes]).to eq(Neutraliser::Recipe::CURRENT.to_s => 3, 'unversioned' => 1)
+      expect(described_class.new(dir).summary).to include("Recipes: #{Neutraliser::Recipe::CURRENT}=3, unversioned=1")
     end
 
     it 'judges what it can from the records and counts the rest apart' do

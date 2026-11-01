@@ -23,7 +23,7 @@ RSpec.describe Neutraliser::FFmpegWrapper do
 
       expect(described_class).to have_received(:execute_with_timeout).with(
         [
-          'ffmpeg', '-hide_banner', '-nostats', '-i', 'test.mp4',
+          'ffmpeg', '-hide_banner', '-nostats', '-drc_scale', '0', '-i', 'test.mp4',
           '-map', '0:a:0',
           '-af', 'loudnorm=I=-20.0:TP=-1.5:LRA=12.0:print_format=json',
           '-f', 'null', '-'
@@ -168,6 +168,7 @@ RSpec.describe Neutraliser::FFmpegWrapper do
     before do
       allow(described_class).to receive(:stream_counts).and_return(video: 0, subtitle: 0)
       allow(described_class).to receive(:output_container) { |_input, output| File.extname(output).downcase }
+      allow(described_class).to receive(:source_dialnorm).and_return(nil)
     end
 
     it 'uses source-matched codec for primary track and copies additional tracks' do
@@ -188,6 +189,57 @@ RSpec.describe Neutraliser::FFmpegWrapper do
       expect(result[:encoder]).to eq('ac3')
       expect(result[:bitrate]).to eq(448_000)
       expect(result[:normalization_type]).to eq('Linear')
+    end
+
+    describe 'Dolby loudness metadata' do
+      let(:ac3_track) { { index: 0, channels: 6, codec: 'ac3', bit_rate: 448_000, sample_rate: 48_000 } }
+
+      def command_for(track)
+        allow(described_class).to receive(:execute_with_timeout).and_return(['', 'Normalization Type:   Linear', ok_status])
+        result = described_class.apply_normalization('in.mkv', 'out.mkv', measured_data, profile, audio_tracks: [track])
+        captured = nil
+        expect(described_class).to have_received(:execute_with_timeout) { |cmd, *_| captured ||= cmd }
+        [captured, result]
+      end
+
+      it 'decodes with the stream DRC off, ahead of the input' do
+        cmd, = command_for(ac3_track)
+
+        expect(cmd.each_cons(2).to_a).to include(['-drc_scale', '0'])
+        expect(cmd.index('-drc_scale')).to be < cmd.index('-i')
+      end
+
+      it 'gives the encoder the source dialnorm and stamps it' do
+        allow(described_class).to receive(:source_dialnorm).with('in.mkv', ac3_track).and_return(-24)
+
+        cmd, result = command_for(ac3_track)
+
+        expect(cmd.each_cons(2).to_a).to include(['-dialnorm:a:0', '-24'], ['-metadata:s:a:0', 'NEUTRALISER_SOURCE_DIALNORM=-24'])
+        expect(result[:dialnorm]).to eq(-24)
+      end
+
+      it 'leaves the encoder default when the dialnorm can not be read' do
+        cmd, result = command_for(ac3_track)
+
+        expect(cmd).not_to include('-dialnorm:a:0')
+        expect(result).not_to have_key(:dialnorm)
+      end
+
+      it 'passes no dialnorm for an AAC track' do
+        expect(described_class).not_to receive(:source_dialnorm)
+
+        cmd, = command_for({ index: 0, channels: 2, codec: 'aac', bit_rate: 128_000, sample_rate: 48_000 })
+
+        expect(cmd.join(' ')).not_to include('-dialnorm')
+      end
+
+      it 'passes no dialnorm for a DTS track encoded to E-AC-3: the source has none of the Dolby kind' do
+        expect(described_class).not_to receive(:source_dialnorm)
+
+        cmd, = command_for({ index: 0, channels: 6, codec: 'dts', bit_rate: 1_509_000, sample_rate: 48_000 })
+
+        expect(cmd.join(' ')).not_to include('-dialnorm')
+      end
     end
 
     describe 'default-disposition primary' do

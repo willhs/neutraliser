@@ -4,7 +4,7 @@ require 'time'
 
 module Neutraliser
   class CacheManager
-    CACHE_VERSION = '1.1'
+    CACHE_VERSION = '1.2'
 
     def initialize(enabled: true)
       @enabled = enabled
