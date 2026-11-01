@@ -9,7 +9,7 @@ A Ruby CLI tool that normalises audio volume in video files using industry-stand
 - **Language**: Ruby
 - **Type**: Command-line interface with Thor
 - **Purpose**: EBU R128 video audio volume normalisation
-- **Dependencies**: FFmpeg for video/audio processing (tested on 5.1 and 7.1; Atmos/DTS:X detection needs 7.1+)
+- **Dependencies**: FFmpeg for video/audio processing (CI runs 4.2.2 and 7.1; `--limit-db` and the `reference` profile's LRA 50 under `--allow-dynamic` need 5.1+, Atmos/DTS:X detection needs 7.1+)
 - **Status**: ✅ **FULLY IMPLEMENTED** - Production ready
 
 ## Architecture Overview

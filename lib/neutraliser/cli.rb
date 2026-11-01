@@ -134,49 +134,6 @@ module Neutraliser
       exit EXIT_SIGNAL_BASE + e.signo
     end
 
-    no_commands do
-      def gib(value) = value && (value * DiskGuard::GIB).to_i
-
-      # The only place a bad option combination (--fast without --allow-dynamic)
-      # surfaces. Anything raised once the run is under way is a real error, not
-      # a usage message.
-      def build_processor
-        guard = DiskGuard.new(min_free: gib(options[:min_free_gb]), abort_free: gib(options[:abort_free_gb]))
-        Processor.new(
-          replace: options[:replace],
-          target_level: options[:target_level],
-          profile: options[:profile],
-          tolerance: options[:tolerance],
-          cache: options[:cache],
-          dry_run: options[:dry_run],
-          fast_verify: options[:fast_verify],
-          resume: options[:resume],
-          fast: options[:fast],
-          local_stage: options[:local_stage],
-          allow_dynamic: options[:allow_dynamic],
-          allow_object_audio_loss: options[:allow_object_audio_loss],
-          keep_original_audio: options[:keep_original_audio],
-          limit_db: options[:limit_db],
-          min_gain: options[:min_gain],
-          allow_codec_change: options[:allow_codec_change],
-          disk_guard: guard
-        )
-      rescue ArgumentError, FileManagerError, SystemCallError => e
-        raise Thor::Error, "Error: #{e.message}"
-      end
-
-      def run_locked(lock_file, &block)
-        return yield unless lock_file
-
-        RunLock.hold(lock_file, &block)
-      rescue RunLock::Busy => e
-        warn "Error: #{e.message}"
-        exit EXIT_LOCK_BUSY
-      rescue RunLock::Unavailable => e
-        raise Thor::Error, "Error: #{e.message}"
-      end
-    end
-
     desc 'analyze-plex', 'Analyze Plex library audio levels'
     option :server_url, type: :string, default: 'http://localhost:32400', desc: 'Plex server URL'
     option :token, type: :string, desc: 'Plex authentication token (overrides .env)'
@@ -306,6 +263,49 @@ module Neutraliser
     def self.command_known?(name)
       candidates = [name, name.tr('-', '_')]
       candidates.any? { |c| all_commands.key?(c) || subcommands.include?(c) }
+    end
+
+    private
+
+    def gib(value) = value && (value * DiskGuard::GIB).to_i
+
+    # The only place a bad option combination (--fast without --allow-dynamic)
+    # surfaces. Anything raised once the run is under way is a real error, not
+    # a usage message.
+    def build_processor
+      guard = DiskGuard.new(min_free: gib(options[:min_free_gb]), abort_free: gib(options[:abort_free_gb]))
+      Processor.new(
+        replace: options[:replace],
+        target_level: options[:target_level],
+        profile: options[:profile],
+        tolerance: options[:tolerance],
+        cache: options[:cache],
+        dry_run: options[:dry_run],
+        fast_verify: options[:fast_verify],
+        resume: options[:resume],
+        fast: options[:fast],
+        local_stage: options[:local_stage],
+        allow_dynamic: options[:allow_dynamic],
+        allow_object_audio_loss: options[:allow_object_audio_loss],
+        keep_original_audio: options[:keep_original_audio],
+        limit_db: options[:limit_db],
+        min_gain: options[:min_gain],
+        allow_codec_change: options[:allow_codec_change],
+        disk_guard: guard
+      )
+    rescue ArgumentError, FileManagerError, SystemCallError => e
+      raise Thor::Error, "Error: #{e.message}"
+    end
+
+    def run_locked(lock_file, &)
+      return yield unless lock_file
+
+      RunLock.hold(lock_file, &)
+    rescue RunLock::Busy => e
+      warn "Error: #{e.message}"
+      exit EXIT_LOCK_BUSY
+    rescue RunLock::Unavailable => e
+      raise Thor::Error, "Error: #{e.message}"
     end
   end
 end

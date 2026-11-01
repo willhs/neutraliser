@@ -25,6 +25,10 @@ All notable changes to this project are documented here. The format follows
 
 ### Fixed
 
+- On ffmpeg older than 5.1 (4.2 was checked), every file failed under the `reference`
+  profile: `loudnorm` rejects the profile's loudness range of 50. It now gets 20 there, which
+  changes nothing for constant gain. `--limit-db` needs 5.1 or newer, so older builds now
+  refuse it up front instead of failing inside ffmpeg. CI runs ffmpeg 4.2.2 and 7.1.
 - `--replace` lost MKV attachments (subtitle fonts), MP4 cover art and iTunes atoms, and the
   primary track's dispositions other than default.
 - `--replace` overwrote a file that was still being written. It now fails with

@@ -15,6 +15,8 @@ module Neutraliser
                                     'add --allow-dynamic (or use the night profile) to accept that'.freeze
     LIMIT_NEEDS_CONSTANT_GAIN_MESSAGE = '--limit-db adds a peak limiter to constant gain; ' \
                                         'it cannot combine with --allow-dynamic, --fast or the night profile'.freeze
+    LIMIT_NEEDS_NEWER_FFMPEG_MESSAGE = '--limit-db needs ffmpeg 5.1 or newer (its limiter has no latency option before that); ' \
+                                       'upgrade ffmpeg or use the Docker image'.freeze
     # The only manifest records --resume takes as the last word on a file. Every
     # other outcome depends on something that can change between runs (a flag,
     # free space, the ffmpeg version, or a dry run that did nothing) and goes
@@ -50,6 +52,7 @@ module Neutraliser
       raise ArgumentError, FAST_REQUIRES_DYNAMIC_MESSAGE if @fast && !@allow_dynamic
       raise ArgumentError, LIMIT_NEEDS_CONSTANT_GAIN_MESSAGE if @limit_db.positive? && @allow_dynamic
       raise ArgumentError, '--limit-db cannot be negative' if @limit_db.negative?
+      raise ArgumentError, LIMIT_NEEDS_NEWER_FFMPEG_MESSAGE if @limit_db.positive? && !FFmpegWrapper.wide_filter_options?
 
       @stager = LocalStager.new(enabled: local_stage)
     end
@@ -297,6 +300,21 @@ module Neutraliser
       summary[:not_writable_dirs].each { |dir| log "  #{dir}" }
     end
 
+    # A file with nothing to level: unreadable (a failure, it may be mid-write)
+    # or readable but silent of audio (a skip). nil when there is a track.
+    def check_audio_stream(file_path, movie)
+      return if movie.audio_stream
+
+      unless movie.valid?
+        message = 'ffprobe could not read this file; it may be corrupt or still being written'
+        log "  Unreadable: #{message}"
+        return file_result(file_path, status: :failed, reason: :unreadable, message: message)
+      end
+
+      log '  No audio track found, skipping'
+      file_result(file_path, status: :skipped, reason: :no_audio_track)
+    end
+
     # Everything per-file happens under these rescues, so one bad file (a name
     # Ruby chokes on, a folder that vanished) is that file's failure, not the end
     # of a library run. Only a disk-guard abort is meant to stop the run.
@@ -328,16 +346,8 @@ module Neutraliser
         # name that isn't valid UTF-8 (Latin-1 names are common on older NASes).
         movie = FFMPEG::Movie.new(working_path.b)
 
-        unless movie.audio_stream
-          unless movie.valid?
-            message = 'ffprobe could not read this file; it may be corrupt or still being written'
-            log "  Unreadable: #{message}"
-            next file_result(file_path, status: :failed, reason: :unreadable, message: message)
-          end
-
-          log '  No audio track found, skipping'
-          next file_result(file_path, status: :skipped, reason: :no_audio_track)
-        end
+        no_audio = check_audio_stream(file_path, movie)
+        next no_audio if no_audio
 
         audio_tracks = FFmpegWrapper.detect_audio_tracks(working_path)
         # Not stamped in the sidecar: a later --allow-object-audio-loss run
