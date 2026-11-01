@@ -97,7 +97,7 @@ Neutraliser does the one job: make the library level, leave everything else alon
 ## Requirements
 
 - **Ruby** 3.2+
-- **FFmpeg** with `ffprobe` on your `PATH`. Tested on 5.1 and 7.1; **7.1 or newer** is what detects Atmos / DTS:X
+- **FFmpeg** with `ffprobe` on your `PATH`. Works from 4.2 (CI runs 4.2.2 and 7.1); **7.1 or newer** is what detects Atmos / DTS:X, and `--limit-db` needs 5.1 or newer. On anything older than 5.1 the `reference` profile asks `loudnorm` for a loudness range of 20 instead of 50, which only matters with `--allow-dynamic`
 - *(Optional)* a Plex token in `.env` for `analyze-plex`
 
 Check FFmpeg with `ffmpeg -version`. On macOS: `brew install ffmpeg`. On Debian/Ubuntu: `sudo apt install ffmpeg`, though many releases ship older than 7.1, in which case the Docker image is the easy way to get it.

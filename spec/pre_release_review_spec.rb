@@ -9,9 +9,17 @@ require 'tmpdir'
 # drives the real code over synthetic media and asserts what a user would see.
 module ReviewFixtures
   DIR = Dir.mktmpdir('neutraliser-review-fixtures')
-  at_exit { FileUtils.remove_entry(DIR) if Dir.exist?(DIR) }
+  at_exit { FileUtils.rm_rf(DIR) }
 
   module_function
+
+  # Does the ffmpeg on PATH have the limiter option --limit-db needs? (Decided when
+  # the file loads, so each ffmpeg in the CI matrix runs the example that applies to it.)
+  def limiter_supported?
+    Neutraliser::FFmpegWrapper.wide_filter_options?
+  rescue Neutraliser::FFmpegNotFoundError
+    true
+  end
 
   def ffmpeg(*args)
     system('ffmpeg', '-hide_banner', '-v', 'error', '-y', *args) || raise("ffmpeg failed: #{args.join(' ')}")
@@ -37,7 +45,7 @@ module ReviewFixtures
              '-c:v', 'libx264', '-preset', 'ultrafast', '-c:a', 'aac', '-b:a', '128k', '-af', 'volume=-20dB', '-c:s', 'srt',
              '-metadata:s:a:0', 'language=eng', '-metadata:s:a:0', 'title=Main English',
              '-metadata:s:a:1', 'language=spa', '-metadata:s:a:1', 'title=Spanish Dub',
-             '-metadata:s:s:0', 'language=eng', '-disposition:a:0', 'default+hearing_impaired', '-disposition:a:1', '0',
+             '-metadata:s:s:0', 'language=eng', '-disposition:a:0', 'default+forced+hearing_impaired', '-disposition:a:1', '0',
              '-disposition:s:0', 'forced',
              '-attach', font, '-metadata:s:t:0', 'mimetype=font/ttf', '-metadata:s:t:0', 'filename=font.ttf',
              path)
@@ -72,7 +80,7 @@ module ReviewFixtures
       next if File.exist?(path)
 
       ffmpeg('-f', 'lavfi', '-i', 'color=c=black:s=64x64:r=1:d=120',
-             '-f', 'lavfi', '-i', "aevalsrc='if(between(t\,44\,76)\,0.15\,0.035)*sin(2*PI*440*t)':s=48000:d=120",
+             '-f', 'lavfi', '-i', "aevalsrc='if(between(t,44,76),0.15,0.035)*sin(2*PI*440*t)':s=48000:d=120",
              '-map', '0', '-map', '1', '-c:v', 'libx264', '-preset', 'ultrafast', '-c:a', 'aac', '-b:a', '96k', path)
     end
   end
@@ -81,7 +89,7 @@ module ReviewFixtures
     File.join(DIR, 'silent.mkv').tap do |path|
       next if File.exist?(path)
 
-      ffmpeg('-f', 'lavfi', '-i', 'testsrc=size=64x64:rate=5:duration=6', '-f', 'lavfi', '-i', 'anullsrc=r=48000:cl=stereo:d=6',
+      ffmpeg('-f', 'lavfi', '-i', 'testsrc=size=64x64:rate=5:duration=6', '-f', 'lavfi', '-i', 'anullsrc=r=48000:cl=stereo',
              '-map', '0', '-map', '1', '-shortest', '-c:v', 'libx264', '-preset', 'ultrafast', '-c:a', 'aac', '-b:a', '128k', path)
     end
   end
@@ -97,7 +105,7 @@ RSpec.describe 'pre-release review', :real_ffmpeg do
     allow(Neutraliser.logger).to receive(:log) { |message| logged << message }
   end
 
-  after { FileUtils.remove_entry(dir) if Dir.exist?(dir) }
+  after { FileUtils.rm_rf(dir) }
 
   def place(fixture, name = File.basename(fixture))
     File.join(dir, name).tap do |path|
@@ -124,8 +132,10 @@ RSpec.describe 'pre-release review', :real_ffmpeg do
 
   def integrated(path)
     out, = Open3.capture2e('ffmpeg', '-hide_banner', '-nostats', '-i', path, '-map', '0:a:0',
-                           '-af', 'ebur128=framelog=quiet', '-f', 'null', '-')
-    out[/I:\s+(-?[\d.]+) LUFS/, 1].to_f
+                           '-af', 'ebur128', '-f', 'null', '-')
+    # The summary comes last. framelog=quiet would drop the per-frame lines, but
+    # ffmpeg 5.1 and earlier don't know that name, so take the last reading instead.
+    out.scan(/I:\s+(-?[\d.]+) LUFS/).last.first.to_f
   end
 
   def fake_ffmpeg(script)
@@ -326,9 +336,15 @@ RSpec.describe 'pre-release review', :real_ffmpeg do
     it 'keeps every disposition flag on the normalised track' do
       film = place(ReviewFixtures.rich)
 
+      flags = ['-select_streams', 'a:0', '-show_entries', 'stream_disposition=default,forced,hearing_impaired']
+      # Compared with what the fixture really carries: before ffmpeg 4.4 the Matroska
+      # muxer can't write hearing_impaired, so there it never reaches the source.
+      before = probe(film, *flags)
+      expect(before).to start_with('1,1')
+
       run(film, replace: true)
 
-      expect(probe(film, '-select_streams', 'a:0', '-show_entries', 'stream_disposition=default,hearing_impaired')).to eq('1,1')
+      expect(probe(film, *flags)).to eq(before)
       expect(probe(film, '-select_streams', 's:0', '-show_entries', 'stream_disposition=forced')).to eq('1')
     end
 
@@ -744,15 +760,25 @@ RSpec.describe 'pre-release review', :real_ffmpeg do
       expect(profile).to include(lufs: -14.0, lra: 10.0, dynamic: true)
     end
 
-    it 'gives a later --limit-db run a file an earlier run skipped as peak-limited' do
-      film = place(ReviewFixtures.peaky)
+    # The limiter's `latency` option arrived in ffmpeg 5.1; older builds get a clear refusal instead.
+    if ReviewFixtures.limiter_supported?
+      it 'gives a later --limit-db run a file an earlier run skipped as peak-limited' do
+        film = place(ReviewFixtures.peaky)
 
-      first = run(film, replace: true)
-      second = run(film, replace: true, limit_db: 12)
+        first = run(film, replace: true)
+        second = run(film, replace: true, limit_db: 12)
 
-      expect(first[:results].first[:reason]).to eq(:peak_limited)
-      expect(second[:results].first[:reason]).to eq(:normalized)
-      expect(Neutraliser::FFmpegWrapper.read_stamp(film).mode).to eq('limited')
+        expect(first[:results].first[:reason]).to eq(:peak_limited)
+        expect(second[:results].first[:reason]).to eq(:normalized)
+        expect(Neutraliser::FFmpegWrapper.read_stamp(film).mode).to eq('limited')
+      end
+    else
+      it 'refuses --limit-db up front, naming the ffmpeg it needs, rather than failing inside ffmpeg' do
+        film = place(ReviewFixtures.peaky)
+
+        expect { run(film, replace: true, limit_db: 12) }.to raise_error(ArgumentError, /--limit-db needs ffmpeg 5\.1/)
+        expect(profile_stamp(film)).to be_nil
+      end
     end
 
     it 'does not re-measure a peak-limited file on a re-run with the same options' do

@@ -825,6 +825,13 @@ RSpec.describe Neutraliser::Processor do
         .to raise_error(ArgumentError, /--limit-db/)
     end
 
+    it 'refuses --limit-db on an ffmpeg whose limiter has no latency option' do
+      allow(Neutraliser::FFmpegWrapper).to receive(:version).and_return([4, 2])
+
+      expect { described_class.new(limit_db: 3.0) }.to raise_error(ArgumentError, /--limit-db needs ffmpeg 5\.1/)
+      expect { described_class.new }.not_to raise_error
+    end
+
     it 'lets --limit-db lift a file the plain peak cap would leave alone' do
       m = measurement(input_i: -26.0, input_tp: -2.0) # plain cap: +0.5 dB -> skipped
       plain = described_class.new(replace: false)

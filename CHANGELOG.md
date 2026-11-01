@@ -101,6 +101,10 @@ Docker image; a RubyGems release is deferred until v0.1 has had real-world milea
 
 ### Fixed
 
+- On ffmpeg older than 5.1 (4.2 was checked), every file failed under the `reference`
+  profile: `loudnorm` rejects the profile's loudness range of 50. It now gets 20 there, which
+  changes nothing for constant gain. `--limit-db` needs 5.1 or newer, so older builds now
+  refuse it up front instead of failing inside ffmpeg. CI runs ffmpeg 4.2.2 and 7.1.
 - The `process` run manifest (`.neutraliser-run-manifest.jsonl`) recorded each file's outcome
   only after the whole run finished, so a run stopped part-way (Ctrl-C, SIGTERM, a crash)
   left only `queued` lines and `--resume` had nothing to skip. Outcomes are now written as

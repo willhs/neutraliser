@@ -24,6 +24,10 @@ RSpec.configure do |config|
   Kernel.srand config.seed
 
   # Every run asks for the ffmpeg version first. The suite has to run on a machine
-  # without ffmpeg, and most examples stub the rest of it anyway.
-  config.before { allow(Neutraliser::FFmpegWrapper).to receive(:version).and_return([7, 1]) }
+  # without ffmpeg, and most examples stub the rest of it anyway. Examples that run
+  # the real ffmpeg (:real_ffmpeg) see its real version, because what they exercise
+  # depends on it: filter options differ between releases.
+  config.before do |example|
+    allow(Neutraliser::FFmpegWrapper).to receive(:version).and_return([7, 1]) unless example.metadata[:real_ffmpeg]
+  end
 end

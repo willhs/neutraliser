@@ -143,7 +143,7 @@ module Neutraliser
       cmd += ['-t', duration.to_s] if duration
       cmd += [
         '-map', "0:a:#{audio_index}",
-        '-af', "loudnorm=I=#{target_i}:TP=#{target_tp}:LRA=#{target_lra}:print_format=json",
+        '-af', "loudnorm=I=#{target_i}:TP=#{target_tp}:LRA=#{loudnorm_lra(target_lra)}:print_format=json",
         '-f', 'null', '-'
       ]
 
@@ -166,6 +166,25 @@ module Neutraliser
 
       match = output.scrub.match(/\Affmpeg version n?(\d+)\.(\d+)/)
       match && [match[1].to_i, match[2].to_i]
+    end
+
+    # ffmpeg 5.1 is where loudnorm's LRA ceiling went from 20 to 50 (the
+    # `reference` profile asks for 50) and alimiter gained `latency` (--limit-db).
+    # Older builds reject both filter arguments outright.
+    WIDE_FILTER_OPTIONS_FFMPEG = [5, 1].freeze
+    LEGACY_LOUDNORM_MAX_LRA = 20.0
+
+    # A build with no release number (a git snapshot) is assumed to be recent.
+    def self.wide_filter_options?
+      version = self.version
+      version.nil? || (version <=> WIDE_FILTER_OPTIONS_FFMPEG) >= 0
+    end
+
+    # The LRA to hand loudnorm: the profile's own, held to what this ffmpeg
+    # accepts. Constant gain never reads it (the measurement is the same at any
+    # target), so only --allow-dynamic's loudnorm pass gets a tighter target.
+    def self.loudnorm_lra(lra)
+      wide_filter_options? ? lra : [lra, LEGACY_LOUDNORM_MAX_LRA].min
     end
 
     # Probes a file's duration via ffprobe, timeboxed like every other
@@ -366,7 +385,7 @@ module Neutraliser
       codec_decision = select_output_codec(primary_track, output_path, input_path, container: container)
       codec_args = build_codec_args(codec_decision, primary_track[:index])
 
-      loudnorm_filter = "loudnorm=I=#{profile[:lufs]}:TP=#{profile[:tp]}:LRA=#{profile[:lra]}:print_format=summary"
+      loudnorm_filter = "loudnorm=I=#{profile[:lufs]}:TP=#{profile[:tp]}:LRA=#{loudnorm_lra(profile[:lra])}:print_format=summary"
       loudnorm_filter += ",#{pin_sample_rate(primary_track[:sample_rate])}" if primary_track[:sample_rate]
 
       # Single-pass loudnorm has no prior measurement pass, so it always
@@ -755,7 +774,7 @@ module Neutraliser
     end
 
     def self.build_loudnorm_filter(measured, target_i, target_tp, target_lra)
-      "loudnorm=I=#{target_i}:TP=#{target_tp}:LRA=#{target_lra}" \
+      "loudnorm=I=#{target_i}:TP=#{target_tp}:LRA=#{loudnorm_lra(target_lra)}" \
         ":measured_I=#{measured.input_i}" \
         ":measured_TP=#{measured.input_tp}" \
         ":measured_LRA=#{measured.input_lra}" \
@@ -790,7 +809,7 @@ module Neutraliser
       valid = measured.input_tp != 99 && measured.input_thresh != -70 &&
               measured.input_lra != 0 && measured.input_i != 0
       gain = profile[:lufs] - measured.input_i
-      fits = measured.input_tp + gain <= profile[:tp] && measured.input_lra <= profile[:lra]
+      fits = measured.input_tp + gain <= profile[:tp] && measured.input_lra <= loudnorm_lra(profile[:lra])
       valid && fits ? 'Linear' : 'Dynamic'
     end
 
@@ -993,6 +1012,7 @@ module Neutraliser
                          :estimate_bitrate_from_packets,
                          :lossless_encoder?,
                          :build_codec_args,
+                         :loudnorm_lra,
                          :build_loudnorm_filter,
                          :build_audio_filter,
                          :parse_normalization_type,

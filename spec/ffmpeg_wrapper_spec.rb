@@ -35,11 +35,53 @@ RSpec.describe Neutraliser::FFmpegWrapper do
       expect(result.input_i).to eq(-18.5)
     end
 
+    it 'asks loudnorm for no more than LRA 20 on an ffmpeg that rejects more' do
+      allow(described_class).to receive(:version).and_return([4, 2])
+      allow(described_class).to receive(:execute_with_timeout)
+        .and_return(['', %({"input_i":"-18.5","input_tp":"-2.1","input_lra":"8.3","input_thresh":"-28.9","target_offset":"1.5"}), ok_status])
+
+      described_class.measure_loudness('test.mp4', target_lra: 50.0)
+
+      expect(described_class).to have_received(:execute_with_timeout)
+        .with(include('loudnorm=I=-20.0:TP=-1.5:LRA=20.0:print_format=json'), anything, anything)
+    end
+
     it 'raises FFmpegError including stderr when command fails' do
       allow(described_class).to receive(:execute_with_timeout).and_return(['', 'boom', fail_status])
 
       expect { described_class.measure_loudness('missing.mp4') }
         .to raise_error(Neutraliser::FFmpegError, /boom/)
+    end
+  end
+
+  describe 'the LRA handed to loudnorm' do
+    # Before ffmpeg 5.1 loudnorm rejects an LRA above 20, which the reference profile (50) asks for.
+    {
+      'a 4.2 build holds a wide profile to 20' => [[4, 2], 50.0, 'LRA=20.0'],
+      'a 5.0 build still holds it to 20' => [[5, 0], 50.0, 'LRA=20.0'],
+      'a 4.2 build leaves a narrow profile alone' => [[4, 2], 12.0, 'LRA=12.0'],
+      '5.1 passes the profile through' => [[5, 1], 50.0, 'LRA=50.0'],
+      'a build with no release number passes it through' => [nil, 50.0, 'LRA=50.0']
+    }.each do |name, (version, lra, expected)|
+      it name do
+        allow(described_class).to receive(:version).and_return(version)
+        allow(described_class).to receive(:execute_with_timeout)
+          .and_return(['', %({"input_i":"-18.5","input_tp":"-2.1","input_lra":"8.3","input_thresh":"-28.9","target_offset":"1.5"}), ok_status])
+
+        described_class.measure_loudness('test.mp4', target_lra: lra)
+
+        expect(described_class).to have_received(:execute_with_timeout)
+          .with(include(a_string_including(expected)), anything, anything)
+      end
+    end
+
+    it 'is capped in the second pass of an --allow-dynamic run too' do
+      allow(described_class).to receive(:version).and_return([4, 2])
+      measured = Neutraliser::Measurement.new(input_i: -30.0, input_tp: -8.0, input_lra: 4.0, input_thresh: -40.0, target_offset: 0.0)
+
+      filter = described_class.send(:build_loudnorm_filter, measured, -23.0, -1.5, 50.0)
+
+      expect(filter).to start_with('loudnorm=I=-23.0:TP=-1.5:LRA=20.0')
     end
   end
 
@@ -102,6 +144,7 @@ RSpec.describe Neutraliser::FFmpegWrapper do
         :probe_audio_profile_mid_file,
         :stream_counts,
         :version,
+        :wide_filter_options?,
         :unsupported_subtitles,
         :codec_change,
         :output_audio_count
