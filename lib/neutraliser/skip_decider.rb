@@ -32,11 +32,17 @@ module Neutraliser
 
     # tolerance is this run's --tolerance: a file recorded as "close enough" under
     # a looser one gets looked at again.
-    def initialize(root_dir, fast_verification: true, tolerance: nil)
+    #
+    # redo_recipes: the recipes (Recipe) this run was asked to do over. A file
+    # made by any other recipe counts as done under the same profile, so a new
+    # default never re-levels a library on its own; naming the old recipe
+    # (or Recipe::UNVERSIONED) is the deliberate re-run.
+    def initialize(root_dir, fast_verification: true, tolerance: nil, redo_recipes: [])
       @path = File.join(root_dir, FILENAME)
       @entries = load
       @fast_verification = fast_verification
       @tolerance = tolerance
+      @redo_recipes = redo_recipes
     end
 
     # Cheap pre-check: has this exact file+profile been fully processed
@@ -44,9 +50,11 @@ module Neutraliser
     # No loudness measurement either way.
     def already_processed?(file_path, profile)
       return true if sidecar_hit?(file_path, profile)
-      return false unless File.exist?(file_path) && FFmpegWrapper.read_stamp(file_path)&.profile == profile[:name]
 
-      mark_processed(file_path, profile)
+      stamp = File.exist?(file_path) ? FFmpegWrapper.read_stamp(file_path) : nil
+      return false unless stamp&.profile == profile[:name] && !redo?(stamp.recipe)
+
+      mark_processed(file_path, profile, recipe: stamp.recipe)
       true
     end
 
@@ -69,16 +77,60 @@ module Neutraliser
 
     # tolerance: set when the file was left alone for being close enough, rather
     # than normalised, so that a stricter run isn't bound by this verdict.
-    def mark_processed(file_path, profile, tolerance: nil)
+    #
+    # recipe: the recipe that made (or judged) the file; a tag hit passes the
+    # file's own, so the sidecar never claims a newer recipe than the file has.
+    # left: a LeftRecord of the levels it was judged close enough on (reason
+    # within_tolerance), kept so `report` can place the untouched file.
+    def mark_processed(file_path, profile, tolerance: nil, recipe: Recipe::CURRENT, left: nil)
       entry = {
         'size' => File.size(file_path),
         'mtime' => File.mtime(file_path).to_i,
         'profile' => profile[:name],
         'processed_at' => Time.now.utc.iso8601
       }
+      entry['recipe'] = recipe if recipe
       entry['tolerance'] = tolerance if tolerance
+      entry['left'] = left.to_h_for_entry if left
       @entries[tracker_key(file_path)] = entry
       save
+    end
+
+    # Records that the file was looked at and left alone (see LeftRecord). It
+    # never counts as processed, and overwrites any earlier entry for the file.
+    def mark_left(file_path, record)
+      @entries[tracker_key(file_path)] = {
+        'size' => File.size(file_path),
+        'mtime' => File.mtime(file_path).to_i,
+        'left' => record.to_h_for_entry,
+        'recorded_at' => Time.now.utc.iso8601
+      }
+      save
+    end
+
+    # The record this sidecar holds for the file as it is now, or nil.
+    def left_record(file_path)
+      entry = @entries[tracker_key(file_path)]
+      return nil unless entry && File.exist?(file_path)
+      return nil if File.size(file_path) != entry['size'] || File.mtime(file_path).to_i != entry['mtime']
+
+      LeftRecord.from_entry(entry)
+    end
+
+    # The nearest record for the file in any `.neutraliser` from its own folder
+    # up: the run that wrote it may have started anywhere above. deciders memoises
+    # the sidecar read per folder across a batch of lookups.
+    def self.left_record_for(file_path, deciders = {})
+      dir = File.dirname(File.expand_path(file_path))
+      loop do
+        record = (deciders[dir] ||= new(dir, fast_verification: false)).left_record(file_path)
+        return record if record
+
+        parent = File.dirname(dir)
+        return nil if parent == dir
+
+        dir = parent
+      end
     end
 
     private
@@ -107,10 +159,13 @@ module Neutraliser
       return false if File.size(file_path) != entry['size']
       return false if File.mtime(file_path).to_i != entry['mtime']
       return false if entry['profile'] != profile[:name]
+      return false if redo?(entry['recipe'])
       return false if entry['tolerance'] && @tolerance && @tolerance < entry['tolerance']
 
       true
     end
+
+    def redo?(recipe) = @redo_recipes.include?(recipe)
 
     def quick_sample_verified?(file_path, profile, tolerance:)
       quick_result = FFmpegWrapper.quick_loudness_sample(

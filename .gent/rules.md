@@ -21,7 +21,11 @@ A Ruby CLI tool that normalises audio volume in video files using industry-stand
 - **`GainPlan`**: The constant-gain decision for one measurement — applied gain, shortfall, whether a limiter is needed (`--limit-db`), `worthwhile?(min_gain)` direction-aware skip
 - **`DiskGuard`** / **`RunLock`**: `--min-free-gb`/`--abort-free-gb` floors; `--lock-file` flock run lock
 - **`ManifestImport`**: `neutraliser import-manifest` — carries the retired `neutralise.sh` manifest into `.neutraliser` sidecars
-- **`Report`**: `neutraliser report PATH` — reads stamps, counts linear/dynamic/untouched and profiles
+- **`Report`**: `neutraliser report PATH` — reads stamps and left-alone records, counts linear/dynamic/untouched, profiles and recipes, and the remote-free rate (`--measure` reads the files instead of computing from the records)
+- **`Recipe`**: version of the leveling method (`NEUTRALISER_RECIPE`); a run never re-levels a file because of it, only `process --redo-recipe` does (files from before recipes are `unversioned`)
+- **`LeftRecord`**: why a file was left alone (peak-limited, object audio, codec change, within tolerance) and its measured levels, kept in the sidecar with no top-level `profile` so it never counts as done
+- **`FinalLevels`** / **`RemoteFreeRate`**: where a file ends up, and the share within 2 LU of target at or under an LRA limit; a `limited` file is not computed (a limiter lands short), only measured
+- **`RateHarness`**: `neutraliser rate-sample ROOT...` — a recipe run on copies of a random sample (equal share per root), library only read
 - **`FFmpegWrapper`**: Two-pass loudnorm implementation, ffprobe, source-matched codec selection; the primary track is the default-disposition audio track (else the first `eng` one, else a:0), normalised in place and measured by the same index
 - **`ObjectAudio`**: Detects Atmos / DTS:X on the primary track (ffprobe profile, name-hinted mid-file probe) so it is skipped, not silently flattened
 - **`AudioAnalyser`**: Full loudnorm measurement coordination with sidecar caching
@@ -67,7 +71,8 @@ A Ruby CLI tool that normalises audio volume in video files using industry-stand
 
 ### Primary Commands
 - `neutraliser process PATH` - Main processing command
-- `neutraliser report PATH [--format summary|tsv|json]` - What was done to each file, from its tags
+- `neutraliser report PATH [--format summary|tsv|json] [--measure]` - What was done to each file, from its tags, why untouched files were left, and the remote-free rate
+- `neutraliser rate-sample ROOT... [--sample N --seed S --plan]` - Try a recipe on copies of a random sample and report its remote-free rate
 - `neutraliser import-manifest MANIFEST --root DIR` - Mark files a `neutralise.sh` manifest recorded as done as already processed
 - `neutraliser profiles` - List normalization profiles
 - `neutraliser analyze-plex [--full]` - Plex library loudness triage (sampled estimates; `--full` for exact, slow)
@@ -89,6 +94,7 @@ A Ruby CLI tool that normalises audio volume in video files using industry-stand
 - `--limit-db N` - Opt-in peak limiter: gain may exceed the peak headroom by N dB (stamped `limited`)
 - `--allow-codec-change` - Process DTS/TrueHD/etc. (codec can't be kept); skipped by default
 - `--min-free-gb N` / `--abort-free-gb N` - Disk floors (skip file / stop run, exit 4); `--lock-file PATH` - one run at a time (exit 3)
+- `--redo-recipe N,unversioned` - Process again files an older recipe made (a run never does this by itself)
 - `--linear-only` - Deprecated no-op alias (constant gain is the default)
 
 ## Testing Strategy ✅ COMPLETED

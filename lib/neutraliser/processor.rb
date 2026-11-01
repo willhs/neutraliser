@@ -7,6 +7,9 @@ require_relative 'skip_decider'
 module Neutraliser
   class Processor
     SUPPORTED_FORMATS = VideoFiles::EXTENSIONS
+    # The profile this run aims for, target level applied.
+    attr_reader :profile
+
     MANIFEST_FILENAME = '.neutraliser-run-manifest.jsonl'.freeze
     NORMALIZED_SUFFIX = '_normalized'.freeze
     # Atmos/DTS:X profile names arrived in FFmpeg 7.1. Older ones report none.
@@ -26,7 +29,7 @@ module Neutraliser
     def initialize(replace: false, target_level: nil, profile: 'livingroom', tolerance: 1.0, cache: true,
                    dry_run: false, fast_verify: false, resume: false, fast: false, local_stage: false,
                    allow_dynamic: false, allow_object_audio_loss: false, keep_original_audio: false,
-                   limit_db: 0.0, min_gain: nil, allow_codec_change: false, disk_guard: nil)
+                   limit_db: 0.0, min_gain: nil, allow_codec_change: false, disk_guard: nil, redo_recipes: [])
       @replace = replace
       base_profile = profile.is_a?(Hash) ? profile : Profiles.get_profile(profile)
       @profile = if target_level
@@ -47,6 +50,8 @@ module Neutraliser
       @keep_original_audio = keep_original_audio
       @allow_codec_change = allow_codec_change
       @disk_guard = disk_guard || DiskGuard.new
+      @redo_recipes = Array(redo_recipes).uniq
+      Recipe.check_redoable!(@redo_recipes)
       @limit_db = limit_db.to_f
       @min_gain = (min_gain || tolerance).to_f
       raise ArgumentError, FAST_REQUIRES_DYNAMIC_MESSAGE if @fast && !@allow_dynamic
@@ -87,7 +92,7 @@ module Neutraliser
     end
 
     def new_skip_decider(root)
-      SkipDecider.new(root, fast_verification: @fast_verify, tolerance: @tolerance)
+      SkipDecider.new(root, fast_verification: @fast_verify, tolerance: @tolerance, redo_recipes: @redo_recipes)
     end
 
     # Without a version that can name them, an Atmos track looks like plain
@@ -201,6 +206,8 @@ module Neutraliser
     # Only a final outcome, reached by a run asking for the same thing.
     def resume_terminal?(entry)
       return false unless entry && RESUME_FINAL_REASONS.include?(entry['reason'])
+      # An earlier run without --redo-recipe called these done; this one was asked to look again.
+      return false if @redo_recipes.any? && entry['reason'] == 'already_processed'
 
       entry['profile'] == @profile[:name] && entry['target_lufs'] == @profile[:lufs] && entry['replace'] == @replace
     end
@@ -350,13 +357,13 @@ module Neutraliser
         next no_audio if no_audio
 
         audio_tracks = FFmpegWrapper.detect_audio_tracks(working_path)
-        # Not stamped in the sidecar: a later --allow-object-audio-loss run
-        # (or an ffmpeg that can keep the objects) must still see the file.
+        # Recorded as left alone, never as done: a later --allow-object-audio-loss
+        # run (or an ffmpeg that can keep the objects) must still see the file.
         object_audio_skip = check_object_audio(file_path, working_path, FFmpegWrapper.primary_audio_track(audio_tracks))
-        next object_audio_skip if object_audio_skip
+        next record_outcome(file_path, object_audio_skip) if object_audio_skip
 
         codec_skip = check_codec_change(file_path, working_path, FFmpegWrapper.primary_audio_track(audio_tracks))
-        next codec_skip if codec_skip
+        next record_outcome(file_path, codec_skip) if codec_skip
 
         result = if @fast
                    process_file_fast(file_path, working_path, audio_tracks)
@@ -365,8 +372,6 @@ module Neutraliser
                  end
 
         record_outcome(file_path, result)
-
-        result
       end
     rescue DiskGuard::Abort
       raise
@@ -416,19 +421,26 @@ module Neutraliser
     # holds for later runs, about the file that holds the result:
     # - a normalised copy is recorded as the copy, so a later --replace still
     #   does the original;
-    # - close enough is recorded with its tolerance, so a stricter run looks again;
-    # - peak-limited isn't recorded, because --limit-db or --allow-dynamic can
-    #   change it, and the cached measurement makes re-deciding cheap;
+    # - close enough is recorded with its tolerance, so a stricter run looks again,
+    #   and with the levels it was judged on when it was measured, for `report`;
+    # - peak-limited, object audio and codec change are recorded as left alone
+    #   (LeftRecord), not as done, because --limit-db, --allow-dynamic,
+    #   --allow-object-audio-loss or --allow-codec-change can change the answer.
+    #   The file is looked at again next run; the record is for `report`;
     # - a dry run isn't recorded, because it did nothing.
+    # Returns the result, so a caller can record and return in one step.
     def record_outcome(file_path, result)
-      return if @skip_decider.nil? || @dry_run
+      return result if @skip_decider.nil? || @dry_run
 
       case result[:reason]
       when :normalized
         @skip_decider.mark_processed(@replace ? file_path : generate_output_path(file_path), @profile)
       when :within_tolerance
-        @skip_decider.mark_processed(file_path, @profile, tolerance: @tolerance)
+        @skip_decider.mark_processed(file_path, @profile, tolerance: @tolerance, left: result[:left])
+      else
+        @skip_decider.mark_left(file_path, result[:left]) if result[:left]
       end
+      result
     end
 
     def process_file_two_pass(original_path, working_path, audio_tracks)
@@ -440,7 +452,9 @@ module Neutraliser
       elsif peak_limited?(measurement)
         log "  Peak-limited: max useful gain #{gain_plan(measurement).applied.round(2)} dB is under " \
             "#{@min_gain} dB towards target, skipping re-encode"
-        file_result(original_path, status: :skipped, reason: :peak_limited)
+        file_result(original_path, status: :skipped, reason: :peak_limited,
+                                   left: LeftRecord.for(:peak_limited, @profile, measurement: measurement,
+                                                                                 message: peak_limited_message(measurement)))
       elsif measurement.needs_normalization?(@profile, tolerance: @tolerance)
         if @dry_run
           log "  [DRY RUN] Would normalize: #{measurement.input_i.round(1)} LUFS → #{@profile[:lufs]} LUFS"
@@ -453,8 +467,20 @@ module Neutraliser
       else
         level = measurement.already_at_target? ? 'by the 30-second sample' : "#{measurement.input_i.round(2)} LUFS"
         log "  Already at target level (#{level}, within #{@tolerance} LU of #{@profile[:lufs]}), skipping"
-        file_result(original_path, status: :skipped, reason: :within_tolerance)
+        file_result(original_path, status: :skipped, reason: :within_tolerance, left: within_tolerance_record(measurement))
       end
+    end
+
+    # The sentinel "already at target" measurement has no real levels to keep.
+    def within_tolerance_record(measurement)
+      return nil if measurement.already_at_target?
+
+      LeftRecord.for(:within_tolerance, @profile, measurement: measurement)
+    end
+
+    def peak_limited_message(measurement)
+      plan = gain_plan(measurement)
+      "peak ceiling allows #{plan.applied.round(2)} dB of the #{plan.desired.round(2)} dB towards #{@profile[:lufs]} LUFS"
     end
 
     # Constant-gain mode only: a file far from target whose peak ceiling
@@ -476,7 +502,8 @@ module Neutraliser
         if @object_audio_undetectable && !@allow_object_audio_loss
           log "  Name suggests object audio and this ffmpeg can't check the #{primary_track[:codec]} track, skipping " \
               '(--allow-object-audio-loss to process anyway)'
-          return file_result(original_path, status: :skipped, reason: :object_audio, message: 'suspected from the name')
+          return file_result(original_path, status: :skipped, reason: :object_audio, message: 'suspected from the name',
+                                            left: LeftRecord.for(:object_audio, @profile, message: 'suspected from the name'))
         end
 
         log "  Note: name suggests object audio but ffprobe found none on the #{primary_track[:codec]} track, " \
@@ -493,7 +520,8 @@ module Neutraliser
 
       log "  Object audio (#{verdict.profile}): re-encoding would strip it, skipping " \
           '(--allow-object-audio-loss to process anyway)'
-      file_result(original_path, status: :skipped, reason: :object_audio, message: verdict.profile)
+      file_result(original_path, status: :skipped, reason: :object_audio, message: verdict.profile,
+                                 left: LeftRecord.for(:object_audio, @profile, message: verdict.profile))
     end
 
     # Re-encoding to a different codec isn't leveling the volume, it's
@@ -506,7 +534,8 @@ module Neutraliser
 
       message = "#{primary_track[:codec]} would be re-encoded as #{encoder}"
       log "  Codec change (#{message}), skipping (--allow-codec-change to process anyway)"
-      file_result(original_path, status: :skipped, reason: :codec_change, message: message)
+      file_result(original_path, status: :skipped, reason: :codec_change, message: message,
+                                 left: LeftRecord.for(:codec_change, @profile, message: message))
     end
 
     # Low space skips this file (a smaller one may still fit); critically low
@@ -695,13 +724,15 @@ module Neutraliser
                                 'run again once it has finished changing'
     end
 
-    def file_result(file_path, status:, reason:, message: nil, normalization_type: nil)
+    # left: the LeftRecord to persist for a file skipped but not done (see record_outcome).
+    def file_result(file_path, status:, reason:, message: nil, normalization_type: nil, left: nil)
       {
         file: File.expand_path(file_path),
         status: status,
         reason: reason,
         message: message,
-        normalization_type: normalization_type
+        normalization_type: normalization_type,
+        left: left
       }
     end
 

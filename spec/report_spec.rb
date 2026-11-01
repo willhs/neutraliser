@@ -32,7 +32,8 @@ RSpec.describe Neutraliser::Report do
 
   it 'counts linear, dynamic and untouched files and the profile mix' do
     expect(described_class.new(dir).counts).to eq(
-      total: 4, linear: 2, limited: 0, dynamic: 1, untouched: 1, profiles: { 'livingroom' => 2, 'night' => 1 }
+      total: 4, linear: 2, limited: 0, dynamic: 1, untouched: 1, profiles: { 'livingroom' => 2, 'night' => 1 },
+      recipes: { '1' => 3 }, left: {}
     )
   end
 
@@ -46,9 +47,9 @@ RSpec.describe Neutraliser::Report do
   it 'prints one TSV row per file' do
     lines = described_class.new(dir).to_tsv.lines.map(&:chomp)
 
-    expect(lines.first).to start_with("file\tstate\tprofile\tgain_db")
+    expect(lines.first).to start_with("file\tstate\tprofile\trecipe\tgain_db")
     expect(lines.size).to eq(5)
-    expect(lines.find { |l| l.include?('a.mkv') }.split("\t")[1..3]).to eq(%w[linear livingroom 2.5])
+    expect(lines.find { |l| l.include?('a.mkv') }.split("\t")[1..3]).to eq(%w[linear livingroom 1])
     expect(lines.find { |l| l.include?('c.mkv') }.split("\t")[1]).to eq('untouched')
   end
 
@@ -65,5 +66,83 @@ RSpec.describe Neutraliser::Report do
     expect { Neutraliser::CLI.start(['report', dir]) }.to output(/normalised dynamic: 1/).to_stdout
     expect { Neutraliser::CLI.start(['report', dir, '--format', 'tsv']) }
       .to output(/b\.mp4\tdynamic\tnight/).to_stdout.and output(/Files: 4/).to_stderr
+  end
+
+  describe 'left-alone files and the remote-free rate' do
+    let(:peaky) do
+      Neutraliser::LeftRecord.new(reason: 'peak_limited', profile: 'livingroom', recipe: 1, message: 'peak ceiling allows -1.8 dB',
+                                  measured_i: -30.0, measured_tp: -0.5, measured_lra: 4.0)
+    end
+
+    before do
+      Neutraliser::SkipDecider.new(dir).mark_left(File.join(dir, 'c.mkv'), peaky)
+      stamps['d.mkv'] = Neutraliser::Stamp.now(profile: 'livingroom', recipe: nil, mode: 'linear', gain_db: 3.0,
+                                               source_codec: 'aac', source_bitrate: nil, measured_i: -23.0,
+                                               measured_tp: -6.0, measured_lra: 5.0)
+      File.write(File.join(dir, 'd.mkv'), 'x')
+    end
+
+    it 'says why an untouched file was left alone, with its measured levels' do
+      report = described_class.new(dir)
+      c = report.rows.find { |row| row.file.end_with?('c.mkv') }
+
+      expect(c).to have_attributes(state: 'untouched', left: peaky)
+      expect(report.counts[:left]).to eq('peak_limited' => 1)
+      expect(report.summary).to include('left alone: peak_limited=1')
+      row = report.to_tsv.lines.find { |l| l.include?('c.mkv') }.chomp.split("\t")
+      header = report.to_tsv.lines.first.chomp.split("\t")
+      expect(row.zip(header).to_h { |value, name| [name, value] })
+        .to include('left_reason' => 'peak_limited', 'measured_i' => '-30.0', 'measured_lra' => '4.0')
+    end
+
+    it 'counts recipes, with files from before recipes as unversioned' do
+      expect(described_class.new(dir).counts[:recipes]).to eq('1' => 3, 'unversioned' => 1)
+      expect(described_class.new(dir).summary).to include('Recipes: 1=3, unversioned=1')
+    end
+
+    it 'judges what it can from the records and counts the rest apart' do
+      rate = described_class.new(dir).rate
+
+      # a: -24+2.5=-21.5 ok; b: dynamic, night -16 ok; c: -30 off; d: -20 ok; sub/d: -24-1=-25 off
+      expect(rate.to_h).to include(judged: 5, remote_free: 3, off_level: 2, not_judged: 0, measured: 0)
+    end
+
+    it 'measures every file instead when asked, against the profile for files with no record' do
+      measure = lambda do |path, **|
+        level = path.end_with?('c.mkv') ? -21.0 : -35.0
+        Neutraliser::Measurement.new(input_i: level, input_tp: -3.0, input_lra: 5.0, input_thresh: -45.0, target_offset: 0.0)
+      end
+      allow(Neutraliser::FFmpegWrapper).to receive(:primary_audio_index).and_return(0)
+      allow(Neutraliser::FFmpegWrapper).to receive(:measure_loudness, &measure)
+
+      report = described_class.new(dir, measure: true)
+
+      expect(report.rate.to_h).to include(judged: 5, measured: 5, remote_free: 1)
+      c = report.rows.find { |row| row.file.end_with?('c.mkv') }
+      expect(report.final_levels_for(c)).to have_attributes(target: -20.0, basis: :measured)
+      expect(Neutraliser::FFmpegWrapper).to have_received(:measure_loudness)
+        .with(c.file, hash_including(target_i: -20.0)).once
+    end
+
+    it 'skips a file it cannot measure and says how many it did not judge' do
+      allow(Neutraliser::FFmpegWrapper).to receive(:primary_audio_index).and_return(0)
+      allow(Neutraliser::FFmpegWrapper).to receive(:measure_loudness).and_raise(Neutraliser::FFmpegError, 'boom')
+
+      expect(described_class.new(dir, measure: true).rate.to_h).to include(judged: 0, not_judged: 5)
+    end
+
+    it 'takes the target for untouched files from --profile and the limits from the flags' do
+      loose = described_class.new(dir, within_lu: 20.0, lra_limit: 100.0)
+      tight = described_class.new(dir, within_lu: 0.1)
+
+      expect(loose.rate.remote_free).to eq(5)
+      expect(tight.rate.remote_free).to eq(2) # only the two landing exactly on target
+    end
+
+    it 'prints the rate through the CLI, in JSON too' do
+      expect { Neutraliser::CLI.start(['report', dir]) }.to output(/Remote-free rate: 60.0% \(3 of 5/).to_stdout
+      expect { Neutraliser::CLI.start(['report', dir, '--format', 'json']) }
+        .to output(/"remote_free_rate": \{\s+"rate": 0.6/).to_stdout
+    end
   end
 end

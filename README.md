@@ -270,6 +270,7 @@ Normalise a file or every video under a directory.
 | `--allow-object-audio-loss` | `false` | Process files whose primary track is Atmos / DTS:X anyway. Re-encoding drops the object audio (plain 5.1/7.1 out); each such file logs a warning. Default skips them with reason `object_audio` |
 | `--min-gain` | `--tolerance` | A peak-capped file is re-encoded only if the gain **towards** target is at least this many dB; otherwise skipped (`peak_limited`) |
 | `--limit-db` | `0` | Let a peak limiter take up to N dB off overshooting peaks so quiet-but-peaky files can reach target. Off = strict constant gain. Such files are stamped `limited` and reported; not combinable with `--allow-dynamic`/`--fast`/`night` |
+| `--redo-recipe` | none | Process files again when an older recipe made them: comma-separated numbers, or `unversioned` for files stamped before recipes existed. Without it a file counts as done whatever recipe made it, so a new default never re-levels a library by itself |
 | `--allow-codec-change` | `false` | Process files whose codec can't be re-encoded to itself (DTS, TrueHD ... become FLAC/E-AC3). Default skips them with reason `codec_change` |
 | `--min-free-gb` | off | Skip a file while the output volume has less than N GiB free (or less than the file's size); reason `low_disk` |
 | `--abort-free-gb` | off | Stop the run, exit `4`, when the output volume has less than N GiB free |
@@ -320,15 +321,43 @@ Copy `.env.example` to `.env` and add your token. Only `analyze-plex` reads that
 
 ### `report PATH`
 
-Reads the `NEUTRALISER_*` tags from every video under PATH (or one file) with ffprobe and changes nothing. By default it prints counts: normalised linear, normalised dynamic, untouched, and the profile mix.
+Reads the `NEUTRALISER_*` tags from every video under PATH (or one file) with ffprobe and changes nothing. By default it prints counts: normalised linear, normalised dynamic, untouched, the profile mix and the recipe mix, then the remote-free rate.
+
+**Untouched files say why.** A file a run looked at and left alone is recorded in the `.neutraliser` sidecar: peak-limited (with its measured levels), Atmos / DTS:X, a DTS / TrueHD codec change, or already within tolerance (with its levels). `report` shows the reason, and the levels in `tsv` and `json`. Files from before recipes were stamped show as `unversioned`.
+
+**Remote-free rate.** The share of files you could watch without reaching for the remote: within `--within` LU (2) of their target loudness and at or under `--lra-limit` LU (12) of loudness range. By default the final levels are *computed* from each file's record (a constant-gain file moves by its gain; a file left alone is as measured), which is cheap but an estimate, and a file whose record can't give them (a `--limit-db` one, which lands shy of target, or one with no record) is counted as not judged. `--measure` reads every file instead (slow: it decodes each one).
 
 | Option | Default | Description |
 |---|---|---|
 | `--format` | `summary` | `summary` (counts), `tsv` (one row per file on stdout, counts on stderr) or `json` (counts plus every file's tags) |
+| `--measure` | off | Measure each file's loudness as it is now instead of computing it from the record |
+| `--within` | `2.0` | Remote-free: loudness within this many LU of the target |
+| `--lra-limit` | `12.0` | Remote-free: loudness range at or under this many LU |
+| `--profile` | `livingroom` | Target for files with no record (only judged under `--measure`) |
 
 ```bash
 neutraliser report /media/tv
 neutraliser report /media/tv --format tsv > tv-report.tsv
+neutraliser report /media/tv --measure
+```
+
+### `rate-sample ROOT [ROOT...]`
+
+Tries a recipe on copies of a random sample of files and prints its remote-free rate, so a recipe can be judged before it is run over a library. The sample is shared equally between the roots (say `/media/tv` and `/media/movies`) so a few films are not drowned by thousands of episodes. The files are copied to a scratch folder, processed there with `--replace`, measured, and the copies deleted. The library is only read, and a scratch folder inside a root is refused. The seed is printed so a sample can be repeated. Needs room for the sample plus one more copy of its biggest file.
+
+| Option | Default | Description |
+|---|---|---|
+| `--sample` | `20` | Files to sample |
+| `--seed` | random | Repeat a sample |
+| `--plan` | off | List the files that would be copied and their size; copy nothing |
+| `--work-dir` | system temp | Where the copies go; `--keep` keeps them |
+| `--measure` / `--no-measure` | measure | Measure the copies, or compute from their records |
+| `--profile`, `--target-level`, `--tolerance`, `--allow-dynamic`, `--limit-db`, `--min-gain`, `--allow-codec-change`, `--allow-object-audio-loss` | as `process` | The recipe under test |
+| `--within`, `--lra-limit` | `2.0`, `12.0` | The remote-free limits |
+
+```bash
+neutraliser rate-sample /media/tv /media/movies --sample 30 --plan
+neutraliser rate-sample /media/tv /media/movies --sample 30 --seed 7 --allow-dynamic
 ```
 
 AVI can't hold custom tags, and MP4 files with cover art or descriptive tags keep their iTunes tags rather than take ours, so these always show as untouched. Their skip state lives only in the sidecar.

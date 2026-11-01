@@ -105,6 +105,10 @@ module Neutraliser
                            desc: 'Stop the run (exit 4) when the output volume has less than N GiB free'
     option :lock_file, type: :string,
                        desc: 'Only one run at a time per lock file; exit 3 when another run holds it'
+    option :redo_recipe, type: :string,
+                         desc: "Process again files made by these older recipes: comma-separated numbers, or 'unversioned' for files " \
+                               'from before recipes were stamped (e.g. 1,unversioned). Without it a file counts as done whatever ' \
+                               'recipe made it'
     option :linear_only, type: :boolean, default: false,
                          desc: 'Deprecated no-op: constant gain is now the default'
     def process(path)
@@ -164,16 +168,25 @@ module Neutraliser
       exit 1
     end
 
-    desc 'report PATH', 'Report what neutraliser recorded inside each video file (NEUTRALISER_* tags)'
+    desc 'report PATH', 'Report what neutraliser recorded for each video file, and the share of files you could watch without the remote'
     option :format, type: :string, default: 'summary', enum: Report::FORMATS,
                     desc: 'summary (counts), tsv or json (per-file rows)'
+    option :measure, type: :boolean, default: false,
+                     desc: 'Read every file for its loudness as it is now (slow: decodes each file) instead of computing it from the records'
+    option :profile, type: :string, default: 'livingroom',
+                     desc: 'Target for files with no record, which are only judged under --measure'
+    option :within, type: :numeric, default: RemoteFreeRate::WITHIN_LU,
+                    desc: 'Remote-free: loudness within this many LU of the target'
+    option :lra_limit, type: :numeric, default: RemoteFreeRate::LRA_LIMIT,
+                       desc: 'Remote-free: loudness range at or under this many LU'
     def report(path)
       raise Thor::Error, "Error: Path '#{path}' does not exist" unless File.exist?(path)
 
       # A failed tag probe reads as "no tags", so without ffprobe every file would
       # look untouched.
       FFmpegWrapper.version
-      report = Report.new(path)
+      report = Report.new(path, measure: options[:measure], profile: Profiles.get_profile(options[:profile]),
+                                within_lu: options[:within], lra_limit: options[:lra_limit])
       case options[:format]
       when 'tsv'
         puts report.to_tsv
@@ -181,7 +194,41 @@ module Neutraliser
       when 'json' then puts report.to_json
       else puts report.summary
       end
-    rescue FFmpegNotFoundError => e
+    rescue ArgumentError, FFmpegNotFoundError => e
+      raise Thor::Error, "Error: #{e.message}"
+    end
+
+    desc 'rate-sample ROOT [ROOT...]', 'Try a recipe on copies of a random sample of files and report its remote-free rate (the library is only read)'
+    option :sample, type: :numeric, default: 20, desc: 'How many files to sample, spread evenly over the roots'
+    option :seed, type: :numeric, desc: 'Seed for the random sample (printed, so a sample can be repeated)'
+    option :plan, type: :boolean, default: false, desc: 'Only list the files that would be copied; copy nothing'
+    option :work_dir, type: :string, desc: 'Where to put the copies (default: system temp). Must be outside every root'
+    option :keep, type: :boolean, default: false, desc: 'Keep the processed copies instead of deleting them'
+    option :measure, type: :boolean, default: true,
+                     desc: 'Measure the processed copies (default) or compute levels from their records'
+    option :profile, type: :string, default: 'livingroom', desc: 'Recipe: normalization profile'
+    option :target_level, type: :numeric, desc: 'Recipe: target LUFS (overrides profile)'
+    option :tolerance, type: :numeric, default: 1.0, desc: 'Recipe: skip files within this many LU of target'
+    option :allow_dynamic, type: :boolean, default: false, desc: 'Recipe: allow loudnorm to compress dynamics'
+    option :limit_db, type: :numeric, default: 0.0, desc: 'Recipe: peak limiter reach in dB (0 = off)'
+    option :min_gain, type: :numeric, desc: 'Recipe: skip a peak-capped file when the gain would be under N dB'
+    option :allow_codec_change, type: :boolean, default: false, desc: 'Recipe: process DTS / TrueHD anyway'
+    option :allow_object_audio_loss, type: :boolean, default: false, desc: 'Recipe: process Atmos / DTS:X anyway'
+    option :within, type: :numeric, default: RemoteFreeRate::WITHIN_LU, desc: 'Remote-free: within this many LU of target'
+    option :lra_limit, type: :numeric, default: RemoteFreeRate::LRA_LIMIT, desc: 'Remote-free: loudness range at or under N LU'
+    def rate_sample(*roots)
+      raise Thor::Error, 'Error: give at least one root folder' if roots.empty?
+
+      FFmpegWrapper.version
+      harness = RateHarness.new(
+        roots: roots, size: options[:sample].to_i, seed: options[:seed]&.to_i, processor_options: recipe_options,
+        measure: options[:measure], work_dir: options[:work_dir], keep: options[:keep],
+        within_lu: options[:within], lra_limit: options[:lra_limit]
+      )
+      return print_plan(harness) if options[:plan]
+
+      print_rate(harness.run)
+    rescue ArgumentError, RateHarness::Error, FFmpegNotFoundError => e
       raise Thor::Error, "Error: #{e.message}"
     end
 
@@ -269,6 +316,31 @@ module Neutraliser
 
     def gib(value) = value && (value * DiskGuard::GIB).to_i
 
+    def recipe_options
+      { profile: options[:profile], target_level: options[:target_level], tolerance: options[:tolerance],
+        allow_dynamic: options[:allow_dynamic], limit_db: options[:limit_db], min_gain: options[:min_gain],
+        allow_codec_change: options[:allow_codec_change], allow_object_audio_loss: options[:allow_object_audio_loss] }
+    end
+
+    def print_plan(harness)
+      picks = harness.plan
+      puts "Seed: #{harness.seed}"
+      picks.each { |pick| puts "#{pick.root}\t#{pick.relative}\t#{(pick.size / (1024.0**2)).round} MiB" }
+      puts "Would copy #{picks.size} file(s), #{(picks.sum(&:size) / DiskGuard::GIB.to_f).round(2)} GiB. Nothing copied."
+    end
+
+    def print_rate(result)
+      report = result.report
+      puts "Seed: #{result.seed} (repeat this sample with --seed #{result.seed})"
+      report.rows.each do |row|
+        pick = result.copies.fetch(row.file)
+        puts [File.join(File.basename(pick.root), pick.relative), report.state_text(row), report.levels_text(row),
+              report.verdict_text(row)].join("\t")
+      end
+      puts report.summary
+      puts "Copies kept in #{result.work_dir}" if result.work_dir
+    end
+
     # The only place a bad option combination (--fast without --allow-dynamic)
     # surfaces. Anything raised once the run is under way is a real error, not
     # a usage message.
@@ -291,7 +363,8 @@ module Neutraliser
         limit_db: options[:limit_db],
         min_gain: options[:min_gain],
         allow_codec_change: options[:allow_codec_change],
-        disk_guard: guard
+        disk_guard: guard,
+        redo_recipes: options[:redo_recipe].to_s.split(',').map { |text| Recipe.parse(text) }
       )
     rescue ArgumentError, FileManagerError, SystemCallError => e
       raise Thor::Error, "Error: #{e.message}"

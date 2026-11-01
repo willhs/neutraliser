@@ -646,6 +646,7 @@ RSpec.describe Neutraliser::Processor do
       allow(FFMPEG::Movie).to receive(:new).and_return(instance_double(FFMPEG::Movie, audio_stream: true))
       allow(Neutraliser::FFmpegWrapper).to receive(:detect_audio_tracks).and_return([atmos_track])
       allow(skip_decider).to receive(:mark_processed)
+      allow(skip_decider).to receive(:mark_left)
     end
 
     def run(processor)
@@ -673,6 +674,8 @@ RSpec.describe Neutraliser::Processor do
       expect(result).to include(status: :skipped, reason: :object_audio, message: 'Dolby Digital Plus + Dolby Atmos')
       expect(output).to match(/Object audio \(Dolby Digital Plus \+ Dolby Atmos\).*skipping.*--allow-object-audio-loss/)
       expect(skip_decider).not_to have_received(:mark_processed)
+      expect(skip_decider).to have_received(:mark_left)
+        .with(video_file, have_attributes(reason: 'object_audio', message: 'Dolby Digital Plus + Dolby Atmos'))
     end
 
     it 'skips in a dry run too, so the preview shows what a real run will do' do
@@ -870,7 +873,9 @@ RSpec.describe Neutraliser::Processor do
   describe 'prod-parity guards' do
     let(:video_file) { File.join(temp_dir, 'movie.mkv') }
     let(:dts_track) { { index: 0, channels: 6, codec: 'dts', bit_rate: 1_509_000, sample_rate: 48_000 } }
-    let(:skip_decider) { instance_double(Neutraliser::SkipDecider, already_processed?: false, mark_processed: nil) }
+    let(:skip_decider) do
+      instance_double(Neutraliser::SkipDecider, already_processed?: false, mark_processed: nil, mark_left: nil)
+    end
     let(:measured) do
       Neutraliser::Measurement.new(input_i: -26.0, input_tp: -12.0, input_lra: 8.0, input_thresh: -36.0,
                                    target_offset: 0.0)
@@ -899,6 +904,8 @@ RSpec.describe Neutraliser::Processor do
 
         expect(result).to include(status: :skipped, reason: :codec_change, message: 'dts would be re-encoded as flac')
         expect(skip_decider).not_to have_received(:mark_processed)
+        expect(skip_decider).to have_received(:mark_left)
+          .with(video_file, have_attributes(reason: 'codec_change', message: 'dts would be re-encoded as flac'))
       end
 
       it 'processes it under --allow-codec-change' do

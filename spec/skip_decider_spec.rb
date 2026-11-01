@@ -168,4 +168,120 @@ RSpec.describe Neutraliser::SkipDecider do
       expect(decider.skip?(video_path, profile, tolerance: 1.0)).to be false
     end
   end
+
+  describe 'recipes' do
+    let(:stamp_for) do
+      lambda do |recipe|
+        Neutraliser::Stamp.now(profile: 'livingroom', recipe: recipe, mode: 'linear', gain_db: 3.0, source_codec: 'aac',
+                               source_bitrate: nil, measured_i: -23.0, measured_tp: -6.0, measured_lra: 5.0)
+      end
+    end
+
+    before { stub_const('Neutraliser::Recipe::CURRENT', 2) }
+
+    it 'counts a file made by any recipe as done, so a new default never re-levels on its own' do
+      [1, nil, 2].each do |recipe|
+        allow(Neutraliser::FFmpegWrapper).to receive(:read_stamp).and_return(stamp_for.call(recipe))
+
+        FileUtils.rm_f(File.join(temp_dir, '.neutraliser'))
+
+        expect(described_class.new(temp_dir).already_processed?(video_path, profile)).to be true
+      end
+    end
+
+    it 'does the files of a named recipe over, and no others' do
+      redo_old = described_class.new(temp_dir, redo_recipes: [1])
+
+      allow(Neutraliser::FFmpegWrapper).to receive(:read_stamp).and_return(stamp_for.call(1))
+      expect(redo_old.already_processed?(video_path, profile)).to be false
+      allow(Neutraliser::FFmpegWrapper).to receive(:read_stamp).and_return(stamp_for.call(2))
+      expect(redo_old.already_processed?(video_path, profile)).to be true
+    end
+
+    it 'does unversioned files over when asked, and not before' do
+      allow(Neutraliser::FFmpegWrapper).to receive(:read_stamp).and_return(stamp_for.call(nil))
+
+      expect(described_class.new(temp_dir).already_processed?(video_path, profile)).to be true
+      expect(described_class.new(temp_dir, redo_recipes: [nil]).already_processed?(video_path, profile)).to be false
+    end
+
+    it 'remembers a tag hit under the file\'s own recipe, not the current one' do
+      allow(Neutraliser::FFmpegWrapper).to receive(:read_stamp).and_return(stamp_for.call(1))
+      described_class.new(temp_dir).already_processed?(video_path, profile)
+
+      entry = JSON.parse(File.read(File.join(temp_dir, '.neutraliser')))['movie.mp4']
+      expect(entry['recipe']).to eq(1)
+      # So a later redo of recipe 1 is not hidden by the cached verdict.
+      expect(described_class.new(temp_dir, redo_recipes: [1]).already_processed?(video_path, profile)).to be false
+    end
+
+    it 'records the current recipe for a file it marks processed' do
+      described_class.new(temp_dir).mark_processed(video_path, profile)
+
+      expect(JSON.parse(File.read(File.join(temp_dir, '.neutraliser')))['movie.mp4']).to include('recipe' => 2)
+    end
+
+    it 'leaves the recipe off an entry that predates recipes, and still honours it' do
+      File.write(File.join(temp_dir, '.neutraliser'), JSON.generate(
+                                                        'movie.mp4' => { 'size' => File.size(video_path), 'mtime' => File.mtime(video_path).to_i,
+                                                                         'profile' => 'livingroom' }
+                                                      ))
+
+      expect(described_class.new(temp_dir).already_processed?(video_path, profile)).to be true
+      expect(described_class.new(temp_dir, redo_recipes: [nil]).already_processed?(video_path, profile)).to be false
+    end
+  end
+
+  describe 'left-alone records' do
+    let(:record) do
+      Neutraliser::LeftRecord.new(reason: 'peak_limited', profile: 'livingroom', recipe: 1, message: 'peaky',
+                                  measured_i: -30.0, measured_tp: -0.5, measured_lra: 4.0)
+    end
+
+    it 'keeps a record that is never mistaken for done' do
+      decider = described_class.new(temp_dir)
+      decider.mark_left(video_path, record)
+
+      expect(decider.already_processed?(video_path, profile)).to be false
+      expect(described_class.new(temp_dir).already_processed?(video_path, profile)).to be false
+      expect(described_class.new(temp_dir).left_record(video_path)).to eq(record)
+    end
+
+    it 'is replaced when the file is marked processed' do
+      decider = described_class.new(temp_dir)
+      decider.mark_left(video_path, record)
+      decider.mark_processed(video_path, profile)
+
+      expect(decider.left_record(video_path)).to be_nil
+      expect(decider.already_processed?(video_path, profile)).to be true
+    end
+
+    it 'goes stale when the file changes' do
+      decider = described_class.new(temp_dir)
+      decider.mark_left(video_path, record)
+      File.write(video_path, 'x' * 300)
+
+      expect(decider.left_record(video_path)).to be_nil
+    end
+
+    it 'is found from a folder above, where the run that wrote it started' do
+      sub = File.join(temp_dir, 'Show', 'S01')
+      FileUtils.mkdir_p(sub)
+      episode = File.join(sub, 'e1.mkv')
+      File.write(episode, 'y' * 50)
+      described_class.new(temp_dir).mark_left(episode, record)
+
+      expect(described_class.left_record_for(episode)).to eq(record)
+      expect(described_class.left_record_for(video_path)).to be_nil
+    end
+
+    it 'keeps the measured levels of a close-enough file beside its processed entry' do
+      within = record.with(reason: 'within_tolerance')
+      decider = described_class.new(temp_dir)
+      decider.mark_processed(video_path, profile, tolerance: 1.0, left: within)
+
+      expect(decider.already_processed?(video_path, profile)).to be true
+      expect(described_class.new(temp_dir).left_record(video_path)).to eq(within)
+    end
+  end
 end

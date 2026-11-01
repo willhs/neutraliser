@@ -79,6 +79,26 @@ RSpec.describe Neutraliser::CLI do
       expect(seen[:disk_guard]).to be_enabled
     end
 
+    it 'passes --redo-recipe as recipes, with unversioned as nil, and none by default' do
+      processor = instance_double(Neutraliser::Processor, process: { found: 0, queued: 0, resumed: 0, done: 0, skipped: 0, failed: 0 })
+      seen = []
+      allow(Neutraliser::Processor).to receive(:new) do |**kwargs|
+        seen << kwargs
+        processor
+      end
+
+      described_class.start(['process', '/tmp/library'])
+      described_class.start(['process', '--redo-recipe', 'unversioned', '/tmp/library'])
+      described_class.start(['process', '--redo-recipe', '1,unversioned', '/tmp/library'])
+
+      expect(seen.map { |kwargs| kwargs[:redo_recipes] }).to eq([[], [nil], [1, nil]])
+    end
+
+    it 'turns a bad --redo-recipe into a usage error' do
+      expect { described_class.start(['process', '--redo-recipe', 'newest', '/tmp/library']) }
+        .to raise_error(SystemExit).and output(/Unknown recipe 'newest'/).to_stderr
+    end
+
     it 'exits 4 when the run was aborted by the disk guard' do
       processor = instance_double(Neutraliser::Processor, process: { found: 2, queued: 2, done: 1, skipped: 0, failed: 0, aborted: true })
       allow(Neutraliser::Processor).to receive(:new).and_return(processor)

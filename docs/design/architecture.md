@@ -72,7 +72,14 @@ The normalise pass writes a `Stamp` (`lib/neutraliser/stamp.rb`) as `NEUTRALISER
 
 The mode tag has to be written before ffmpeg runs, but with `--allow-dynamic` loudnorm only says afterwards whether it stayed linear. So `predict_loudnorm_type` copies loudnorm's own rule (valid measured values, gain fits under the true-peak ceiling, source LRA ≤ target LRA). If loudnorm's summary disagrees, `restamp` stream-copies the output once with corrected tags before it is committed. The tags never claim the wrong mode. Constant gain (the default) is always linear and `--fast` is always dynamic, so neither needs a prediction.
 
-`neutraliser report PATH` (`lib/neutraliser/report.rb`) reads the stamps back to count linear / dynamic / untouched files and the profile mix.
+`neutraliser report PATH` (`lib/neutraliser/report.rb`) reads the stamps back to count linear / dynamic / untouched files, the profile mix and the recipe mix.
+
+### Recipes, left-alone records and the remote-free rate
+
+- **Recipe** (`recipe.rb`): a version number for the leveling method, stamped as `NEUTRALISER_RECIPE` and kept in the sidecar. Profile names say where to aim; the recipe says how. `SkipDecider` ignores the recipe by default, so changing the default can never re-level a library by accident, and takes `redo_recipes:` (`process --redo-recipe`) as the deliberate re-run. Files from before recipes are `unversioned`: valid, counted, and redoable. The current recipe can't be redone (every file it wrote would qualify again).
+- **LeftRecord** (`left_record.rb`): why a file was looked at and not re-encoded (peak-limited, object audio, codec change, within tolerance), with its measured levels when there are any. A stamp needs a re-encode, so the record lives in the sidecar, shaped so it can't be mistaken for "done" (no top-level `profile`). `Report` reads it via `SkipDecider.left_record_for`.
+- **FinalLevels / RemoteFreeRate** (`remote_free_rate.rb`): where a file ends up (integrated loudness, LRA, target) and the share of files within 2 LU of target and at or under an LRA limit (12 LU). Levels are *computed* from the record by default (constant gain: measured + gain, range unchanged; dynamic: the target, range capped at the profile's; untouched: as measured) or *measured* by reading the file (`report --measure`). A file whose levels the record can't give, such as a `limited` one, is counted as not judged rather than guessed: a limiter run aimed at -20 LUFS measured -26.
+- **RateHarness** (`rate_harness.rb`, `neutraliser rate-sample`): an equal share of a random sample per root, copied to a scratch folder outside the library, run through the processor with `replace`, judged by `Report`. The library is only read; a work folder inside a root is refused.
 
 ### Performance Flags
 
@@ -98,7 +105,11 @@ Both flags are independent and can be combined.
 | GainPlan | `lib/neutraliser/gain_plan.rb` | The constant-gain decision for a measurement: applied gain capped by the true-peak headroom (plus `--limit-db`), limiter filter, shortfall, direction-aware `worthwhile?` |
 | DiskGuard / RunLock | `lib/neutraliser/disk_guard.rb`, `run_lock.rb` | Free-space floors (skip a file / abort the run) and the flock run lock, for unattended NAS sweeps |
 | ManifestImport | `lib/neutraliser/manifest_import.rb` | Carries the retired `neutralise.sh` manifest into `.neutraliser` sidecars |
-| Report | `lib/neutraliser/report.rb` | `neutraliser report`: reads stamps across a directory, counts and per-file rows |
+| Report | `lib/neutraliser/report.rb` | `neutraliser report`: reads stamps and left-alone records across a directory, counts, per-file rows and the remote-free rate |
+| Recipe | `lib/neutraliser/recipe.rb` | The leveling method's version number; what `--redo-recipe` accepts |
+| LeftRecord | `lib/neutraliser/left_record.rb` | Why a file was left as it is, with measured levels; stored in the sidecar |
+| RemoteFreeRate | `lib/neutraliser/remote_free_rate.rb` | `FinalLevels` (computed or measured) and the share of files within 2 LU of target and under an LRA limit |
+| RateHarness | `lib/neutraliser/rate_harness.rb` | `neutraliser rate-sample`: a recipe tried on copies of a random sample across roots |
 | FileManager | `lib/neutraliser/file_manager.rb` | Atomic file replacement, integrity verification |
 | LocalStager | `lib/neutraliser/local_stager.rb` | Stage files to local NVMe for fast processing, copy result back |
 

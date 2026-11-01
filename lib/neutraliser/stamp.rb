@@ -11,13 +11,17 @@ module Neutraliser
   # limiter, --limit-db) or 'dynamic' (loudnorm compressed the dynamic range).
   # gain_db is only meaningful for linear and limited; measured_* are the
   # pre-normalisation loudnorm values, absent in --fast mode (no analysis).
-  Stamp = Data.define(:version, :profile, :mode, :gain_db, :source_codec, :source_bitrate,
+  #
+  # recipe is the leveling method's version (Recipe); nil on a stamp from before
+  # versioning, which stays valid.
+  Stamp = Data.define(:version, :profile, :recipe, :mode, :gain_db, :source_codec, :source_bitrate,
                       :measured_i, :measured_tp, :measured_lra, :date)
 
   class Stamp
     def self.tag_name(field) = "NEUTRALISER_#{field.upcase}"
 
     FLOAT_FIELDS = %i[gain_db measured_i measured_tp measured_lra].freeze
+    INTEGER_FIELDS = %i[source_bitrate recipe].freeze
 
     # Builds a Stamp from probed tags (stream or container level). Tag-name
     # case varies by container, so keys are matched case-insensitively.
@@ -33,13 +37,13 @@ module Neutraliser
     def self.decode(field, value)
       return nil if value.empty?
       return value.to_f if FLOAT_FIELDS.include?(field)
-      return value.to_i if field == :source_bitrate
+      return value.to_i if INTEGER_FIELDS.include?(field)
 
       value
     end
 
     def self.now(**fields)
-      new(version: VERSION, date: Time.now.utc.iso8601, **fields)
+      new(version: VERSION, recipe: Recipe::CURRENT, date: Time.now.utc.iso8601, **fields)
     end
 
     # Every field is always written: an empty value makes ffmpeg delete the

@@ -14,6 +14,17 @@ RSpec.describe Neutraliser::Stamp do
                                         date: stamp.date)
   end
 
+  it 'carries the recipe, and reads a stamp from before recipes as unversioned' do
+    expect(stamp.recipe).to eq(Neutraliser::Recipe::CURRENT)
+    expect(stamp.to_tags).to include('NEUTRALISER_RECIPE' => Neutraliser::Recipe::CURRENT.to_s)
+    expect(described_class.from_tags(stamp.to_tags)).to have_attributes(recipe: Neutraliser::Recipe::CURRENT)
+
+    legacy = stamp.to_tags.except('NEUTRALISER_RECIPE')
+    expect(described_class.from_tags(legacy)).to have_attributes(profile: 'livingroom', recipe: nil)
+    expect(described_class.from_tags(stamp.to_tags.merge('NEUTRALISER_RECIPE' => ''))).to have_attributes(recipe: nil)
+    expect(stamp.with(recipe: nil).recipe).to be_nil
+  end
+
   it 'writes every field, empty when unknown, so stale tags from an earlier run are deleted' do
     tags = described_class.now(profile: 'night', mode: 'dynamic', gain_db: nil, source_codec: 'aac',
                                source_bitrate: nil, measured_i: nil, measured_tp: nil, measured_lra: nil).to_tags

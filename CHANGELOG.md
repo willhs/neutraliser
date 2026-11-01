@@ -4,6 +4,22 @@ All notable changes to this project are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and this project adheres to
 [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Added
+
+- Stamps record a **recipe version** (`NEUTRALISER_RECIPE`, also in the sidecar). Files stamped
+  before this stay valid and show as `unversioned` in `report`. A run never re-levels a file
+  because its recipe is older; `process --redo-recipe 1,unversioned` is the deliberate re-run.
+- Files left alone on purpose are recorded in the sidecar with the reason and, where it was
+  measured, their levels: peak-limited, Atmos / DTS:X, DTS / TrueHD codec change, and within
+  tolerance. `report` shows them (`tsv` and `json` carry the levels). They never count as done.
+- `report` shows the **remote-free rate**: the share of files within 2 LU of target and at or
+  under 12 LU of loudness range (`--within`, `--lra-limit`). Levels are computed from the
+  records, or measured from the files with `--measure`.
+- `rate-sample ROOT...` runs a recipe on copies of a random sample (an equal share per root, so
+  films aren't drowned by episodes) and reports that rate. The library is only read.
+
 ## [0.1.0] — 2026-10-31
 
 First public release. Run from source (`git clone` + `bundle install`) or with the

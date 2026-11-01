@@ -25,6 +25,15 @@ module Neutraliser
       end
     end
 
+    # The profile a stamp's name stands for, or nil when it names none we know.
+    # Custom names carry their target (`custom-18`), so they can be rebuilt.
+    def self.find(name)
+      return PROFILES[name] if PROFILES.key?(name)
+
+      match = name.to_s.match(/\Acustom([+-]?\d+(?:\.\d+)?)\z/)
+      match && custom_profile(match[1].to_f)
+    end
+
     # `dynamic: true` marks a compression profile: it implies allow-dynamic,
     # so loudnorm may squash dynamic range without the --allow-dynamic flag.
     # The default name carries the target because stamps, sidecars and caches

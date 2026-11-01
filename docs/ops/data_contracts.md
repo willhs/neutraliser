@@ -3,7 +3,7 @@ type: note
 status: active
 owner: will
 contributors: []
-updated: 2026-10-15
+updated: 2026-11-01
 review_cycle: 30d
 agent_write: true
 links: []
@@ -22,6 +22,7 @@ Every file neutraliser writes carries a record of what was done to it. `Neutrali
 | Tag | Example | Meaning |
 |---|---|---|
 | `NEUTRALISER_VERSION` | `0.1.0` | neutraliser version that wrote it |
+| `NEUTRALISER_RECIPE` | `1` | Version of the leveling method that wrote it (`Neutraliser::Recipe::CURRENT`). The profile says where to aim, the recipe how it gets there. Absent on files stamped before recipes existed: those stay valid (a run counts them done) and `report` lists them as `unversioned`. A newer recipe never re-levels a file by itself; `process --redo-recipe N` (or `unversioned`) is the deliberate re-run |
 | `NEUTRALISER_PROFILE` | `livingroom` | Profile name (`reference`, `livingroom`, `night`, or `custom<target>` for `--target-level`, e.g. `custom-18`). **Its presence is what marks a file as processed.** |
 | `NEUTRALISER_MODE` | `linear` | `linear` (constant gain, dynamics untouched), `limited` (constant gain plus a peak limiter, `--limit-db`) or `dynamic` (loudnorm compressed the dynamic range) |
 | `NEUTRALISER_GAIN_DB` | `-1.50` | Constant gain applied, in dB (before the limiter, for `limited`). Empty for `dynamic` |
@@ -52,7 +53,9 @@ Where the tags live:
 
 ### Sidecar cache: `.neutraliser`
 
-JSON in the run's root directory, mapping each file's path (relative to that root) to `{size, mtime, profile, processed_at}`, plus `tolerance` when the file was left alone for being close enough (a stricter run looks again). After a copy-mode run the entry names the `_normalized` copy, not the original. Peak-limited files aren't recorded, so a later `--limit-db` run can still reach them. It is a cache in front of the tag check. A file counts as processed when size, mtime and profile all match. A tag hit refreshes the entry. A sidecar in the file's own folder also counts for a run started above it; `neutraliser import-manifest` writes there.
+JSON in the run's root directory, mapping each file's path (relative to that root) to `{size, mtime, profile, recipe, processed_at}`, plus `tolerance` when the file was left alone for being close enough (a stricter run looks again). `recipe` is the recipe that made or judged the file; a tag hit keeps the file's own, and entries without one are unversioned. After a copy-mode run the entry names the `_normalized` copy, not the original.
+
+A file looked at and left alone on purpose gets a `left` object: `{reason, profile, recipe, message, measured_i, measured_tp, measured_lra}` (`Neutraliser::LeftRecord`), which `neutraliser report` shows. `reason` is `peak_limited` (the peak ceiling leaves under `--min-gain` dB), `object_audio`, `codec_change` (DTS / TrueHD) or `within_tolerance`. The measured levels are present for `peak_limited` and `within_tolerance`; the object-audio and codec checks run before any measurement. For the first three the entry has `{size, mtime, left, recorded_at}` and **no top-level `profile`**, so it never matches as done and the next run decides again (`--limit-db`, `--allow-codec-change` and the rest can change the answer). A `within_tolerance` record rides inside the processed entry. Normalising the file later replaces the entry; a changed size or mtime makes the record stale. A dry run records nothing. `report` reads these from the `.neutraliser` in the file's folder or any folder above it. It is a cache in front of the tag check. A file counts as processed when size, mtime and profile all match. A tag hit refreshes the entry. A sidecar in the file's own folder also counts for a run started above it; `neutraliser import-manifest` writes there.
 
 ### Run manifest: `.neutraliser-run-manifest.jsonl`
 
@@ -84,6 +87,7 @@ The record lives in the file because the sidecar is tied to the run's root direc
 - docs/ops/runbook.md
 
 ### Change Log
+- 2026-11-01 (agent:no-regret-groundwork): Added `NEUTRALISER_RECIPE`, the sidecar `recipe` and `left` records
 - 2026-10-20 (agent:prod-parity): Added `limited` mode, `codec_change`/`low_disk`/`peak_limited` skip reasons, output-match verification, sidecar-in-own-folder rule
 - 2026-10-15 (agent:preflight-failures): Documented failure reasons and the one-line failure message
 - 2026-10-15 (agent:record-what-was-done): Added the NEUTRALISER_* tag schema, sidecar and run-manifest contracts
