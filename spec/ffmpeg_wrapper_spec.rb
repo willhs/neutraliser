@@ -636,9 +636,9 @@ RSpec.describe Neutraliser::FFmpegWrapper do
         array_including('-of', 'json'), described_class::PROBE_TIMEOUT, 'Audio track detection'
       )
       expect(result).to eq([
-                             { index: 0, stream_index: 1, channels: 6, channel_layout: '5.1(side)', codec: 'ac3', profile: nil, title: nil, language: nil, default: false, dispositions: [], bit_rate: 640_000,
+                             { index: 0, stream_index: 1, channels: 6, channel_layout: '5.1(side)', codec: 'ac3', profile: nil, title: nil, handler_name: nil, language: nil, default: false, dispositions: [], bit_rate: 640_000,
                                sample_rate: 48_000 },
-                             { index: 1, stream_index: 2, channels: 2, channel_layout: nil, codec: 'aac', profile: nil, title: nil, language: nil, default: false, dispositions: [], bit_rate: 256_000,
+                             { index: 1, stream_index: 2, channels: 2, channel_layout: nil, codec: 'aac', profile: nil, title: nil, handler_name: nil, language: nil, default: false, dispositions: [], bit_rate: 256_000,
                                sample_rate: 44_100 }
                            ])
     end

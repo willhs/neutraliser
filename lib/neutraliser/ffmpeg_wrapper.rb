@@ -490,7 +490,7 @@ module Neutraliser
     def self.detect_audio_tracks(input_path)
       cmd = [
         'ffprobe', '-v', 'error', '-select_streams', 'a',
-        '-show_entries', 'stream=index,codec_name,profile,sample_rate,channels,channel_layout,bit_rate:stream_tags=title,language:stream_disposition',
+        '-show_entries', 'stream=index,codec_name,profile,sample_rate,channels,channel_layout,bit_rate:stream_tags=title,language,handler_name:stream_disposition',
         '-of', 'json', input_path
       ]
 
@@ -525,6 +525,7 @@ module Neutraliser
           codec: stream['codec_name'] || 'unknown',
           profile: parse_profile(stream['profile']),
           title: stream.dig('tags', 'title'),
+          handler_name: stream.dig('tags', 'handler_name'),
           language: stream.dig('tags', 'language')&.downcase,
           default: stream.dig('disposition', 'default') == 1,
           dispositions: PRESERVED_DISPOSITIONS.select { |flag| stream.dig('disposition', flag) == 1 },
@@ -949,9 +950,7 @@ module Neutraliser
       flags = ['default', *flags] if keep_original || primary[:default]
       cmd += ["-disposition:a:#{normalised_output}", flags.join('+')] if flags.any?
       if keep_original
-        cmd += ["-map_metadata:s:a:#{kept_output}", "0:s:a:#{primary[:index]}",
-                "-metadata:s:a:#{kept_output}", "title=#{original_title(primary)}",
-                "-disposition:a:#{kept_output}", '0']
+        cmd += kept_original_args(kept_output, primary, output_path)
       end
       stream_counts[:video].to_i.times do |i|
         cmd += ["-map_metadata:s:v:#{i}", "0:s:v:#{i}"]
@@ -974,6 +973,15 @@ module Neutraliser
       cmd
     end
 
+    def self.kept_original_args(output_index, primary, output_path)
+      title = original_title(primary)
+      args = ["-map_metadata:s:a:#{output_index}", "0:s:a:#{primary[:index]}",
+              "-metadata:s:a:#{output_index}", "title=#{title}", "-disposition:a:#{output_index}", '0']
+      # MP4 has no stream title; players show its handler name instead.
+      mp4 = MP4_FAMILY.include?(File.extname(output_path).downcase)
+      mp4 ? args + ["-metadata:s:a:#{output_index}", "handler_name=#{title}"] : args
+    end
+
     ORIGINAL_TITLE_SUFFIX = '(original, not normalised)'.freeze
 
     def self.original_title(track)
@@ -982,7 +990,7 @@ module Neutraliser
 
     # A track a previous --keep-original-audio run preserved.
     def self.original_copy?(track)
-      track[:title].to_s.end_with?(ORIGINAL_TITLE_SUFFIX)
+      [track[:title], track[:handler_name]].any? { |name| name.to_s.end_with?(ORIGINAL_TITLE_SUFFIX) }
     end
 
     def self.execute_with_progress(cmd)
@@ -1001,6 +1009,7 @@ module Neutraliser
     # above `execute_with_timeout` on why the old `private` keyword didn't
     # do this).
     private_class_method :execute_with_timeout,
+                         :kept_original_args,
                          :stop_process,
                          :valid_utf8,
                          :timeout_variable,

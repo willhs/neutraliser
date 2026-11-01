@@ -309,6 +309,23 @@ NEUTRALISER_ANALYSIS_TIMEOUT=3600 NEUTRALISER_NORMALIZATION_TIMEOUT=3600 \
   neutraliser process /media/tv
 ```
 
+### Keeping the original audio (`--keep-original-audio`)
+
+Off by default. With it, one output file carries both versions of the main audio track:
+
+1. the normalised track, first and set as the default, so players pick it;
+2. the original, a bit-exact stream copy (same audio packets, no re-encode), not default, titled `<title> (original, not normalised)`.
+
+Other audio tracks, subtitles and chapters are untouched, and the original keeps its language tag. In MP4/M4V/MOV, which have no stream title, the label is stored as the track's handler name.
+
+**Switching tracks:** use the player's audio-track menu and pick the one marked "(original, not normalised)". Players differ in what they show for MP4 labels.
+
+**Disk cost:** about one extra copy of the main audio track: roughly 0.1–1.5 GB for a two-hour film, depending on the codec (a lossless TrueHD/DTS-HD track is at the top of that range). Video is not duplicated.
+
+**Re-runs:** an already-normalised file is skipped, and a file that already holds a kept original never gets a second one. There is no undo command: to go back, remux the original track out with ffmpeg.
+
+This is proved with real-ffmpeg round-trip specs (MKV and MP4, audio hashes compared) but **has not been tested on Plex or other clients**.
+
 ### `analyze-plex`
 
 Loudness triage across your Plex movie and TV libraries, modifying nothing. Reads audio over Plex's own stream, so it doesn't need filesystem access to the media. TV libraries are read episode by episode (`Show S01E02 Title`).

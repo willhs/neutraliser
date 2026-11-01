@@ -125,4 +125,53 @@ RSpec.describe 'Golden round trip over a real-structure clip', :real_ffmpeg do
       end
     end
   end
+
+  # Audio packets only, so a bit-exact stream copy gives the same hash.
+  def audio_hash(path, audio_index)
+    out, = Open3.capture2('ffmpeg', '-v', 'error', '-i', path, '-map', "0:a:#{audio_index}", '-c', 'copy', '-f', 'md5', '-')
+    out.strip
+  end
+
+  %w[mkv mp4].each do |ext|
+    it "keeps a bit-exact, non-default, titled original beside the levelled track with --keep-original-audio (#{ext})" do
+      Dir.mktmpdir do |dir|
+        path = File.join(dir, "keep.#{ext}")
+        build_fixture(path, dir, ext)
+        before = probe(path)
+        before_hashes = (0..2).map { |i| audio_hash(path, i) }
+
+        Neutraliser::Processor.new(replace: true, profile: 'livingroom', keep_original_audio: true).process(path)
+
+        after = probe(path)
+        audio = streams_of(after, 'audio')
+        tags = audio.map { |s| (s['tags'] || {}).transform_keys(&:downcase) }
+        # Source a:0, a:1 (levelled, then its original), a:2
+        expect(audio.length).to eq(4)
+        expect(audio.map { |s| s['disposition']['default'] }).to eq([0, 1, 0, 0])
+        expect(tags.map { |t| t['language'] }).to eq(%w[eng jpn jpn fre])
+
+        # The original is the exact packets of source a:1; the others are untouched.
+        expect(audio_hash(path, 2)).to eq(before_hashes[1])
+        expect(audio_hash(path, 0)).to eq(before_hashes[0])
+        expect(audio_hash(path, 3)).to eq(before_hashes[2])
+        expect(audio_hash(path, 1)).not_to eq(before_hashes[1])
+
+        # Titles: MKV carries them; the kept one is clearly marked.
+        if ext == 'mkv'
+          expect(tags[1]['title']).to eq('日本語 Main')
+          expect(tags[2]['title']).to eq('日本語 Main (original, not normalised)')
+        else # MP4 has no stream title; the handler name carries it
+          expect(tags[2]['handler_name']).to eq('(original, not normalised)')
+        end
+        expect(mean_volume(path, 1) - mean_volume(path, 2)).to be > 3.0
+        expect(Neutraliser::FFmpegWrapper.read_stamp(path)).to have_attributes(profile: 'livingroom')
+        expect(streams_of(after, 'video').length).to eq(streams_of(before, 'video').length)
+
+        # A re-run is skipped: no second copy.
+        Neutraliser::Processor.new(replace: true, profile: 'livingroom', keep_original_audio: true).process(path)
+        expect(streams_of(probe(path), 'audio').length).to eq(4)
+        expect(audio_hash(path, 2)).to eq(before_hashes[1])
+      end
+    end
+  end
 end
