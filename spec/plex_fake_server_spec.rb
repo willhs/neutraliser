@@ -14,9 +14,7 @@ RSpec.describe 'analyze-plex against a fake Plex server', :real_ffmpeg do
   let(:server) { FakePlexServer.new(libraries: libraries, token: token) }
 
   before do
-    unless system('which ffmpeg > /dev/null 2>&1') && system('which ffprobe > /dev/null 2>&1')
-      skip 'ffmpeg/ffprobe not available on PATH'
-    end
+    skip 'ffmpeg/ffprobe not available on PATH' unless system('which ffmpeg > /dev/null 2>&1') && system('which ffprobe > /dev/null 2>&1')
     allow(Neutraliser.logger).to receive(:log)
     server.start
   end

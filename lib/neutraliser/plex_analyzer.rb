@@ -206,7 +206,7 @@ module Neutraliser
       title = item['title'] || 'Unknown Title'
       return title unless item['grandparentTitle']
 
-      episode = format('S%<season>02dE%<number>02d', season: item['parentIndex'].to_i, number: item['index'].to_i)
+      episode = format('S%02dE%02d', item['parentIndex'].to_i, item['index'].to_i)
       "#{item['grandparentTitle']} #{episode} #{title}"
     end
 
