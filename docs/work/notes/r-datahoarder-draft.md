@@ -35,7 +35,7 @@ Plex's Sept 2026 Normalize Loudness (Plex Pass, transcodes per play) isn't menti
 Writing this for people with libraries too big to babysit. I wrote an open-source CLI, Neutraliser, that evens out loudness across a video archive. The design goal was to touch as little as possible.
 
 - **Video is stream-copied** (MD5-identical in my test). Only the main audio track is re-encoded, at the source's own codec and bitrate. FLAC stays lossless
-- **Constant gain, not compression** by default, so dynamic range is unchanged (LRA 12.5 LU before and after on a real film clip). The gain is capped at the profile's true-peak ceiling (-1.5 dBTP)
+- **Constant gain by default, compression opt-in**, so dynamic range is unchanged (LRA 12.5 LU before and after on a real film clip). The gain is capped at the profile's true-peak ceiling (-1.5 dBTP)
 - **Lossy is still lossy**: re-encoding AAC or AC3 costs one generation. Files close to target are left alone to avoid it
 - **Reversible**: copies by default. `--keep-original-audio` stream-copies the untouched original track into the output as an extra non-default track, even with `--replace`
 - **Everything else preserved**: other audio and subtitle tracks, fonts, per-stream metadata, chapters, dispositions. If a stream or chapter goes missing, the original isn't replaced. Data streams other than a MOV timecode (GoPro telemetry, say) are not carried over

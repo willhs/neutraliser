@@ -18,6 +18,7 @@ Entry point and navigation map for the neutraliser documentation set. Neutralise
 
 ## Philosophy
 - [`philosophy/vision.md`](philosophy/vision.md) — North star: consistent volume for your media library, least lossy processing
+- [`work/roadmap.md`](work/roadmap.md) — Route to the vision's default and the 0.1 criteria
 - [`philosophy/form.md`](philosophy/form.md) — Shape of the tool: Ruby CLI, volume pipeline, copy or replace
 
 ## Design

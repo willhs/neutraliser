@@ -24,7 +24,7 @@ library Neutraliser has run over — [the method is documented](demo/README.md).
 > **Read this as a result from v0.1's first runs (August 2026), not a promise about
 > the current defaults.** Those runs used two-pass `loudnorm`, which picks constant
 > gain or dynamic compression per file and doesn't record which. Since then constant
-> gain has become the default: it never compresses, but it is capped at the profile's
+> gain has become the default: it doesn't compress (that is opt-in), but it is capped at the profile's
 > −1.5 dBTP ceiling, so a quiet-but-peaky film now lands *short* of −20 LUFS (and the
 > log says by how much) unless you opt in to `--limit-db` or `--allow-dynamic`. The ten
 > films were also picked from files that had been processed, not at random. Expect
@@ -67,11 +67,13 @@ artifacts would show up if they were going to):
 | Audio codec | AAC 162k | AAC 162k |
 | Video bitstream | — | **MD5-identical**, stream-copied |
 
-Constant gain, not compression, by default: the dynamic range is preserved exactly, so quiet
+Constant gain is the default today, and compression is opt-in: the dynamic range is preserved exactly, so quiet
 scenes stay quiet relative to loud ones. Only the overall level moves. The gain is capped so
 true peak stays under the profile ceiling, so a quiet-but-peaky file lands shy of target
 (and the run log says by how much) rather than being squashed. Compression is opt-in:
-`--allow-dynamic`, or the `night` profile.
+`--lra-target`, `--allow-dynamic`, or the `night` profile. The [vision](docs/philosophy/vision.md) is to level
+dialogue and limit loud moments by default; that default hasn't changed yet
+([roadmap](docs/work/roadmap.md)). Levelling can't fix mumbled or masked dialogue.
 
 ## Why this exists
 
@@ -236,8 +238,8 @@ neutraliser process --replace --lock-file /tmp/neutraliser.lock /media/movies
 
 | Profile | Target | True peak | LRA | Use it for |
 |---|---|---|---|---|
-| `reference` | −23 LUFS | −1.5 dBTP | unlimited | Full home-theatre / AVR setups where you want the mix's original dynamics |
-| `livingroom` *(default)* | −20 LUFS | −1.5 dBTP | 12 | TVs and soundbars — general viewing. Start here |
+| `reference` | −23 LUFS | −1.5 dBTP | unlimited (used only with `--allow-dynamic`) | Full home-theatre / AVR setups where you want the mix's original dynamics |
+| `livingroom` *(default)* | −20 LUFS | −1.5 dBTP | 12 (used only with `--allow-dynamic`; constant gain ignores it) | TVs and soundbars — general viewing. Start here |
 | `night` | −16 LUFS | −1.5 dBTP | 10 | Quiet listening: louder overall, compressed range, no explosive peaks. A compression profile — implies `--allow-dynamic` |
 
 Higher (less negative) LUFS = louder. Lower LRA = less difference between the quietest and loudest moments.

@@ -6,6 +6,10 @@ All notable changes to this project are documented here. The format follows
 
 ## [Unreleased]
 
+### Changed
+
+- Docs only: the vision now says dialogue steady across the library with loud moments limited, and the README no longer claims the tool never compresses. No behaviour change. The 0.1 criteria are in `docs/work/roadmap.md`; 0.1 is undated until they pass.
+
 ### Added
 
 - Stamps record a **recipe version** (`NEUTRALISER_RECIPE`, also in the sidecar). Files stamped
