@@ -22,7 +22,8 @@ A Ruby CLI tool that normalises audio volume in video files using industry-stand
 - **`GainPlan`**: The constant-gain decision for one measurement — applied gain, shortfall, whether a limiter is needed (`--limit-db`), `worthwhile?(min_gain)` direction-aware skip
 - **`DiskGuard`** / **`RunLock`**: `--min-free-gb`/`--abort-free-gb` floors; `--lock-file` flock run lock
 - **`ManifestImport`**: `neutraliser import-manifest` — carries the retired `neutralise.sh` manifest into `.neutraliser` sidecars
-- **`Report`**: `neutraliser report PATH` — reads stamps and left-alone records, counts linear/dynamic/untouched, profiles and recipes, and the remote-free rate (`--measure` reads the files instead of computing from the records)
+- **`Report`**: `neutraliser report PATH` — reads stamps and left-alone records, counts linear/dynamic/untouched, profiles and recipes, and the remote-free rate (`--measure` reads the files instead of computing from the records, and also reads their dialogue)
+- **`DialogueMeter`** / **`Dialogue`** / **`DialogueRate`**: read-only dialogue figures under `--measure` / `rate-sample`. `DialogueMeter` estimates a file's dialogue level (centre channel of 5.1/7.1 through the loudnorm measurement, `pan=mono|c0=c2`; stereo/mono get a reason, not a number) and reads its dialnorm; `Dialogue` holds programme, estimate (`DialogueEstimate`: level, method, confidence, speech share, or the reason there is none) and dialnorm, and the loudness above dialogue; `DialogueRate` is the share within 2 LU of the `DialogueAnchor` target (-27 LUFS) and at most 5 LU above it. A figure always carries its method. The Silero VAD gate is an optional add-on not built yet (ADR 0003)
 - **`DolbyStream`**: what keeps constant gain constant on AC-3 / E-AC-3: every decode takes `-drc_scale 0` (FFmpeg applies the stream's DRC by default and its encoders write none back), and the source's dialnorm (read from the raw stream's first frames) is passed to the encoder (`-dialnorm`) and stamped, since the encoders write -31 otherwise
 - **`Recipe`**: version of the leveling method (`NEUTRALISER_RECIPE`); a run never re-levels a file because of it, only `process --redo-recipe` does (files from before recipes are `unversioned`)
 - **`LeftRecord`**: why a file was left alone (peak-limited, object audio, codec change, within tolerance) and its measured levels, kept in the sidecar with no top-level `profile` so it never counts as done
@@ -73,7 +74,7 @@ A Ruby CLI tool that normalises audio volume in video files using industry-stand
 
 ### Primary Commands
 - `neutraliser process PATH` - Main processing command
-- `neutraliser report PATH [--format summary|tsv|json] [--measure]` - What was done to each file, from its tags, why untouched files were left, and the remote-free rate
+- `neutraliser report PATH [--format summary|tsv|json] [--measure] [--no-dialogue]` - What was done to each file, from its tags, why untouched files were left, and the remote-free rate (`--measure` adds the read-only dialogue estimate and a dialogue-anchored rate)
 - `neutraliser rate-sample ROOT... [--sample N --seed S --plan]` - Try a recipe on copies of a random sample and report its remote-free rate
 - `neutraliser import-manifest MANIFEST --root DIR` - Mark files a `neutralise.sh` manifest recorded as done as already processed
 - `neutraliser profiles` - List normalization profiles

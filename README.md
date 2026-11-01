@@ -361,9 +361,18 @@ Reads the `NEUTRALISER_*` tags from every video under PATH (or one file) with ff
 |---|---|---|
 | `--format` | `summary` | `summary` (counts), `tsv` (one row per file on stdout, counts on stderr) or `json` (counts plus every file's tags) |
 | `--measure` | off | Measure each file's loudness as it is now instead of computing it from the record |
-| `--within` | `2.0` | Remote-free: loudness within this many LU of the target |
+| `--dialogue` / `--no-dialogue` | dialogue | With `--measure`, also estimate each file's dialogue level (below) |
+| `--within` | `2.0` | Remote-free: loudness within this many LU of the target (also the dialogue tolerance) |
 | `--lra-limit` | `12.0` | Remote-free: loudness range at or under this many LU |
+| `--dialogue-target` | `-27.0` | Dialogue-anchored remote-free: dialogue within `--within` LU of this many LUFS |
+| `--ldr-limit` | `5.0` | Dialogue-anchored remote-free: programme at most this many LU above the dialogue |
 | `--profile` | `livingroom` | Target for files with no record (only judged under `--measure`) |
+
+**Dialogue estimate (read-only, `--measure` and `rate-sample`).** Dialogue is what you follow a film by, and a film's programme loudness says little about it: a loud action film and a quiet drama at the same programme level can have dialogue 10 LU apart. With `--measure`, `report` also prints, per file, the file's dialnorm (read from an AC-3 / E-AC-3 track, or carried over by a run; `-31` is the encoder's default, usually just "unset"), an estimated dialogue level, **which method produced it**, and the *loudness above dialogue*: programme minus dialogue, the figure EBU R 128 s4 calls LDR. It then prints a second remote-free rate beside today's, anchored on dialogue: dialogue within `--within` LU of `--dialogue-target` (-27 LUFS) and the programme no more than `--ldr-limit` (5) LU above it. Nothing is changed, and no default moves; this is for seeing how a library looks on that anchor before deciding.
+
+- **5.1 and 7.1: centre channel.** The centre channel read with the same EBU R 128 measurement as everything else, no new dependency. Film mixes keep speech there, but effects and score can leak in and it reads high: -0.7 to +3.4 LU on the research's synthetic test mixes (real films are untested). Confidence: medium. It cannot say how much of the file is speech, so the speech share is blank.
+- **Stereo and mono: no figure.** Speech and background can't be separated by channel, so these files get the reason and are counted as not judged, not a bad number. A voice-activity gate would give them a low-confidence one; see [ADR 0003](docs/design/adr/0003-optional-voice-gate-for-dialogue.md) for how that would be carried (an optional extra, not built).
+- Costs one more decode of the centre channel per file; `--no-dialogue` skips it. The dialogue level is read from the file as it is now, so on a processed file it has moved with the gain; the loudness above dialogue does not.
 
 ```bash
 neutraliser report /media/tv
@@ -384,6 +393,7 @@ Tries a recipe on copies of a random sample of files and prints its remote-free 
 | `--measure` / `--no-measure` | measure | Measure the copies, or compute from their records |
 | `--profile`, `--target-level`, `--tolerance`, `--allow-dynamic`, `--limit-db`, `--min-gain`, `--allow-codec-change`, `--allow-object-audio-loss` | as `process` | The recipe under test |
 | `--within`, `--lra-limit` | `2.0`, `12.0` | The remote-free limits |
+| `--dialogue` / `--no-dialogue`, `--dialogue-target`, `--ldr-limit` | on, `-27.0`, `5.0` | The dialogue estimate and its anchor, as in `report --measure`; prints each copy's dialogue level and a dialogue-anchored rate beside the usual one |
 
 ```bash
 neutraliser rate-sample /media/tv /media/movies --sample 30 --plan

@@ -41,7 +41,7 @@ Researched 2026-11-01. Vision alignment: Have an online presence (goal: Release 
 
 1. Fix the DRC and dialnorm bugs: `bb559c56` (done)
 2. Update the README and drafts for Plex's new features: `1d89336a`
-3. Add a read-only dialogue estimate to `report` and `rate-sample`: `7b0e5fc9`
+3. Add a read-only dialogue estimate to `report` and `rate-sample`: `7b0e5fc9` (done 2026-11-01: `DialogueMeter`, centre channel only; the VAD gate is deferred by ADR 0003)
 4. Play a [test pair](#test-your-own-clients) on your own clients (your job, ten minutes): `9125b183`
 5. Validate the estimate on real files, then decide the default: `3da9b750`
 
@@ -244,7 +244,7 @@ Other results:
 - [Dolby's speech-gating reference code](https://professional.dolby.com/support/dolbys-speech-gating-reference-code/): "a free download" behind a form, terms unread. Worth one try as a reference.
 - Source separation: [Torcoli et al](https://arxiv.org/html/2405.17364v1) report "MAE is below 1.0" LU with a non-public model, but [Demucs](https://github.com/facebookresearch/demucs) takes "roughly equal to 1.5 times the duration of the track" on CPU, or 3 to 7 GB of GPU memory. Too heavy for a NAS sweep; keep it as the fallback if VAD fails.
 
-Silero's [LICENSE file](https://raw.githubusercontent.com/snakers4/silero-vad/master/LICENSE) says MIT, while a README badge's alt text says CC BY-NC. Check before bundling.
+Silero's [LICENSE file](https://raw.githubusercontent.com/snakers4/silero-vad/master/LICENSE) says MIT, while a README badge's alt text says CC BY-NC. **Checked 2026-11-01 (task `7b0e5fc9`): MIT.** The README also says "permissive license (MIT)", and the badge's image URL is `License-MIT` and links to the LICENSE file; the CC BY-NC alt text is a typo. How an optional gate would be carried: [ADR 0003](../../design/adr/0003-optional-voice-gate-for-dialogue.md).
 
 ### (b) Metadata instead of changing the audio: who honours it?
 

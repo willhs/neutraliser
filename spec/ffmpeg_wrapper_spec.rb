@@ -139,6 +139,7 @@ RSpec.describe Neutraliser::FFmpegWrapper do
         :apply_normalization_single_pass,
         :detect_audio_tracks,
         :read_stamp,
+        :read_dialnorm,
         :primary_audio_track,
         :primary_audio_index,
         :probe_audio_profile_mid_file,

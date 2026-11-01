@@ -31,7 +31,8 @@ module Neutraliser
     # limit_db ...): the recipe under test. replace/dry_run are the harness's
     # to set.
     def initialize(roots:, size:, seed: nil, processor_options: {}, measure: true, work_dir: nil, keep: false,
-                   within_lu: RemoteFreeRate::WITHIN_LU, lra_limit: RemoteFreeRate::LRA_LIMIT)
+                   within_lu: RemoteFreeRate::WITHIN_LU, lra_limit: RemoteFreeRate::LRA_LIMIT,
+                   dialogue_anchor: DialogueAnchor::DEFAULT)
       roots.each { |root| raise Error, "'#{root}' is not a directory" unless File.directory?(root) }
       @roots = roots.map { |root| File.realpath(root) }.uniq
       @size = size
@@ -42,6 +43,7 @@ module Neutraliser
       @keep = keep
       @within_lu = within_lu
       @lra_limit = lra_limit
+      @dialogue_anchor = dialogue_anchor
       validate!
     end
 
@@ -60,7 +62,7 @@ module Neutraliser
         copies = copy_all(picks, work)
         summary = @processor.process(work)
         report = Report.new(work, measure: @measure, profile: @processor.profile, within_lu: @within_lu,
-                                  lra_limit: @lra_limit)
+                                  lra_limit: @lra_limit, dialogue_anchor: @dialogue_anchor)
         Result.new(copies: copies, work_dir: (work if @keep), summary: summary,
                    report: report, seed: @seed)
       ensure

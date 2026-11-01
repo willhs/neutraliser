@@ -6,6 +6,10 @@ All notable changes to this project are documented here. The format follows
 
 ## [Unreleased]
 
+### Added
+
+- **Read-only dialogue estimate** in `report --measure` and `rate-sample`; no audio and no default changes. Per file: the dialnorm it carries, an estimated dialogue level with **the method that produced it**, and the loudness above dialogue (programme minus dialogue, EBU R 128 s4's LDR). Beside the usual remote-free rate, a second one anchored on dialogue (within 2 LU of -27 LUFS, programme at most 5 LU above it; `--dialogue-target`, `--ldr-limit`). The only method is the centre channel of 5.1 / 7.1 mixes through the EBU R 128 measurement (medium confidence); stereo and mono get no figure and are counted as not judged. `--no-dialogue` skips the extra read. A voice-activity gate is left as an optional extra ([ADR 0003](docs/design/adr/0003-optional-voice-gate-for-dialogue.md)).
+
 ### Changed
 
 - Docs only: the vision now says dialogue steady across the library with loud moments limited, and the README no longer claims the tool never compresses. No behaviour change. The 0.1 criteria are in `docs/work/roadmap.md`; 0.1 is undated until they pass.

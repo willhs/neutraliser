@@ -185,6 +185,12 @@ module Neutraliser
                     desc: 'Remote-free: loudness within this many LU of the target'
     option :lra_limit, type: :numeric, default: RemoteFreeRate::LRA_LIMIT,
                        desc: 'Remote-free: loudness range at or under this many LU'
+    option :dialogue, type: :boolean, default: true,
+                      desc: 'With --measure, also read each file for its dialogue level and loudness above dialogue (read-only; one more decode of the centre channel)'
+    option :dialogue_target, type: :numeric, default: DialogueAnchor::DEFAULT.target,
+                             desc: 'Dialogue-anchored remote-free: dialogue within --within LU of this many LUFS'
+    option :ldr_limit, type: :numeric, default: DialogueAnchor::DEFAULT.ldr_limit,
+                       desc: 'Dialogue-anchored remote-free: programme at most this many LU above dialogue'
     def report(path)
       raise Thor::Error, "Error: Path '#{path}' does not exist" unless File.exist?(path)
 
@@ -192,7 +198,8 @@ module Neutraliser
       # look untouched.
       FFmpegWrapper.version
       report = Report.new(path, measure: options[:measure], profile: Profiles.get_profile(options[:profile]),
-                                within_lu: options[:within], lra_limit: options[:lra_limit])
+                                within_lu: options[:within], lra_limit: options[:lra_limit],
+                                dialogue_anchor: dialogue_anchor)
       case options[:format]
       when 'tsv'
         puts report.to_tsv
@@ -222,6 +229,12 @@ module Neutraliser
     option :allow_object_audio_loss, type: :boolean, default: false, desc: 'Recipe: process Atmos / DTS:X anyway'
     option :within, type: :numeric, default: RemoteFreeRate::WITHIN_LU, desc: 'Remote-free: within this many LU of target'
     option :lra_limit, type: :numeric, default: RemoteFreeRate::LRA_LIMIT, desc: 'Remote-free: loudness range at or under N LU'
+    option :dialogue, type: :boolean, default: true,
+                      desc: 'With --measure (the default), also read each file for its dialogue level and loudness above dialogue (read-only; one more decode of the centre channel)'
+    option :dialogue_target, type: :numeric, default: DialogueAnchor::DEFAULT.target,
+                             desc: 'Dialogue-anchored remote-free: dialogue within --within LU of this many LUFS'
+    option :ldr_limit, type: :numeric, default: DialogueAnchor::DEFAULT.ldr_limit,
+                       desc: 'Dialogue-anchored remote-free: programme at most this many LU above dialogue'
     def rate_sample(*roots)
       raise Thor::Error, 'Error: give at least one root folder' if roots.empty?
 
@@ -229,7 +242,7 @@ module Neutraliser
       harness = RateHarness.new(
         roots: roots, size: options[:sample].to_i, seed: options[:seed]&.to_i, processor_options: recipe_options,
         measure: options[:measure], work_dir: options[:work_dir], keep: options[:keep],
-        within_lu: options[:within], lra_limit: options[:lra_limit]
+        within_lu: options[:within], lra_limit: options[:lra_limit], dialogue_anchor: dialogue_anchor
       )
       return print_plan(harness) if options[:plan]
 
@@ -320,6 +333,13 @@ module Neutraliser
 
     private
 
+    # nil under --no-dialogue: the files are then read for loudness only.
+    def dialogue_anchor
+      return unless options[:dialogue]
+
+      DialogueAnchor.new(target: options[:dialogue_target].to_f, ldr_limit: options[:ldr_limit].to_f)
+    end
+
     def gib(value) = value && (value * DiskGuard::GIB).to_i
 
     def recipe_options
@@ -341,7 +361,8 @@ module Neutraliser
       report.rows.each do |row|
         pick = result.copies.fetch(row.file)
         puts [File.join(File.basename(pick.root), pick.relative), report.state_text(row), report.levels_text(row),
-              report.verdict_text(row)].join("\t")
+              report.verdict_text(row), report.dialogue_text(row), (report.dialogue_verdict_text(row) if report.dialogue_rate)]
+          .compact.join("\t")
       end
       puts report.summary
       puts "Copies kept in #{result.work_dir}" if result.work_dir

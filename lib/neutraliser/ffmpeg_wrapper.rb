@@ -791,9 +791,17 @@ module Neutraliser
       dialnorm ? codec_decision.merge(dialnorm: dialnorm) : codec_decision
     end
 
-    # The track's dialnorm in dB, read from its first few frames stream-copied to a raw file, or nil
-    # (logged) when that fails: ffprobe doesn't report it.
+    # The track's dialnorm in dB for the re-encode, or nil (logged) when it can't be read.
     def self.source_dialnorm(input_path, track)
+      read_dialnorm(input_path, track)
+    rescue StandardError => e
+      Neutraliser.logger.log "  Could not read the source dialnorm (#{e.message.lines.first&.strip}); the output gets the encoder's -31"
+      nil
+    end
+
+    # The track's dialnorm in dB, read from its first few frames stream-copied to a raw file (ffprobe
+    # doesn't report it). Raises FFmpegError when they can't be read.
+    def self.read_dialnorm(input_path, track)
       format = DolbyStream.raw_format(track[:codec])
       Dir.mktmpdir('neutraliser-dialnorm') do |dir|
         raw = File.join(dir, "head.#{format}")
@@ -804,9 +812,6 @@ module Neutraliser
 
         DolbyStream.dialnorm(File.binread(raw)) || raise(FFmpegError, 'no dialnorm in the first frames')
       end
-    rescue StandardError => e
-      Neutraliser.logger.log "  Could not read the source dialnorm (#{e.message.lines.first&.strip}); the output gets the encoder's -31"
-      nil
     end
     DIALNORM_PROBE_FRAMES = 8
 

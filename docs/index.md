@@ -25,6 +25,7 @@ Entry point and navigation map for the neutraliser documentation set. Neutralise
 - [`design/architecture.md`](design/architecture.md) — Normalisation pipeline, codec selection, component table, performance flags
 - [`design/adr/0001-smart-codec-selection.md`](design/adr/0001-smart-codec-selection.md) — Decision: match source codec and bitrate instead of hardcoding AAC/AC3
 - [`design/adr/0002-performance-flags.md`](design/adr/0002-performance-flags.md) — Decision: `--fast` and `--local-stage` flags; benchmark results
+- [`design/adr/0003-optional-voice-gate-for-dialogue.md`](design/adr/0003-optional-voice-gate-for-dialogue.md) — Decision: dialogue is estimated from the centre channel with no new dependency; a Silero voice gate is an optional gem plus pinned model, not built until real files need it. Silero licence checked: MIT
 - [`design/plex-analysis-guide.md`](design/plex-analysis-guide.md) — User guide for the `analyze-plex` command
 
 ## Operations
@@ -60,6 +61,7 @@ Entry point and navigation map for the neutraliser documentation set. Neutralise
 - [`front-matter-schema.json`](front-matter-schema.json) — JSON Schema for validating doc frontmatter
 
 ### Change Log
+- 2026-11-01 (agent:dialogue-estimate): Added design/adr/0003-optional-voice-gate-for-dialogue
 - 2026-11-01 (agent:lra-target): Added compression-ladder-fixtures-2026-11.md research note
 - 2026-11-01 (agent:streaming-research): Added research/0002-streaming-loudness-and-dialogue
 - 2026-11-01 (agent:architecture-review): Added architecture-review-2026-11.md research note

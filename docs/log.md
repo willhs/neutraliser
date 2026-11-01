@@ -1,3 +1,6 @@
+## [2026-11-01] update | Read-only dialogue estimate in report and rate-sample
+`report --measure` and `rate-sample` now estimate each file's dialogue level, say which method produced it, and print the loudness above dialogue (programme minus dialogue) and a second remote-free rate anchored on dialogue (within 2 LU of -27 LUFS, programme at most 5 LU above it). The only method is the centre channel of 5.1/7.1 through the loudnorm measurement the tool already runs; stereo and mono get a reason, not a figure. The source dialnorm is shown where there is one (stamped, or read from an unstamped AC-3 / E-AC-3 track). No audio and no default changed. Silero VAD licence checked: the LICENSE file and the README text say MIT; the badge's "CC BY-NC 4.0" alt text is a typo (its image says MIT and it links to the LICENSE). How the optional gate would be carried is `docs/design/adr/0003-optional-voice-gate-for-dialogue.md`; not built. Code: `lib/neutraliser/dialogue.rb`, `dialogue_meter.rb`.
+
 ## [2026-11-01] update | Pre-release clean-up: private details out of the tree, TV libraries in analyze-plex, demo charts labelled synthetic
 Worked the remaining items from `docs/research/pre-release-review-2026-11.md` (no tag, release or post).
 

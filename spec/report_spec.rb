@@ -126,7 +126,7 @@ RSpec.describe Neutraliser::Report do
         level = path.end_with?('c.mkv') ? -21.0 : -35.0
         Neutraliser::Measurement.new(input_i: level, input_tp: -3.0, input_lra: 5.0, input_thresh: -45.0, target_offset: 0.0)
       end
-      allow(Neutraliser::FFmpegWrapper).to receive(:primary_audio_index).and_return(0)
+      allow(Neutraliser::FFmpegWrapper).to receive(:detect_audio_tracks).and_return([{ index: 0, channels: 2, channel_layout: 'stereo', codec: 'aac' }])
       allow(Neutraliser::FFmpegWrapper).to receive(:measure_loudness, &measure)
 
       report = described_class.new(dir, measure: true)
@@ -139,7 +139,7 @@ RSpec.describe Neutraliser::Report do
     end
 
     it 'skips a file it cannot measure and says how many it did not judge' do
-      allow(Neutraliser::FFmpegWrapper).to receive(:primary_audio_index).and_return(0)
+      allow(Neutraliser::FFmpegWrapper).to receive(:detect_audio_tracks).and_return([{ index: 0, channels: 2, channel_layout: 'stereo', codec: 'aac' }])
       allow(Neutraliser::FFmpegWrapper).to receive(:measure_loudness).and_raise(Neutraliser::FFmpegError, 'boom')
 
       expect(described_class.new(dir, measure: true).rate.to_h).to include(judged: 0, not_judged: 5)
