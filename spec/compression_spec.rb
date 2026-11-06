@@ -115,7 +115,7 @@ RSpec.describe Neutraliser::Compression do
 
       expect(result.applied).to eq(10.0) # -30 LUFS after compression to the -20 target
       expect(result.filter).to start_with('acompressor=').and include(',volume=10.00dB')
-      expect(result).to have_attributes(mode: 'compressed', limited: false, label: 'gentle')
+      expect(result).to have_attributes(mode: Neutraliser::Mode::COMPRESSED, limited: false, label: 'gentle')
     end
 
     it 'adds the limiter when --limit-db lets the gain run past the peak ceiling' do

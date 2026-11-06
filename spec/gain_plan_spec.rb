@@ -12,7 +12,7 @@ RSpec.describe Neutraliser::GainPlan do
   it 'applies the full gap to target when the peak headroom allows it' do
     plan = plan_for(input_i: -25.0, input_tp: -20.0)
 
-    expect(plan).to have_attributes(applied: 5.0, shortfall: 0.0, limited: false, mode: 'linear')
+    expect(plan).to have_attributes(applied: 5.0, shortfall: 0.0, limited: false, mode: Neutraliser::Mode::LINEAR)
     expect(plan.filter).to eq('volume=5.00dB')
   end
 
@@ -26,7 +26,7 @@ RSpec.describe Neutraliser::GainPlan do
     it 'lets gain exceed the headroom by limit_db and adds an alimiter under the ceiling' do
       plan = plan_for(input_i: -26.0, input_tp: -3.0, limit_db: 4.0)
 
-      expect(plan).to have_attributes(applied: 5.5, limited: true, mode: 'limited', shortfall: 0.5)
+      expect(plan).to have_attributes(applied: 5.5, limited: true, mode: Neutraliser::Mode::LIMITED, shortfall: 0.5)
       expect(plan.filter).to eq('volume=5.50dB,alimiter=limit=0.7943:attack=5:release=50:level=0:latency=1')
     end
 

@@ -176,7 +176,7 @@ RSpec.describe Neutraliser::FFmpegWrapper do
       end
       expect(result[:encoder]).to eq('ac3')
       expect(result[:bitrate]).to eq(448_000)
-      expect(result[:normalization_type]).to eq('Linear')
+      expect(result[:mode]).to eq(Neutraliser::Mode::LINEAR)
     end
 
     describe 'Dolby loudness metadata' do
@@ -378,7 +378,7 @@ RSpec.describe Neutraliser::FFmpegWrapper do
 
       result = described_class.apply_normalization(source_of(tracks, 'in.mp4'), 'out.mp4', measured_data, profile.merge(name: 'livingroom'), allow_dynamic: true)
 
-      expect(result[:normalization_type]).to eq('Dynamic')
+      expect(result[:mode]).to eq(Neutraliser::Mode::DYNAMIC)
       expect(described_class).to have_received(:execute_with_timeout).with(
         array_including('-map', '0', '-c', 'copy', 'NEUTRALISER_MODE=dynamic', 'NEUTRALISER_GAIN_DB='),
         described_class::NORMALIZATION_TIMEOUT, 'Restamp'
@@ -452,7 +452,7 @@ RSpec.describe Neutraliser::FFmpegWrapper do
 
       result = described_class.apply_normalization(source_of(tracks, 'in.mp4'), 'out.mp4', measured_data, profile)
 
-      expect(result[:normalization_type]).to eq('Linear')
+      expect(result[:mode]).to eq(Neutraliser::Mode::LINEAR)
       expect(described_class).to have_received(:execute_with_timeout) do |cmd, *_rest|
         filter_arg = cmd[cmd.index('-filter_complex') + 1]
         expect(filter_arg).to include('volume=')
@@ -741,23 +741,23 @@ RSpec.describe Neutraliser::FFmpegWrapper do
     end
   end
 
-  describe '.parse_normalization_type' do
+  describe '.parse_mode' do
     it 'extracts Linear from the loudnorm summary output' do
       output = "Input Integrated:    -18.5 LUFS\nNormalization Type:   Linear\n"
-      expect(described_class.send(:parse_normalization_type, output)).to eq('Linear')
+      expect(described_class.send(:parse_mode, output)).to eq(Neutraliser::Mode::LINEAR)
     end
 
     it 'extracts Dynamic from the loudnorm summary output' do
       output = "Input Integrated:    -18.5 LUFS\nNormalization Type:   Dynamic\n"
-      expect(described_class.send(:parse_normalization_type, output)).to eq('Dynamic')
+      expect(described_class.send(:parse_mode, output)).to eq(Neutraliser::Mode::DYNAMIC)
     end
 
     it 'returns nil when no normalization type line is present' do
-      expect(described_class.send(:parse_normalization_type, 'no summary here')).to be_nil
+      expect(described_class.send(:parse_mode, 'no summary here')).to be_nil
     end
 
     it 'returns nil for nil output' do
-      expect(described_class.send(:parse_normalization_type, nil)).to be_nil
+      expect(described_class.send(:parse_mode, nil)).to be_nil
     end
   end
 
@@ -770,7 +770,7 @@ RSpec.describe Neutraliser::FFmpegWrapper do
       filter = described_class.send(:build_audio_filter, measured, profile, 48_000, plan: plan)
 
       expect(filter).to eq('volume=5.00dB,aresample=48000')
-      expect(plan.mode).to eq('linear')
+      expect(plan.mode).to eq(Neutraliser::Mode::LINEAR)
     end
 
     it 'omits aresample when source sample rate is unknown' do

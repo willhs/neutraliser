@@ -64,7 +64,7 @@ ffmpeg can't encode Atmos or DTS:X object metadata, so re-encoding the primary t
 
 ### Constant gain by default, dynamic opt-in
 
-The default normalisation pass is a constant `volume=` gain (`FFmpegWrapper.build_volume_gain_filter`), capped so true peak stays at or below the profile TP. Quiet-but-peaky files land shy of target; `apply_normalization` returns `shortfall_lu` and the Processor logs it. `--allow-dynamic` switches to the two-pass `loudnorm` filter, which may fall back to dynamic compression; profiles with `dynamic: true` (`night`) imply it. Every result carries `normalization_type` (Linear/Dynamic); the run summary reports `linear`/`dynamic` counts and each Dynamic file logs a warning. `--linear-only` is a deprecated no-op.
+The default normalisation pass is a constant `volume=` gain (`FFmpegWrapper.build_volume_gain_filter`), capped so true peak stays at or below the profile TP. Quiet-but-peaky files land shy of target; `apply_normalization` returns `shortfall_lu` and the Processor logs it. `--allow-dynamic` switches to the two-pass `loudnorm` filter, which may fall back to dynamic compression; profiles with `dynamic: true` (`night`) imply it. Every result carries a `Mode` (linear/limited/compressed/dynamic; the manifest's `normalization_type` is its capitalised label); the run summary reports `linear`/`dynamic` counts and each Dynamic file logs a warning. `--linear-only` is a deprecated no-op.
 
 ### Every change is recorded in the file (Stamp)
 

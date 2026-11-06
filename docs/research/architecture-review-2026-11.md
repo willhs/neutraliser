@@ -127,7 +127,9 @@ Ranked. Dependency category per `improve-architecture`'s DEEPENING guide.
 - **Dependencies**: in-process apart from bitrate estimation, which becomes an input.
 - **ADR**: keeps ADR-0001's decision; moves it. No conflict.
 
-### 4. The per-file outcome: Guards, FileResult, Mode. **Worth exploring.** Task `1c585044` (M)
+### 4. The per-file outcome: Guards, FileResult, Mode. **Worth exploring.** Task `1c585044` (M). **Done 2026-11-07**
+
+Done: `Guards` (lib/neutraliser/guards.rb) returns a `Verdict`, `FileResult` and `Mode` have one spelling each, and `Processor` logs and records. The problem below is as found. The reason strings in the manifest are unchanged.
 
 - **Files**: `processor.rb`, `gain_plan.rb`, `stamp.rb`, `report.rb`.
 - **Problem**: Processor holds 21 instance variables (the option bag) and runs five pre-encode guards

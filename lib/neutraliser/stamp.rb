@@ -70,9 +70,9 @@ module Neutraliser
       end
     end
 
-    def linear? = mode == 'linear'
-    def limited? = mode == 'limited'
-    def compressed? = mode == 'compressed'
-    def dynamic? = mode == 'dynamic'
+    def linear? = mode == Mode::LINEAR.to_s
+    def limited? = mode == Mode::LIMITED.to_s
+    def compressed? = mode == Mode::COMPRESSED.to_s
+    def dynamic? = mode == Mode::DYNAMIC.to_s
   end
 end

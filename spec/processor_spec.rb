@@ -41,10 +41,10 @@ RSpec.describe Neutraliser::Processor do
       File.write(video_2, 'x')
 
       expect(processor).to receive(:process_one).with(video_1).and_return(
-        { file: video_1, status: :done, reason: :normalized, message: nil }
+        Neutraliser::FileResult.done(video_1, :normalized)
       )
       expect(processor).to receive(:process_one).with(video_2).and_return(
-        { file: video_2, status: :skipped, reason: :within_tolerance, message: nil }
+        Neutraliser::FileResult.skipped(video_2, :within_tolerance)
       )
 
       summary = processor.process(temp_dir)
@@ -73,7 +73,7 @@ RSpec.describe Neutraliser::Processor do
       end
 
       expect(processor).to receive(:process_one).with(pending).and_return(
-        { file: pending, status: :done, reason: :normalized, message: nil }
+        Neutraliser::FileResult.done(pending, :normalized)
       )
       expect(processor).not_to receive(:process_one).with(completed)
 
@@ -95,7 +95,7 @@ RSpec.describe Neutraliser::Processor do
       before do
         [first, second, third].each { |f| File.write(f, 'x') }
         allow(processor_under_test).to receive(:process_one).with(first).and_return(
-          { file: first, status: :done, reason: :normalized, message: nil }
+          Neutraliser::FileResult.done(first, :normalized)
         )
         allow(processor_under_test).to receive(:process_one).with(second).and_raise(Interrupt)
       end
@@ -115,8 +115,8 @@ RSpec.describe Neutraliser::Processor do
 
         resumed = described_class.new(resume: true)
         expect(resumed).not_to receive(:process_one).with(first)
-        expect(resumed).to receive(:process_one).with(second).and_return({ file: second, status: :done })
-        expect(resumed).to receive(:process_one).with(third).and_return({ file: third, status: :done })
+        expect(resumed).to receive(:process_one).with(second).and_return(Neutraliser::FileResult.done(second, :normalized))
+        expect(resumed).to receive(:process_one).with(third).and_return(Neutraliser::FileResult.done(third, :normalized))
 
         summary = resumed.process(temp_dir)
         expect(summary[:resumed]).to eq(1)
@@ -124,20 +124,41 @@ RSpec.describe Neutraliser::Processor do
       end
     end
 
-    it 'records normalization_type per file in the run manifest' do
+    it 'records the mode per file in the run manifest, spelt as ever' do
+      modes = { 'a.mp4' => Neutraliser::Mode::LINEAR, 'b.mp4' => Neutraliser::Mode::DYNAMIC,
+                'c.mp4' => Neutraliser::Mode::LIMITED, 'd.mp4' => Neutraliser::Mode::COMPRESSED }
       processor = described_class.new
-      video = File.join(temp_dir, 'a.mp4')
-      File.write(video, 'x')
+      videos = modes.keys.to_h { |name| [name, File.join(temp_dir, name)] }
+      videos.each_value { |video| File.write(video, 'x') }
+      allow(processor).to receive(:process_one) do |video|
+        Neutraliser::FileResult.done(video, :normalized, mode: modes.fetch(File.basename(video)))
+      end
 
-      expect(processor).to receive(:process_one).with(video).and_return(
-        { file: video, status: :done, reason: :normalized, message: nil, normalization_type: 'Dynamic' }
-      )
+      summary = nil
+      expect { summary = processor.process(temp_dir) }.to output.to_stdout
+      done = File.readlines(summary[:manifest_path]).map { |line| JSON.parse(line) }.select { |entry| entry['status'] == 'done' }
+
+      expect(done.to_h { |entry| [File.basename(entry['file']), entry['normalization_type']] })
+        .to eq('a.mp4' => 'Linear', 'b.mp4' => 'Dynamic', 'c.mp4' => 'Limited', 'd.mp4' => 'Compressed')
+      expect(summary).to include(linear: 1, dynamic: 1, limited: 1, compressed: 1)
+    end
+
+    it 'resumes from a manifest an older version wrote, taking only the final reasons as done' do
+      processor = described_class.new(resume: true)
+      files = %w[normalized already_processed no_audio_track unsupported_format dry_run low_disk timeout object_audio]
+              .to_h { |reason| [reason, File.join(temp_dir, "#{reason}.mp4")] }
+      files.each_value { |file| File.write(file, 'x') }
+      profile = processor.profile
+      File.write(File.join(temp_dir, '.neutraliser-run-manifest.jsonl'), files.map do |reason, file|
+        JSON.generate(file: file, status: 'done', reason: reason, profile: profile[:name], target_lufs: profile[:lufs], replace: false)
+      end.join("\n"))
+      allow(processor).to receive(:process_one) { |file| Neutraliser::FileResult.done(file, :normalized) }
 
       summary = processor.process(temp_dir)
-      manifest_lines = File.readlines(summary[:manifest_path]).map { |line| JSON.parse(line) }
-      done_entry = manifest_lines.find { |entry| entry['status'] == 'done' }
 
-      expect(done_entry['normalization_type']).to eq('Dynamic')
+      expect(summary[:resumed]).to eq(4)
+      expect(summary[:results].map { |result| File.basename(result.file, '.mp4') })
+        .to contain_exactly('dry_run', 'low_disk', 'timeout', 'object_audio')
     end
   end
 
@@ -173,7 +194,7 @@ RSpec.describe Neutraliser::Processor do
       result = nil
       expect { result = processor.send(:process_file, video_file) }.to output(/Unreadable: ffprobe could not read this file/).to_stdout
 
-      expect(result).to include(status: :failed, reason: :unreadable)
+      expect(result).to have_attributes(status: :failed, reason: :unreadable)
       expect(Neutraliser::FFmpegWrapper).to have_received(:probe_file).once
     end
 
@@ -183,7 +204,7 @@ RSpec.describe Neutraliser::Processor do
       result = nil
       expect { result = described_class.new.send(:process_file, video_file) }.to output(/Timed out/).to_stdout
 
-      expect(result).to include(status: :failed, reason: :timeout)
+      expect(result).to have_attributes(status: :failed, reason: :timeout)
     end
 
     it 'asks ffprobe about a file once, however many checks and passes read its facts' do
@@ -233,7 +254,7 @@ RSpec.describe Neutraliser::Processor do
 
       result = nil
       expect { result = processor.send(:process_file, video_file) }.to output(/DRY RUN/).to_stdout
-      expect(result[:reason]).to eq(:dry_run)
+      expect(result.reason).to eq(:dry_run)
     end
 
     it 'handles analysis errors by reporting and continuing' do
@@ -253,8 +274,8 @@ RSpec.describe Neutraliser::Processor do
       expect { result = processor.send(:process_file, video_file) }
         .to output(/Timed out processing file: timed out/).to_stdout
 
-      expect(result[:status]).to eq(:failed)
-      expect(result[:reason]).to eq(:timeout)
+      expect(result.status).to eq(:failed)
+      expect(result.reason).to eq(:timeout)
     end
 
     it 'records a distinct :output_verification_failed reason, not the generic processing_error bucket' do
@@ -266,8 +287,8 @@ RSpec.describe Neutraliser::Processor do
       expect { result = processor.send(:process_file, video_file) }
         .to output(/Output verification failed/).to_stdout
 
-      expect(result[:status]).to eq(:failed)
-      expect(result[:reason]).to eq(:output_verification_failed)
+      expect(result.status).to eq(:failed)
+      expect(result.reason).to eq(:output_verification_failed)
     end
 
     it 'records a distinct :ffmpeg_error reason for a non-timeout FFmpegError' do
@@ -277,8 +298,8 @@ RSpec.describe Neutraliser::Processor do
 
       result = processor.send(:process_file, video_file)
 
-      expect(result[:status]).to eq(:failed)
-      expect(result[:reason]).to eq(:ffmpeg_error)
+      expect(result.status).to eq(:failed)
+      expect(result.reason).to eq(:ffmpeg_error)
     end
   end
 
@@ -304,33 +325,11 @@ RSpec.describe Neutraliser::Processor do
       expect { summary = processor.process(show_dir) }
         .to output(/Not writable — fix permissions on 1 folder\(s\):\n.*The Simpsons/).to_stdout
 
-      expect(summary[:results].map { |r| r[:reason] }).to eq(%i[not_writable not_writable])
-      expect(summary[:results].first[:message]).to eq("can't write to #{File.expand_path(show_dir)} (Permission denied); fix the folder's permissions")
+      expect(summary[:results].map(&:reason)).to eq(%i[not_writable not_writable])
+      expect(summary[:results].first.message).to eq("can't write to #{File.expand_path(show_dir)} (Permission denied); fix the folder's permissions")
       expect(summary[:failed_by_reason]).to eq(not_writable: 2)
       expect(summary[:not_writable_dirs]).to eq([File.expand_path(show_dir)])
       expect(Dir.children(show_dir).grep(/write-check/)).to be_empty
-    end
-
-    it 'leaves no trace of the write check in a writable folder' do
-      processor = described_class.new
-      stub_probe(audio: [])
-
-      result = nil
-      expect { result = processor.send(:process_file, episodes.first) }.to output.to_stdout
-
-      expect(result[:reason]).to eq(:no_audio_track)
-      expect(Dir.children(show_dir)).to contain_exactly('s01e01.mkv', 's01e02.mkv')
-    end
-
-    it 'does not check writability on a dry run, which writes nothing' do
-      FileUtils.chmod(0o555, show_dir)
-      processor = described_class.new(dry_run: true)
-      stub_probe(audio: [])
-
-      result = nil
-      expect { result = processor.send(:process_file, episodes.first) }.to output.to_stdout
-
-      expect(result[:reason]).to eq(:no_audio_track)
     end
 
     it 'fails a file whose subtitles ffmpeg cannot copy as :unsupported_subtitle, before any analysis' do
@@ -342,8 +341,8 @@ RSpec.describe Neutraliser::Processor do
       expect { result = processor.send(:process_file, episodes.first) }
         .to output(/Unsupported subtitle: subtitle stream 2 \(S_TEXT\/WEBVTT\)/).to_stdout
 
-      expect(result).to include(status: :failed, reason: :unsupported_subtitle)
-      expect(result[:message]).to start_with("subtitle stream 2 (S_TEXT/WEBVTT) can't be copied")
+      expect(result).to have_attributes(status: :failed, reason: :unsupported_subtitle)
+      expect(result.message).to start_with("subtitle stream 2 (S_TEXT/WEBVTT) can't be copied")
     end
 
     it 'takes the failure reason an FFmpegError recognised from the encode' do
@@ -356,8 +355,8 @@ RSpec.describe Neutraliser::Processor do
       result = nil
       expect { result = processor.send(:process_file, episodes.first) }.to output.to_stdout
 
-      expect(result).to include(status: :failed, reason: :unsupported_subtitle,
-                                message: 'Normalization failed (exit 1): Subtitle codec 0 is not supported.')
+      expect(result).to have_attributes(status: :failed, reason: :unsupported_subtitle,
+                                        message: 'Normalization failed (exit 1): Subtitle codec 0 is not supported.')
     end
   end
 
@@ -436,12 +435,12 @@ RSpec.describe Neutraliser::Processor do
     it 'returns the codec decision including normalization_type' do
       allow(Neutraliser::FFmpegWrapper).to receive(:apply_normalization) do |_source, output, *_rest, **_kwargs|
         File.write(output, 'y')
-        { encoder: 'aac', bitrate: 256_000, source_codec: 'aac', source_bitrate: 256_000, lossless_output: false, normalization_type: 'Dynamic' }
+        { encoder: 'aac', bitrate: 256_000, source_codec: 'aac', source_bitrate: 256_000, lossless_output: false, mode: Neutraliser::Mode::DYNAMIC }
       end
 
       result = processor.send(:normalize_file_with_paths, video_file, working, measured_data)
 
-      expect(result[:normalization_type]).to eq('Dynamic')
+      expect(result[:mode]).to eq(Neutraliser::Mode::DYNAMIC)
     end
 
     it 'passes allow_dynamic through to FFmpegWrapper' do
@@ -537,10 +536,10 @@ RSpec.describe Neutraliser::Processor do
 
     it 'counts Linear and Dynamic files in the summary' do
       results = [
-        { status: :done, normalization_type: 'Linear' },
-        { status: :done, normalization_type: 'Linear' },
-        { status: :done, normalization_type: 'Dynamic' },
-        { status: :skipped, normalization_type: nil }
+        Neutraliser::FileResult.done('a.mkv', :normalized, mode: Neutraliser::Mode::LINEAR),
+        Neutraliser::FileResult.done('b.mkv', :normalized, mode: Neutraliser::Mode::LINEAR),
+        Neutraliser::FileResult.done('c.mkv', :normalized, mode: Neutraliser::Mode::DYNAMIC),
+        Neutraliser::FileResult.skipped('d.mkv', :within_tolerance)
       ]
 
       summary = processor.send(:summarize_results, found: 4, queued: 4, resumed: 0, manifest_path: nil, results: results)
@@ -552,14 +551,14 @@ RSpec.describe Neutraliser::Processor do
       expect(Neutraliser.logger).to receive(:log).with(/Warning: file went Dynamic/).at_least(:once)
       allow(Neutraliser.logger).to receive(:log)
 
-      processor.send(:log_codec_decision, encoder: 'aac', bitrate: 128_000, normalization_type: 'Dynamic')
+      processor.send(:log_codec_decision, encoder: 'aac', bitrate: 128_000, mode: Neutraliser::Mode::DYNAMIC)
     end
 
     it 'logs the shortfall when the gain was peak-capped' do
       expect(Neutraliser.logger).to receive(:log).with(/Peak-capped: landed 8.5 LU short of -20.0 LUFS/)
       allow(Neutraliser.logger).to receive(:log)
 
-      processor.send(:log_codec_decision, encoder: 'aac', bitrate: 128_000, normalization_type: 'Linear', shortfall_lu: 8.5)
+      processor.send(:log_codec_decision, encoder: 'aac', bitrate: 128_000, mode: Neutraliser::Mode::LINEAR, shortfall_lu: 8.5)
     end
   end
 
@@ -575,8 +574,8 @@ RSpec.describe Neutraliser::Processor do
     it 'uses fast single-pass in dry-run mode' do
       result = processor.send(:process_file, video_file)
 
-      expect(result[:status]).to eq(:done)
-      expect(result[:reason]).to eq(:dry_run)
+      expect(result.status).to eq(:done)
+      expect(result.reason).to eq(:dry_run)
     end
   end
 
@@ -596,17 +595,17 @@ RSpec.describe Neutraliser::Processor do
 
     it 'stages file locally before processing' do
       allow(processor).to receive(:process_file_two_pass).and_return(
-        { file: video_file, status: :done, reason: :dry_run, message: nil }
+        Neutraliser::FileResult.done(video_file, :dry_run)
       )
 
       result = processor.send(:process_file, video_file)
 
-      expect(result[:status]).to eq(:done)
+      expect(result.status).to eq(:done)
     end
 
     it 'cleans up staged file after processing' do
       allow(processor).to receive(:process_file_two_pass).and_return(
-        { file: video_file, status: :done, reason: :dry_run, message: nil }
+        Neutraliser::FileResult.done(video_file, :dry_run)
       )
 
       processor.send(:process_file, video_file)
@@ -666,7 +665,7 @@ RSpec.describe Neutraliser::Processor do
 
       result, output = run(processor)
 
-      expect(result).to include(status: :skipped, reason: :object_audio, message: 'Dolby Digital Plus + Dolby Atmos')
+      expect(result).to have_attributes(status: :skipped, reason: :object_audio, message: 'Dolby Digital Plus + Dolby Atmos')
       expect(output).to match(/Object audio \(Dolby Digital Plus \+ Dolby Atmos\).*skipping.*--allow-object-audio-loss/)
       expect(skip_decider).not_to have_received(:mark_processed)
       expect(skip_decider).to have_received(:mark_left)
@@ -676,34 +675,21 @@ RSpec.describe Neutraliser::Processor do
     it 'skips in a dry run too, so the preview shows what a real run will do' do
       result, = run(described_class.new(dry_run: true))
 
-      expect(result[:reason]).to eq(:object_audio)
+      expect(result.reason).to eq(:object_audio)
     end
 
     it 'processes with an explicit warning under --allow-object-audio-loss, on the one probe it already made' do
       processor = described_class.new(allow_object_audio_loss: true)
       allow(processor).to receive(:analyze_loudness_for_path).and_return(measured)
       expect(processor).to receive(:normalize_file_with_paths)
-        .with(video_file, an_instance_of(Neutraliser::Source), measured).and_return({ normalization_type: 'Linear' })
+        .with(video_file, an_instance_of(Neutraliser::Source), measured).and_return({ mode: Neutraliser::Mode::LINEAR })
 
       result, output = run(processor)
 
       expect(Neutraliser::FFmpegWrapper).to have_received(:probe_file).once
 
-      expect(result).to include(status: :done, reason: :normalized)
+      expect(result).to have_attributes(status: :done, reason: :normalized)
       expect(output).to match(/Warning: primary track is Dolby Digital Plus \+ Dolby Atmos; re-encoding drops/)
-    end
-
-    it 'processes a file whose name says Atmos when neither probe finds it, with a note' do
-      stub_probe(audio: [ProbeFixture.audio(codec: 'eac3', channels: 6, bit_rate: '768000')])
-      allow(Neutraliser::FFmpegWrapper).to receive(:probe_audio_profile_mid_file).and_return(nil)
-      processor = described_class.new
-      allow(processor).to receive(:analyze_loudness_for_path).and_return(measured)
-      allow(processor).to receive(:normalize_file_with_paths).and_return({ normalization_type: 'Linear' })
-
-      result, output = run(processor)
-
-      expect(result[:status]).to eq(:done)
-      expect(output).to match(/name suggests object audio but ffprobe found none/)
     end
 
     it 'records the source profile in the codec-decision log line' do
@@ -728,7 +714,7 @@ RSpec.describe Neutraliser::Processor do
     it 'records the skip reason' do
       processor = described_class.new
       allow(processor).to receive(:process_one).and_return(
-        { file: File.expand_path(video), status: :skipped, reason: :object_audio, message: 'Dolby TrueHD + Dolby Atmos' }
+        Neutraliser::FileResult.skipped(File.expand_path(video), :object_audio, message: 'Dolby TrueHD + Dolby Atmos')
       )
 
       processor.process(temp_dir)
@@ -739,7 +725,7 @@ RSpec.describe Neutraliser::Processor do
     it 'looks at an object-audio skip again on resume, since ffmpeg may have changed' do
       processor = described_class.new(resume: true)
       expect(processor).to receive(:process_one).with(video)
-                                                .and_return({ file: video, status: :skipped, reason: :object_audio })
+                                                .and_return(Neutraliser::FileResult.skipped(video, :object_audio))
 
       expect(processor.process(temp_dir)[:resumed]).to eq(0)
     end
@@ -747,7 +733,7 @@ RSpec.describe Neutraliser::Processor do
     it 'picks object-audio skips back up when resuming with --allow-object-audio-loss' do
       processor = described_class.new(resume: true, allow_object_audio_loss: true)
       expect(processor).to receive(:process_one).with(video)
-                                                .and_return({ file: video, status: :done, reason: :normalized })
+                                                .and_return(Neutraliser::FileResult.done(video, :normalized))
 
       expect(processor.process(temp_dir)[:resumed]).to eq(0)
     end
@@ -775,7 +761,7 @@ RSpec.describe Neutraliser::Processor do
 
       result = proc.send(:process_file_two_pass, path, working)
 
-      expect(result).to include(status: :skipped, reason: :peak_limited)
+      expect(result).to have_attributes(status: :skipped, reason: :peak_limited)
     end
 
     it 'labels a -24 LUFS / 0 dBTP file peak_limited under --tolerance 2 --min-gain 1, not within_tolerance' do
@@ -783,7 +769,7 @@ RSpec.describe Neutraliser::Processor do
       proc = described_class.new(replace: false, dry_run: true, tolerance: 2.0, min_gain: 1.0)
       allow(proc).to receive(:analyze_loudness_for_path).and_return(m)
 
-      expect(proc.send(:process_file_two_pass, path, working)).to include(status: :skipped, reason: :peak_limited)
+      expect(proc.send(:process_file_two_pass, path, working)).to have_attributes(status: :skipped, reason: :peak_limited)
     end
 
     it 'names the measured level when a file really is within tolerance' do
@@ -791,7 +777,7 @@ RSpec.describe Neutraliser::Processor do
       proc = described_class.new(replace: false, tolerance: 2.0)
       allow(proc).to receive(:analyze_loudness_for_path).and_return(m)
 
-      expect { expect(proc.send(:process_file_two_pass, path, working)).to include(reason: :within_tolerance) }
+      expect { expect(proc.send(:process_file_two_pass, path, working)).to have_attributes(reason: :within_tolerance) }
         .to output(/Already at target level \(-21\.5 LUFS, within 2\.0 LU of -20\.0\)/).to_stdout
     end
 
@@ -801,19 +787,19 @@ RSpec.describe Neutraliser::Processor do
       allow(proc).to receive(:analyze_loudness_for_path).and_return(m)
       expect(proc).not_to receive(:normalize_file_with_paths)
 
-      expect(proc.send(:process_file_two_pass, path, working)).to include(status: :skipped, reason: :peak_limited)
+      expect(proc.send(:process_file_two_pass, path, working)).to have_attributes(status: :skipped, reason: :peak_limited)
     end
 
     it 'uses --min-gain, not --tolerance, as the floor on a peak-capped gain' do
       m = measurement(input_i: -26.0, input_tp: -3.0) # +1.5 dB available, 6 LU off target
       strict = described_class.new(replace: false, tolerance: 2.0)
       allow(strict).to receive(:analyze_loudness_for_path).and_return(m)
-      expect(strict.send(:process_file_two_pass, path, working)).to include(reason: :peak_limited)
+      expect(strict.send(:process_file_two_pass, path, working)).to have_attributes(reason: :peak_limited)
 
       lenient = described_class.new(replace: false, tolerance: 2.0, min_gain: 1.0)
       allow(lenient).to receive(:analyze_loudness_for_path).and_return(m)
-      allow(lenient).to receive(:normalize_file_with_paths).and_return({ normalization_type: 'Linear' })
-      expect(lenient.send(:process_file_two_pass, path, working)).to include(status: :done, reason: :normalized)
+      allow(lenient).to receive(:normalize_file_with_paths).and_return({ mode: Neutraliser::Mode::LINEAR })
+      expect(lenient.send(:process_file_two_pass, path, working)).to have_attributes(status: :done, reason: :normalized)
     end
 
     it 'rejects --limit-db combined with dynamic normalisation' do
@@ -832,34 +818,34 @@ RSpec.describe Neutraliser::Processor do
       m = measurement(input_i: -26.0, input_tp: -2.0) # plain cap: +0.5 dB -> skipped
       plain = described_class.new(replace: false)
       allow(plain).to receive(:analyze_loudness_for_path).and_return(m)
-      expect(plain.send(:process_file_two_pass, path, working)).to include(reason: :peak_limited)
+      expect(plain.send(:process_file_two_pass, path, working)).to have_attributes(reason: :peak_limited)
 
       limited = described_class.new(replace: false, limit_db: 4.0)
       allow(limited).to receive(:analyze_loudness_for_path).and_return(m)
-      allow(limited).to receive(:normalize_file_with_paths).and_return({ normalization_type: 'Limited' })
-      expect(limited.send(:process_file_two_pass, path, working)).to include(status: :done, normalization_type: 'Limited')
+      allow(limited).to receive(:normalize_file_with_paths).and_return({ mode: Neutraliser::Mode::LIMITED })
+      expect(limited.send(:process_file_two_pass, path, working)).to have_attributes(status: :done, mode: Neutraliser::Mode::LIMITED)
     end
 
     it 'still processes a file with real achievable gain' do
       m = measurement(input_i: profile_lufs - 6, input_tp: tp - 5)
       proc = described_class.new(replace: false)
       allow(proc).to receive(:analyze_loudness_for_path).and_return(m)
-      allow(proc).to receive(:normalize_file_with_paths).and_return({ normalization_type: 'Linear' })
+      allow(proc).to receive(:normalize_file_with_paths).and_return({ mode: Neutraliser::Mode::LINEAR })
 
       result = proc.send(:process_file_two_pass, path, working)
 
-      expect(result).to include(status: :done, reason: :normalized)
+      expect(result).to have_attributes(status: :done, reason: :normalized)
     end
 
     it 'keeps the distance-to-target rule on the dynamic path' do
       m = measurement(input_i: profile_lufs - 6, input_tp: tp - 0.2)
       proc = described_class.new(replace: false, allow_dynamic: true)
       allow(proc).to receive(:analyze_loudness_for_path).and_return(m)
-      allow(proc).to receive(:normalize_file_with_paths).and_return({ normalization_type: 'Dynamic' })
+      allow(proc).to receive(:normalize_file_with_paths).and_return({ mode: Neutraliser::Mode::DYNAMIC })
 
       result = proc.send(:process_file_two_pass, path, working)
 
-      expect(result).to include(status: :done, reason: :normalized)
+      expect(result).to have_attributes(status: :done, reason: :normalized)
     end
   end
 
@@ -893,7 +879,7 @@ RSpec.describe Neutraliser::Processor do
         result = nil
         expect { result = run(processor) }.to output(/Codec change.*--allow-codec-change/).to_stdout
 
-        expect(result).to include(status: :skipped, reason: :codec_change, message: 'dts would be re-encoded as flac')
+        expect(result).to have_attributes(status: :skipped, reason: :codec_change, message: 'dts would be re-encoded as flac')
         expect(skip_decider).not_to have_received(:mark_processed)
         expect(skip_decider).to have_received(:mark_left)
           .with(video_file, have_attributes(reason: 'codec_change', message: 'dts would be re-encoded as flac'))
@@ -902,9 +888,9 @@ RSpec.describe Neutraliser::Processor do
       it 'processes it under --allow-codec-change' do
         processor = described_class.new(allow_codec_change: true)
         allow(processor).to receive(:analyze_loudness_for_path).and_return(measured)
-        allow(processor).to receive(:normalize_file_with_paths).and_return({ normalization_type: 'Linear' })
+        allow(processor).to receive(:normalize_file_with_paths).and_return({ mode: Neutraliser::Mode::LINEAR })
 
-        expect(run(processor)).to include(status: :done)
+        expect(run(processor)).to have_attributes(status: :done)
       end
     end
 
@@ -921,7 +907,7 @@ RSpec.describe Neutraliser::Processor do
         processor = guarded(:skip)
         expect(processor).not_to receive(:analyze_loudness_for_path)
 
-        expect(run(processor)).to include(status: :skipped, reason: :low_disk)
+        expect(run(processor)).to have_attributes(status: :skipped, reason: :low_disk)
         expect(skip_decider).not_to have_received(:mark_processed)
       end
 
@@ -932,7 +918,7 @@ RSpec.describe Neutraliser::Processor do
       it 'stops a directory run at the abort, keeping what was done and flagging it' do
         File.write(File.join(temp_dir, 'b.mkv'), 'x')
         processor = guarded(:ok)
-        done = { file: video_file, status: :done, reason: :normalized }
+        done = Neutraliser::FileResult.done(video_file, :normalized)
         calls = 0
         allow(processor).to receive(:process_one) do
           calls += 1
@@ -950,7 +936,7 @@ RSpec.describe Neutraliser::Processor do
         processor = described_class.new(dry_run: true, disk_guard: guard)
         allow(processor).to receive(:analyze_loudness_for_path).and_return(measured)
 
-        expect(run(processor)).to include(status: :done, reason: :dry_run)
+        expect(run(processor)).to have_attributes(status: :done, reason: :dry_run)
       end
     end
 

@@ -59,10 +59,10 @@ module Neutraliser
       states = rows.map(&:state).tally
       {
         total: rows.length,
-        linear: states.fetch('linear', 0),
-        limited: states.fetch('limited', 0),
-        compressed: states.fetch('compressed', 0),
-        dynamic: states.fetch('dynamic', 0),
+        linear: states.fetch(Mode::LINEAR.to_s, 0),
+        limited: states.fetch(Mode::LIMITED.to_s, 0),
+        compressed: states.fetch(Mode::COMPRESSED.to_s, 0),
+        dynamic: states.fetch(Mode::DYNAMIC.to_s, 0),
         untouched: states.fetch('untouched', 0),
         profiles: rows.filter_map { |row| row.stamp&.profile }.tally.sort.to_h,
         recipes: rows.filter_map(&:recipe_label).tally.sort_by { |label, _| label }.to_h,

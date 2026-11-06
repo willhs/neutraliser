@@ -84,11 +84,11 @@ RSpec.describe 'Recipe versions, left-alone records and the remote-free rate', :
       expect(Neutraliser::Report.new(dir).summary).to include('Recipes: unversioned=1')
 
       plain = process(dir)
-      expect(plain[:results].map { |r| r[:reason] }).to eq([:already_processed])
+      expect(plain[:results].map(&:reason)).to eq([:already_processed])
 
       redo_run = process(dir, redo_recipes: [Neutraliser::Recipe::UNVERSIONED])
       # Looked at again (measured), found already at target, so not re-encoded for nothing.
-      expect(redo_run[:results].map { |r| r[:reason] }).to eq([:within_tolerance])
+      expect(redo_run[:results].map(&:reason)).to eq([:within_tolerance])
       expect(Digest::SHA256.file(path).hexdigest).to eq(before)
     end
 
@@ -105,7 +105,7 @@ RSpec.describe 'Recipe versions, left-alone records and the remote-free rate', :
       before = Digest::SHA256.file(peaky_path).hexdigest
 
       first = process(dir)
-      expect(first[:results].map { |r| r[:reason] }).to eq([:peak_limited])
+      expect(first[:results].map(&:reason)).to eq([:peak_limited])
       expect(Digest::SHA256.file(peaky_path).hexdigest).to eq(before)
 
       record = Neutraliser::SkipDecider.left_record_for(peaky_path)
@@ -121,7 +121,7 @@ RSpec.describe 'Recipe versions, left-alone records and the remote-free rate', :
 
       # Not "done": the next run decides again (a flag may change the answer).
       second = process(dir)
-      expect(second[:results].map { |r| r[:reason] }).to eq([:peak_limited])
+      expect(second[:results].map(&:reason)).to eq([:peak_limited])
     end
 
     it 'replaces the record once a looser recipe normalises the file' do
@@ -129,7 +129,7 @@ RSpec.describe 'Recipe versions, left-alone records and the remote-free rate', :
       process(dir)
       looser = process(dir, allow_dynamic: true)
 
-      expect(looser[:results].map { |r| r[:reason] }).to eq([:normalized])
+      expect(looser[:results].map(&:reason)).to eq([:normalized])
       row = Neutraliser::Report.new(dir).rows.first
       expect(row.left).to be_nil
       expect(row.state).to eq('dynamic')

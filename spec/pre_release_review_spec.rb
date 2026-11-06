@@ -263,7 +263,7 @@ RSpec.describe 'pre-release review', :real_ffmpeg do
 
       summary = run(video_only)
 
-      expect(summary[:results].first[:reason]).to eq(:no_audio_track)
+      expect(summary[:results].first.reason).to eq(:no_audio_track)
       expect(summary[:failed]).to eq(0)
     end
 
@@ -303,7 +303,7 @@ RSpec.describe 'pre-release review', :real_ffmpeg do
 
       summary = run(film, replace: true)
 
-      expect(summary[:results].first[:reason]).to eq(:object_audio)
+      expect(summary[:results].first.reason).to eq(:object_audio)
       expect(profile_stamp(film)).to be_nil
     end
 
@@ -382,7 +382,7 @@ RSpec.describe 'pre-release review', :real_ffmpeg do
         expect(itunes_atom?(film, 'covr')).to be true
         expect(itunes_atom?(film, 'tvsh')).to be true
         expect(integrated(film)).to be_within(1.0).of(-20)
-        expect(second[:results].first[:reason]).to eq(:already_processed)
+        expect(second[:results].first.reason).to eq(:already_processed)
       end
 
       it 'keeps iTunes atoms on a tagged file with no cover' do
@@ -506,7 +506,7 @@ RSpec.describe 'pre-release review', :real_ffmpeg do
 
       summary = run(File.join(dir, 'lib'), dry_run: true)
 
-      expect(summary[:results].map { |r| File.basename(r[:file]) }).to contain_exactly('film.mkv', 'other_normalized.mkv')
+      expect(summary[:results].map { |r| File.basename(r.file) }).to contain_exactly('film.mkv', 'other_normalized.mkv')
     end
 
     it 'on SIGTERM stops ffmpeg, removes the temp output, exits 143 and leaves the original' do
@@ -629,8 +629,8 @@ RSpec.describe 'pre-release review', :real_ffmpeg do
                             '-f', 'lavfi', '-i', 'sine=frequency=660:duration=6:sample_rate=48000',
                             '-map', '0', '-map', '1', '-map', '2', '-c:v', 'libx264', '-preset', 'ultrafast', '-c:a', 'aac',
                             '-af', 'volume=-20dB', '-disposition:a:0', '0', '-disposition:a:1', 'default', film)
-      allow(Neutraliser::FFmpegWrapper).to receive(:predict_loudnorm_type).and_return('Dynamic')
-      allow(Neutraliser::FFmpegWrapper).to receive(:parse_normalization_type).and_return('Linear')
+      allow(Neutraliser::FFmpegWrapper).to receive(:predict_mode).and_return(Neutraliser::Mode::DYNAMIC)
+      allow(Neutraliser::FFmpegWrapper).to receive(:parse_mode).and_return(Neutraliser::Mode::LINEAR)
 
       run(film, replace: true, allow_dynamic: true)
 
@@ -741,7 +741,7 @@ RSpec.describe 'pre-release review', :real_ffmpeg do
       summary = run(lib)
 
       expect(summary[:done]).to eq(0)
-      expect(summary[:results].map { |r| r[:reason] }).to eq([:already_processed])
+      expect(summary[:results].map(&:reason)).to eq([:already_processed])
       expect(File.mtime(copy)).to eq(written)
     end
 
@@ -769,8 +769,8 @@ RSpec.describe 'pre-release review', :real_ffmpeg do
         first = run(film, replace: true)
         second = run(film, replace: true, limit_db: 12)
 
-        expect(first[:results].first[:reason]).to eq(:peak_limited)
-        expect(second[:results].first[:reason]).to eq(:normalized)
+        expect(first[:results].first.reason).to eq(:peak_limited)
+        expect(second[:results].first.reason).to eq(:normalized)
         expect(Neutraliser::Source.new(film).stamp.mode).to eq('limited')
       end
     else
@@ -789,7 +789,7 @@ RSpec.describe 'pre-release review', :real_ffmpeg do
       allow(Neutraliser::FFmpegWrapper).to receive(:measure_loudness).and_call_original
       summary = run(film, replace: true)
 
-      expect(summary[:results].first[:reason]).to eq(:peak_limited)
+      expect(summary[:results].first.reason).to eq(:peak_limited)
       expect(Neutraliser::FFmpegWrapper).not_to have_received(:measure_loudness)
     end
 
@@ -800,9 +800,9 @@ RSpec.describe 'pre-release review', :real_ffmpeg do
       again = run(film, replace: true, tolerance: 1.0)
       stricter = run(film, replace: true, tolerance: 0.3)
 
-      expect(first[:results].first[:reason]).to eq(:within_tolerance)
-      expect(again[:results].first[:reason]).to eq(:already_processed)
-      expect(stricter[:results].first[:reason]).to eq(:normalized)
+      expect(first[:results].first.reason).to eq(:within_tolerance)
+      expect(again[:results].first.reason).to eq(:already_processed)
+      expect(stricter[:results].first.reason).to eq(:normalized)
     end
 
     it 'measures two files sharing a basename separately' do
@@ -834,7 +834,7 @@ RSpec.describe 'pre-release review', :real_ffmpeg do
 
       summary = run(film, replace: true)
 
-      expect(summary[:results].first[:reason]).to eq(:silent)
+      expect(summary[:results].first.reason).to eq(:silent)
       expect(File.binread(film)).to eq(bytes)
     end
 
@@ -886,7 +886,7 @@ RSpec.describe 'pre-release review', :real_ffmpeg do
       second = run(lib, replace: true)
 
       expect(first[:done]).to eq(1)
-      expect(second[:results].first[:reason]).to eq(:already_processed)
+      expect(second[:results].first.reason).to eq(:already_processed)
     end
 
     it 'keeps the sidecar usable when a file name is not valid UTF-8' do

@@ -33,7 +33,7 @@ module Neutraliser
       (desired.negative? ? -applied : applied) >= min_gain
     end
 
-    def mode = limited ? 'limited' : 'linear'
+    def mode = limited ? Mode::LIMITED : Mode::LINEAR
 
     def filter
       chain = "volume=#{format('%.2f', applied)}dB"

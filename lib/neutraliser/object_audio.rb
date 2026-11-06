@@ -19,6 +19,12 @@ module Neutraliser
     # Release-name / track-title spellings. Only ever triggers a deeper probe.
     NAME_HINT = /atmos|\bjoc\b|dts[:\-. ]?x(?![a-z0-9])/i
 
+    # Atmos/DTS:X profile names arrived in FFmpeg 7.1. Older ones report none.
+    MIN_FFMPEG = [7, 1].freeze
+
+    # True for an ffmpeg version too old to name them; nil (couldn't tell) is not.
+    def self.undetectable?(ffmpeg_version) = !ffmpeg_version.nil? && (ffmpeg_version <=> MIN_FFMPEG).negative?
+
     # status is :object_audio (profile names the format), :suspected (the name
     # says so but neither probe confirms it) or :none.
     Verdict = Data.define(:status, :profile) do

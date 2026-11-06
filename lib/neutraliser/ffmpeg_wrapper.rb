@@ -311,38 +311,38 @@ module Neutraliser
       # A CompressionPlan (--lra-target) wraps the GainPlan for the compressed signal.
       plan = compression || (GainPlan.for(measured_data, profile, limit_db: limit_db) unless allow_dynamic)
       audio_filter = build_audio_filter(measured_data, profile, primary_track[:sample_rate], plan: plan)
-      forced_normalization_type = plan&.mode&.capitalize
+      forced_mode = plan&.mode
 
       # Tags go into the same encode, so loudnorm's Linear/Dynamic choice has
       # to be predicted up front; its summary afterwards is the truth.
-      predicted_type = forced_normalization_type || predict_loudnorm_type(measured_data, profile)
-      stamp_for = lambda do |type|
+      predicted_mode = forced_mode || predict_mode(measured_data, profile)
+      stamp_for = lambda do |mode|
         gain = if plan
                  plan.applied
-               elsif type == 'Linear'
+               elsif mode == Mode::LINEAR
                  profile[:lufs] - measured_data.input_i
                end
-        build_stamp(profile, type, codec_decision, gain: gain, measured: measured_data, compression: compression)
+        build_stamp(profile, mode, codec_decision, gain: gain, measured: measured_data, compression: compression)
       end
       container_opts = container_args(container, output_path)
       mdta = mp4_mdta_safe?(source, container)
 
       cmd = build_complete_ffmpeg_command(
         source, output_path, audio_filter, codec_args,
-        tags: stamp_args(stamp_for.call(predicted_type), container, primary_track[:index], mdta: mdta),
+        tags: stamp_args(stamp_for.call(predicted_mode), container, primary_track[:index], mdta: mdta),
         keep_original: keep_original, container_opts: container_opts
       )
 
       ffmpeg_output = execute_with_progress(cmd)
-      normalization_type = forced_normalization_type || parse_normalization_type(ffmpeg_output) || 'Unknown'
+      mode = forced_mode || parse_mode(ffmpeg_output) || Mode::UNKNOWN
       # Rare: loudnorm disagreed with the prediction. A stream-copy remux
       # corrects the record rather than leave a tag that lies.
-      if %w[Linear Dynamic].include?(normalization_type) && normalization_type != predicted_type
-        restamp(output_path, stamp_for.call(normalization_type), container, primary_track[:index], mdta: mdta)
+      if [Mode::LINEAR, Mode::DYNAMIC].include?(mode) && mode != predicted_mode
+        restamp(output_path, stamp_for.call(mode), container, primary_track[:index], mdta: mdta)
       end
 
-      codec_decision = codec_decision.merge(normalization_type: normalization_type)
-      return codec_decision unless forced_normalization_type
+      codec_decision = codec_decision.merge(mode: mode)
+      return codec_decision unless forced_mode
 
       plan.shortfall.positive? ? codec_decision.merge(shortfall_lu: plan.shortfall) : codec_decision
     end
@@ -362,7 +362,7 @@ module Neutraliser
       # Single-pass loudnorm has no prior measurement pass, so it always
       # behaves as dynamic (per-frame) normalization regardless of the
       # filter's default linear setting.
-      stamp = build_stamp(profile, 'Dynamic', codec_decision, gain: nil, measured: nil)
+      stamp = build_stamp(profile, Mode::DYNAMIC, codec_decision, gain: nil, measured: nil)
       cmd = build_complete_ffmpeg_command(
         source, output_path, loudnorm_filter, codec_args,
         tags: stamp_args(stamp, container, primary_track[:index], mdta: mp4_mdta_safe?(source, container)),
@@ -370,9 +370,7 @@ module Neutraliser
       )
 
       ffmpeg_output = execute_with_progress(cmd)
-      normalization_type = parse_normalization_type(ffmpeg_output) || 'Dynamic'
-
-      codec_decision.merge(normalization_type: normalization_type)
+      codec_decision.merge(mode: parse_mode(ffmpeg_output) || Mode::DYNAMIC)
     end
 
     # NOTE: `private` here has no effect on `def self.foo` methods (Ruby
@@ -659,17 +657,17 @@ module Neutraliser
     # loudnorm's own linear-mode rule (af_loudnorm.c init): valid measured
     # values, the gain fits under the true-peak ceiling, and the source LRA
     # is within the target LRA. Anything else goes dynamic.
-    def self.predict_loudnorm_type(measured, profile)
+    def self.predict_mode(measured, profile)
       valid = measured.input_tp != 99 && measured.input_thresh != -70 &&
               measured.input_lra != 0 && measured.input_i != 0
       gain = profile[:lufs] - measured.input_i
       fits = measured.input_tp + gain <= profile[:tp] && measured.input_lra <= loudnorm_lra(profile[:lra])
-      valid && fits ? 'Linear' : 'Dynamic'
+      valid && fits ? Mode::LINEAR : Mode::DYNAMIC
     end
 
-    def self.build_stamp(profile, normalization_type, codec_decision, gain:, measured:, compression: nil)
+    def self.build_stamp(profile, mode, codec_decision, gain:, measured:, compression: nil)
       Stamp.now(
-        profile: profile[:name], mode: normalization_type.downcase, gain_db: gain,
+        profile: profile[:name], mode: mode.to_s, gain_db: gain,
         source_codec: codec_decision[:source_codec], source_dialnorm: codec_decision[:dialnorm],
         source_bitrate: codec_decision[:source_bitrate].to_i.positive? ? codec_decision[:source_bitrate] : nil,
         measured_i: measured&.input_i, measured_tp: measured&.input_tp, measured_lra: measured&.input_lra,
@@ -722,11 +720,11 @@ module Neutraliser
       FileUtils.rm_f(temp) if temp
     end
 
-    def self.parse_normalization_type(ffmpeg_output)
+    def self.parse_mode(ffmpeg_output)
       return nil if ffmpeg_output.nil?
 
       match = ffmpeg_output.match(/Normalization Type:\s*(Linear|Dynamic)/i)
-      match && match[1].capitalize
+      match && Mode.parse(match[1])
     end
 
     def self.build_complete_ffmpeg_command(source, output_path, loudnorm_filter, primary_codec, tags: [],
@@ -866,8 +864,8 @@ module Neutraliser
                          :loudnorm_lra,
                          :build_loudnorm_filter,
                          :build_audio_filter,
-                         :parse_normalization_type,
-                         :predict_loudnorm_type,
+                         :parse_mode,
+                         :predict_mode,
                          :build_stamp,
                          :container_args,
                          :output_container,

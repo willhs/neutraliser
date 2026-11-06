@@ -87,7 +87,7 @@ RSpec.describe 'Opt-in compression (--lra-target)' do
 
       result = processor.send(:process_file_compressed, '/m/film.mkv', film, measurement(lra: 16.0))
 
-      expect(result).to include(status: :done, reason: :dry_run)
+      expect(result).to have_attributes(status: :done, reason: :dry_run)
       expect(logged.join("\n")).to include('Compression: gentle', 'LRA 16.0 -> 9.0 LU', '[DRY RUN] Would compress (gentle)')
       expect(Neutraliser::FFmpegWrapper).not_to have_received(:apply_normalization)
     end
@@ -132,7 +132,7 @@ RSpec.describe 'Opt-in compression (--lra-target)' do
         source, 'out.mkv', measurement(lra: 16.0), profile, compression: plan
       )
 
-      expect(result[:normalization_type]).to eq('Compressed')
+      expect(result[:mode]).to eq(Neutraliser::Mode::COMPRESSED)
       expect(Neutraliser::FFmpegWrapper).to have_received(:execute_with_timeout) do |cmd, *_|
         expect(cmd[cmd.index('-filter_complex') + 1]).to start_with('[0:a:0]pan=5.1|c0=c0,acompressor=ratio=2.5,volume=8.00dB')
         expect(cmd.each_cons(2).to_a).to include(

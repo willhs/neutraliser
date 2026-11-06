@@ -45,7 +45,7 @@ module Neutraliser
     # Answers the same questions as GainPlan (mode, filter, applied, shortfall), so
     # FFmpegWrapper.apply_normalization treats the two alike.
     Plan = Data.define(:rung, :centre_boost_db, :before, :after, :lra_target, :reached, :gain_plan, :chain) do
-      def mode = 'compressed'
+      def mode = Mode::COMPRESSED
       def filter = "#{chain},#{gain_plan.filter}"
       def applied = gain_plan.applied
       def shortfall = gain_plan.shortfall
