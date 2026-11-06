@@ -334,15 +334,15 @@ module Neutraliser
     end
 
     # A file with nothing to level: unreadable (a failure, it may be mid-write)
-    # or readable but silent of audio (a skip). nil when there is a track.
-    def check_audio_stream(file_path, movie)
-      return if movie.audio_stream
-
-      unless movie.valid?
+    # or readable but silent of audio (a skip). nil when there is a track. The
+    # first fact asked of the Source is the run's one probe of this file.
+    def check_audio_stream(file_path, source)
+      unless source.readable?
         message = 'ffprobe could not read this file; it may be corrupt or still being written'
         log "  Unreadable: #{message}"
         return file_result(file_path, status: :failed, reason: :unreadable, message: message)
       end
+      return if source.audio?
 
       log '  No audio track found, skipping'
       file_result(file_path, status: :skipped, reason: :no_audio_track)
@@ -357,7 +357,10 @@ module Neutraliser
         return file_result(file_path, status: :skipped, reason: :unsupported_format)
       end
 
-      if already_handled?(file_path)
+      # Every fact about the file comes from this one object: the first one asked for is
+      # the file's only probe (none at all when the sidecar already says it is done).
+      source = Source.new(file_path)
+      if already_handled?(file_path, source)
         log '  Already processed, skipping'
         return file_result(file_path, status: :skipped, reason: :already_processed)
       end
@@ -371,31 +374,24 @@ module Neutraliser
       disk_skip = check_disk_space(file_path)
       return disk_skip if disk_skip
 
-      subtitle_failure = check_subtitles(file_path)
+      no_audio = check_audio_stream(file_path, source)
+      return no_audio if no_audio
+
+      subtitle_failure = check_subtitles(file_path, source)
       return subtitle_failure if subtitle_failure
 
       @stager.with_working_copy(file_path) do |working_path|
-        # Binary, because the gem runs a regex over the path, which raises on a
-        # name that isn't valid UTF-8 (Latin-1 names are common on older NASes).
-        movie = FFMPEG::Movie.new(working_path.b)
+        working = source.for_copy(working_path)
 
-        no_audio = check_audio_stream(file_path, movie)
-        next no_audio if no_audio
-
-        audio_tracks = FFmpegWrapper.detect_audio_tracks(working_path)
         # Recorded as left alone, never as done: a later --allow-object-audio-loss
         # run (or an ffmpeg that can keep the objects) must still see the file.
-        object_audio_skip = check_object_audio(file_path, working_path, FFmpegWrapper.primary_audio_track(audio_tracks))
+        object_audio_skip = check_object_audio(file_path, working)
         next record_outcome(file_path, object_audio_skip) if object_audio_skip
 
-        codec_skip = check_codec_change(file_path, working_path, FFmpegWrapper.primary_audio_track(audio_tracks))
+        codec_skip = check_codec_change(file_path, working)
         next record_outcome(file_path, codec_skip) if codec_skip
 
-        result = if @fast
-                   process_file_fast(file_path, working_path, audio_tracks)
-                 else
-                   process_file_two_pass(file_path, working_path, audio_tracks)
-                 end
+        result = @fast ? process_file_fast(file_path, working) : process_file_two_pass(file_path, working)
 
         record_outcome(file_path, result)
       end
@@ -434,9 +430,9 @@ module Neutraliser
 
     # With --replace only the file itself counts. Without it, a finished
     # `_normalized` copy means the job was already done.
-    def already_handled?(file_path)
+    def already_handled?(file_path, source)
       return false unless @skip_decider
-      return true if @skip_decider.already_processed?(file_path, @profile)
+      return true if @skip_decider.already_processed?(file_path, @profile, source: source)
       return false if @replace
 
       copy = generate_output_path(file_path)
@@ -469,14 +465,14 @@ module Neutraliser
       result
     end
 
-    def process_file_two_pass(original_path, working_path, audio_tracks)
-      measurement = analyze_loudness_for_path(working_path, original_path)
+    def process_file_two_pass(original_path, working)
+      measurement = analyze_loudness_for_path(working, original_path)
 
       if measurement.silent?
         log '  Primary audio track has no measurable level (silent), skipping'
         file_result(original_path, status: :skipped, reason: :silent)
       elsif compression_needed?(measurement)
-        process_file_compressed(original_path, working_path, measurement, audio_tracks)
+        process_file_compressed(original_path, working, measurement)
       elsif peak_limited?(measurement)
         log "  Peak-limited: max useful gain #{gain_plan(measurement).applied.round(2)} dB is under " \
             "#{@min_gain} dB towards target, skipping re-encode"
@@ -488,7 +484,7 @@ module Neutraliser
           log "  [DRY RUN] Would normalize: #{measurement.input_i.round(1)} LUFS → #{@profile[:lufs]} LUFS"
           file_result(original_path, status: :done, reason: :dry_run)
         else
-          codec_decision = normalize_file_with_paths(original_path, working_path, measurement, audio_tracks)
+          codec_decision = normalize_file_with_paths(original_path, working, measurement)
           file_result(original_path, status: :done, reason: :normalized,
                                      normalization_type: codec_decision[:normalization_type])
         end
@@ -522,11 +518,11 @@ module Neutraliser
     # target (peak limiter per --limit-db) and stamp what was done. The plan costs
     # a few extra decodes of the file (see Compression); a dry run does them too,
     # because what it would pick is the thing worth seeing.
-    def process_file_compressed(original_path, working_path, measurement, audio_tracks)
-      primary = FFmpegWrapper.primary_audio_track(audio_tracks || FFmpegWrapper.detect_audio_tracks(working_path))
+    def process_file_compressed(original_path, working, measurement)
+      primary = working.primary_track
       log "  Loudness range #{measurement.input_lra.round(1)} LU is over --lra-target #{@lra_target} " \
           "(+#{@tolerance} tolerance): finding the gentlest compression that reaches it"
-      plan = Compression.plan(working_path, primary, measurement, @profile, lra_target: @lra_target,
+      plan = Compression.plan(working.path, primary, measurement, @profile, lra_target: @lra_target,
                                                                             tolerance: @tolerance,
                                                                             centre_boost_db: @centre_boost.to_f,
                                                                             limit_db: @limit_db)
@@ -538,13 +534,12 @@ module Neutraliser
       end
 
       codec_decision = render_normalization(
-        original_path, working_path, audio_tracks,
+        original_path, working,
         log_message: "  Compressing (#{plan.rung.name}), then levelling #{plan.after.input_i.round(1)} LUFS " \
                      "to #{@profile[:lufs]} LUFS (#{plan.applied.round(1)} dB)"
-      ) do |wp, out, tracks|
-        FFmpegWrapper.apply_normalization(wp, out, measurement, @profile, audio_tracks: tracks,
-                                                                          keep_original: @keep_original_audio,
-                                                                          limit_db: @limit_db, compression: plan)
+      ) do |out|
+        FFmpegWrapper.apply_normalization(working, out, measurement, @profile, keep_original: @keep_original_audio,
+                                                                               limit_db: @limit_db, compression: plan)
       end
       file_result(original_path, status: :done, reason: :normalized,
                                  normalization_type: codec_decision[:normalization_type])
@@ -582,8 +577,9 @@ module Neutraliser
     # ffmpeg can't encode Atmos/DTS:X object metadata, so re-encoding the
     # primary track flattens it to plain channel audio. Returns a skip result,
     # or nil to carry on (no object audio, or the user accepted the loss).
-    def check_object_audio(original_path, working_path, primary_track)
-      verdict = ObjectAudio.detect(working_path, primary_track, name: File.basename(original_path))
+    def check_object_audio(original_path, working)
+      primary_track = working.primary_track
+      verdict = ObjectAudio.detect(working, name: File.basename(original_path))
 
       if verdict.status == :suspected
         if @object_audio_undetectable && !@allow_object_audio_loss
@@ -613,13 +609,13 @@ module Neutraliser
 
     # Re-encoding to a different codec isn't leveling the volume, it's
     # converting the track. Skipped unless the user accepts it.
-    def check_codec_change(original_path, working_path, primary_track)
+    def check_codec_change(original_path, working)
       return nil if @allow_codec_change
 
-      encoder = FFmpegWrapper.codec_change(primary_track, original_path, working_path)
+      encoder = FFmpegWrapper.codec_change(working, original_path)
       return nil unless encoder
 
-      message = "#{primary_track[:codec]} would be re-encoded as #{encoder}"
+      message = "#{working.primary_track[:codec]} would be re-encoded as #{encoder}"
       log "  Codec change (#{message}), skipping (--allow-codec-change to process anyway)"
       file_result(original_path, status: :skipped, reason: :codec_change, message: message,
                                  left: LeftRecord.for(:codec_change, @profile, message: message))
@@ -681,8 +677,8 @@ module Neutraliser
     # Subtitles are copied as-is, never dropped. One ffmpeg can't identify
     # can't be copied either, so the encode would fail after a full analysis
     # pass; fail the file up front with a countable reason instead.
-    def check_subtitles(file_path)
-      unsupported = FFmpegWrapper.unsupported_subtitles(file_path)
+    def check_subtitles(file_path, source)
+      unsupported = source.unsupported_subtitles
       return nil if unsupported.empty?
 
       message = "subtitle #{unsupported.join(', ')} can't be copied by this ffmpeg; " \
@@ -695,83 +691,67 @@ module Neutraliser
       GainPlan.for(measurement, @profile, limit_db: @limit_db)
     end
 
-    def process_file_fast(original_path, working_path, audio_tracks)
+    def process_file_fast(original_path, working)
       if @dry_run
         log "  [DRY RUN] Would normalize (fast single-pass) to #{@profile[:lufs]} LUFS"
         return file_result(original_path, status: :done, reason: :dry_run)
       end
 
       codec_decision = render_normalization(
-        original_path, working_path, audio_tracks,
-        log_message: "  Fast mode: single-pass normalization to #{@profile[:lufs]} LUFS"
-      ) { |wp, out, tracks| FFmpegWrapper.apply_normalization_single_pass(wp, out, tracks, @profile,
-                                                                     keep_original: @keep_original_audio) }
+        original_path, working, log_message: "  Fast mode: single-pass normalization to #{@profile[:lufs]} LUFS"
+      ) { |out| FFmpegWrapper.apply_normalization_single_pass(working, out, @profile, keep_original: @keep_original_audio) }
 
       file_result(original_path, status: :done, reason: :normalized,
                                  normalization_type: codec_decision[:normalization_type])
     end
 
-    # detect_audio_tracks marks a track UNKNOWN_AUDIO_TRACK-shaped when ffprobe
-    # succeeded but yielded no real stream data. It's still handed to the
-    # encoder/bitrate logic (audio genuinely exists - movie.audio_stream was
-    # already checked), but deliberately, with an explicit warning rather
-    # than silently trusting fabricated stereo/unknown data.
-    def warn_if_audio_track_unknown(audio_tracks)
-      primary = FFmpegWrapper.primary_audio_track(audio_tracks)
-      return unless primary[:unknown]
-
-      log '  Warning: could not determine audio track format, using conservative defaults'
-    end
-
-    def analyze_loudness_for_path(working_path, original_path)
+    def analyze_loudness_for_path(working, original_path)
       analyzer = AudioAnalyser.new(
         cache_enabled: @cache_enabled, fast_verification: @fast_verify, skip_decider: @skip_decider
       )
-      analyzer.analyze(working_path, cached_as: original_path, profile: @profile, tolerance: @tolerance)
+      analyzer.analyze(working, cached_as: original_path, profile: @profile, tolerance: @tolerance)
     end
 
-    def normalize_file_with_paths(original_path, working_path, measurement, audio_tracks = nil)
+    def normalize_file_with_paths(original_path, working, measurement)
       current_lufs = measurement.input_i
       target_lufs = @profile[:lufs]
       adjustment = target_lufs - current_lufs
 
       render_normalization(
-        original_path, working_path, audio_tracks,
+        original_path, working,
         log_message: "  Current: #{current_lufs.round(1)} LUFS, Target: #{target_lufs} LUFS (#{adjustment.round(1)} LU adjustment)"
-      ) do |wp, out, tracks|
-        FFmpegWrapper.apply_normalization(wp, out, measurement, @profile, audio_tracks: tracks,
-                                                                          allow_dynamic: @allow_dynamic,
-                                                                          keep_original: @keep_original_audio,
-                                                                          limit_db: @limit_db)
+      ) do |out|
+        FFmpegWrapper.apply_normalization(working, out, measurement, @profile, allow_dynamic: @allow_dynamic,
+                                                                               keep_original: @keep_original_audio,
+                                                                               limit_db: @limit_db)
       end
     end
 
     # Shared render step for both normalization strategies (fast single-pass
-    # and two-pass): pick the output path, detect audio tracks, apply the
-    # caller-supplied normalization (the only variation point), verify, and
-    # commit - with a single ensure-based cleanup for a partially written
-    # output_path. The output is always a temp file: nothing takes a final name,
-    # or disturbs what already has it, until it has passed verification.
-    def render_normalization(original_path, working_path, audio_tracks, log_message:)
+    # and two-pass): pick the output path, apply the caller-supplied
+    # normalization (the only variation point), verify, and commit - with a
+    # single ensure-based cleanup for a partially written output_path. The
+    # output is always a temp file: nothing takes a final name, or disturbs what
+    # already has it, until it has passed verification. Verification reads the
+    # output through its own Source (one probe), never the source's facts.
+    def render_normalization(original_path, working, log_message:)
       committed = false
-      output_path = FileManager.safe_temp_path(temp_anchor(working_path))
+      output_path = FileManager.safe_temp_path(temp_anchor(working.path))
 
-      audio_tracks ||= FFmpegWrapper.detect_audio_tracks(working_path)
-      warn_if_audio_track_unknown(audio_tracks)
+      audio_tracks = working.audio_tracks
       log "  Found #{audio_tracks.length} audio tracks, normalizing primary track only" if audio_tracks.length > 1
 
       log log_message
-      codec_decision = yield(working_path, output_path, audio_tracks)
+      codec_decision = yield(output_path)
       log_codec_decision(codec_decision)
 
-      unless FileManager.verify_file_integrity(output_path)
+      output = Source.new(output_path)
+      unless FileManager.verify_file_integrity(output_path, output)
         raise OutputVerificationError, 'Output file verification failed - processing aborted'
       end
 
       mismatch = FileManager.output_mismatch(
-        working_path, output_path,
-        expected_audio_streams: FFmpegWrapper.output_audio_count(audio_tracks, keep_original: @keep_original_audio),
-        primary: FFmpegWrapper.primary_audio_track(audio_tracks)
+        working, output, expected_audio_streams: FFmpegWrapper.output_audio_count(audio_tracks, keep_original: @keep_original_audio)
       )
       raise OutputVerificationError, "Output does not match the source: #{mismatch}" if mismatch
 

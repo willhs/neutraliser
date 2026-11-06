@@ -76,7 +76,7 @@ RSpec.describe 'Opt-in compression (--lra-target)' do
 
   describe 'Processor#process_file_compressed (dry run)' do
     let(:processor) { Neutraliser::Processor.new(lra_target: 10, dry_run: true) }
-    let(:track) { { index: 0, channels: 6, channel_layout: '5.1' } }
+    let(:film) { ProbeFixture.source('/m/film.mkv', audio: [ProbeFixture.audio(codec: 'ac3', channels: 6, layout: '5.1')]) }
 
     it 'plans, reports what it would do and writes nothing' do
       allow(Neutraliser::FFmpegWrapper).to receive(:measure_loudness)
@@ -85,7 +85,7 @@ RSpec.describe 'Opt-in compression (--lra-target)' do
       logged = []
       allow(Neutraliser.logger).to receive(:log) { |message| logged << message }
 
-      result = processor.send(:process_file_compressed, '/m/film.mkv', '/m/film.mkv', measurement(lra: 16.0), [track])
+      result = processor.send(:process_file_compressed, '/m/film.mkv', film, measurement(lra: 16.0))
 
       expect(result).to include(status: :done, reason: :dry_run)
       expect(logged.join("\n")).to include('Compression: gentle', 'LRA 16.0 -> 9.0 LU', '[DRY RUN] Would compress (gentle)')
@@ -98,8 +98,8 @@ RSpec.describe 'Opt-in compression (--lra-target)' do
       logged = []
       allow(Neutraliser.logger).to receive(:log) { |message| logged << message }
 
-      boosting.send(:process_file_compressed, '/m/film.mkv', '/m/film.mkv', measurement(lra: 16.0),
-                    [{ index: 0, channels: 2, channel_layout: 'stereo' }])
+      stereo = ProbeFixture.source('/m/film.mkv', audio: [ProbeFixture.audio(channels: 2, layout: 'stereo')])
+      boosting.send(:process_file_compressed, '/m/film.mkv', stereo, measurement(lra: 16.0))
 
       expect(logged.join("\n")).to include('even the strongest compression (extreme) leaves LRA above --lra-target 10.0',
                                            '--centre-boost skipped, the primary track is not 5.1 (layout: stereo)')
@@ -125,13 +125,11 @@ RSpec.describe 'Opt-in compression (--lra-target)' do
         chain: 'pan=5.1|c0=c0,acompressor=ratio=2.5',
         gain_plan: Neutraliser::GainPlan.for(measurement(lra: 10.0, input_i: -28.0, input_tp: -15.0), profile)
       )
-      allow(Neutraliser::FFmpegWrapper).to receive_messages(stream_counts: { video: 0, subtitle: 0 },
-                                                            output_container: '.mkv', source_dialnorm: nil,
-                                                            execute_with_timeout: ['', '', ok_status])
+      allow(Neutraliser::FFmpegWrapper).to receive_messages(source_dialnorm: nil, execute_with_timeout: ['', '', ok_status])
+      source = ProbeFixture.source('in.mkv', audio: [ProbeFixture.audio(codec: 'ac3', channels: 6, bit_rate: '448000')])
 
       result = Neutraliser::FFmpegWrapper.apply_normalization(
-        'in.mkv', 'out.mkv', measurement(lra: 16.0), profile, compression: plan,
-                                                              audio_tracks: [{ index: 0, channels: 6, codec: 'ac3', bit_rate: 448_000, sample_rate: 48_000 }]
+        source, 'out.mkv', measurement(lra: 16.0), profile, compression: plan
       )
 
       expect(result[:normalization_type]).to eq('Compressed')
@@ -191,7 +189,7 @@ RSpec.describe 'Opt-in compression (--lra-target)' do
       $stdout, $stderr = real
     end
 
-    def stamp_of(path) = Neutraliser::FFmpegWrapper.read_stamp(path)
+    def stamp_of(path) = Neutraliser::Source.new(path).stamp
 
     it 'brings the LRA under the target (within tolerance), levels to the profile, stamps what it did and leaves other tracks alone' do
       expect(@source_levels[:lra]).to be_between(14.0, 19.0) # film-like: wide...
@@ -207,9 +205,9 @@ RSpec.describe 'Opt-in compression (--lra-target)' do
       expect(stamp).to be_compressed
       expect(stamp).to have_attributes(compression: 'gentle', measured_lra: be_within(1.0).of(@source_levels[:lra]))
       expect(stamp.lra_after).to be_within(slack).of(after[:lra])
-      tracks = Neutraliser::FFmpegWrapper.detect_audio_tracks(path)
+      tracks = Neutraliser::Source.new(path).audio_tracks
       expect(tracks.map { |t| [t[:codec], t[:channels], t[:channel_layout], t[:language]] })
-        .to eq(Neutraliser::FFmpegWrapper.detect_audio_tracks(@source).map { |t| [t[:codec], t[:channels], t[:channel_layout], t[:language]] })
+        .to eq(Neutraliser::Source.new(@source).audio_tracks.map { |t| [t[:codec], t[:channels], t[:channel_layout], t[:language]] })
       expect(tracks.first[:default]).to be true
       expect(LraFixture.measure(path, 1)[:i]).to be_within(1.0).of(LraFixture.measure(@source, 1)[:i])
     end

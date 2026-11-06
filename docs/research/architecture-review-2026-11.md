@@ -110,6 +110,7 @@ Ranked. Dependency category per `improve-architecture`'s DEEPENING guide.
 - **Dependencies**: local-substitutable. ffprobe JSON fixtures stand in for the real thing; keep one
   real-ffprobe spec. Beware the stand-in hiding ffprobe quirks (`bit_rate` "N/A", `profile` "unknown").
 - **Order**: after candidate 1 is cleaner but not blocked by it; the track hash is the seam.
+- **Done** (task `fb62003d`): `Source` (`lib/neutraliser/source.rb`) built as described. Same shim run (`benchmark/probe_count.sh`): **15 ffprobe calls before, 2 after** (source, output), 2 ffmpeg runs plus the dialnorm read unchanged. The gem's own probe went with the `streamio-ffmpeg` dependency; the BPS-tag probe is read from the stream tags already in the track. What remains per file: one `-version` pair per `FFmpegWrapper.version` call.
 
 ### 3. Codec choice: one public interface. **Strong (small).** Task `4f0038b5` (S)
 

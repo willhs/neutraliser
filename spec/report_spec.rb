@@ -23,9 +23,7 @@ RSpec.describe Neutraliser::Report do
       File.write(File.join(dir, name), 'x')
     end
     File.write(File.join(dir, 'notes.txt'), 'not a video')
-    allow(Neutraliser::FFmpegWrapper).to receive(:read_stamp) do |path|
-      stamps.fetch(path.delete_prefix("#{dir}/"))
-    end
+    stub_stamps { |path| stamps.fetch(path.delete_prefix("#{dir}/")) }
   end
 
   after { FileUtils.remove_entry(dir) }
@@ -40,9 +38,7 @@ RSpec.describe Neutraliser::Report do
   it 'shows the dialnorm carried over, when any file has one' do
     expect(described_class.new(dir).summary).not_to include('Dialnorm')
 
-    allow(Neutraliser::FFmpegWrapper).to receive(:read_stamp) do |path|
-      stamps.fetch(path.delete_prefix("#{dir}/"))&.with(source_dialnorm: -24)
-    end
+    stub_stamps { |path| stamps.fetch(path.delete_prefix("#{dir}/"))&.with(source_dialnorm: -24) }
     report = described_class.new(dir)
 
     expect(report.counts[:dialnorms]).to eq(-24 => 3)
@@ -126,7 +122,6 @@ RSpec.describe Neutraliser::Report do
         level = path.end_with?('c.mkv') ? -21.0 : -35.0
         Neutraliser::Measurement.new(input_i: level, input_tp: -3.0, input_lra: 5.0, input_thresh: -45.0, target_offset: 0.0)
       end
-      allow(Neutraliser::FFmpegWrapper).to receive(:detect_audio_tracks).and_return([{ index: 0, channels: 2, channel_layout: 'stereo', codec: 'aac' }])
       allow(Neutraliser::FFmpegWrapper).to receive(:measure_loudness, &measure)
 
       report = described_class.new(dir, measure: true)
@@ -139,7 +134,6 @@ RSpec.describe Neutraliser::Report do
     end
 
     it 'skips a file it cannot measure and says how many it did not judge' do
-      allow(Neutraliser::FFmpegWrapper).to receive(:detect_audio_tracks).and_return([{ index: 0, channels: 2, channel_layout: 'stereo', codec: 'aac' }])
       allow(Neutraliser::FFmpegWrapper).to receive(:measure_loudness).and_raise(Neutraliser::FFmpegError, 'boom')
 
       expect(described_class.new(dir, measure: true).rate.to_h).to include(judged: 0, not_judged: 5)
@@ -164,7 +158,7 @@ RSpec.describe Neutraliser::Report do
     compressed = Neutraliser::Stamp.now(profile: 'livingroom', mode: 'compressed', gain_db: 6.0, source_codec: 'ac3',
                                         source_bitrate: nil, measured_i: -22.0, measured_tp: -8.0, measured_lra: 16.0,
                                         compression: 'gentle', centre_boost_db: nil, lra_after: 10.0)
-    allow(Neutraliser::FFmpegWrapper).to receive(:read_stamp).and_return(compressed)
+    stub_stamp(compressed)
 
     report = described_class.new(File.join(dir, 'a.mkv'))
 

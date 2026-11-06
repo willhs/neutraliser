@@ -114,7 +114,7 @@ RSpec.describe 'integration: a real S_TEXT/WEBVTT subtitle track' do
     Dir.mktmpdir do |dir|
       input = write_stext_webvtt_mkv(dir)
 
-      expect(Neutraliser::FFmpegWrapper.unsupported_subtitles(input)).to eq(['stream 1 (S_TEXT/WEBVTT)'])
+      expect(Neutraliser::Source.new(input).unsupported_subtitles).to eq(['stream 1 (S_TEXT/WEBVTT)'])
 
       _, stderr, status = Open3.capture3('ffmpeg', '-hide_banner', '-y', '-i', input,
                                          '-map', '0', '-c', 'copy', File.join(dir, 'out.mkv'))

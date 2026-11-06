@@ -21,10 +21,8 @@ RSpec.describe 'Error Handling and Edge Cases' do
       processor = described_class.new
       video = File.join(temp_dir, 'movie.mp4')
       File.write(video, 'x')
-      movie = instance_double(FFMPEG::Movie, path: video, audio_stream: true)
 
-      allow(FFMPEG::Movie).to receive(:new).and_return(movie)
-      allow(Neutraliser::FFmpegWrapper).to receive(:detect_audio_tracks).and_return([{ index: 0, codec: 'aac' }])
+      stub_probe
       allow(processor).to receive(:analyze_loudness_for_path).and_raise(StandardError, 'boom')
 
       expect { processor.send(:process_file, video) }
@@ -64,7 +62,7 @@ RSpec.describe 'Error Handling and Edge Cases' do
       video = File.join(temp_dir, 'movie.mp4')
       File.write(video, 'x')
 
-      allow(Neutraliser::FFmpegWrapper).to receive(:probe_duration).and_raise(Neutraliser::FFmpegError, 'boom')
+      stub_unreadable_probe
 
       expect(described_class.verify_file_integrity(video)).to be(false)
     end
@@ -73,7 +71,7 @@ RSpec.describe 'Error Handling and Edge Cases' do
       video = File.join(temp_dir, 'movie.mp4')
       File.write(video, 'x')
 
-      allow(Neutraliser::FFmpegWrapper).to receive(:probe_duration).and_raise(Errno::ENOENT, 'ffprobe')
+      allow(Neutraliser::FFmpegWrapper).to receive(:probe_file).and_raise(Errno::ENOENT, 'ffprobe')
 
       expect { described_class.verify_file_integrity(video) }
         .to raise_error(Neutraliser::FileManagerError)

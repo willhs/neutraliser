@@ -1,17 +1,9 @@
 require 'spec_helper'
 
 RSpec.describe Neutraliser::ObjectAudio do
-  let(:ok_status) { instance_double(Process::Status, success?: true) }
-
-  # Feeds a canned ffprobe stream entry through the real track parser, so the
-  # detector sees exactly the shape detect_audio_tracks hands the Processor.
-  def probed_track(codec:, profile: nil, title: nil, channels: 6)
-    stream = { index: 1, codec_name: codec, channels: channels, sample_rate: '48000' }
-    stream[:profile] = profile if profile
-    stream[:tags] = { title: title } if title
-    allow(Neutraliser::FFmpegWrapper).to receive(:execute_with_timeout)
-      .and_return([{ streams: [stream] }.to_json, '', ok_status])
-    Neutraliser::FFmpegWrapper.detect_audio_tracks('movie.mkv').first
+  # A file whose one audio track is described the way ffprobe reports it.
+  def probed(codec:, profile: nil, title: nil, channels: 6)
+    ProbeFixture.source('movie.mkv', audio: [ProbeFixture.audio(codec: codec, channels: channels, profile: profile, title: title)])
   end
 
   describe '.detect from the stream profile' do
@@ -22,10 +14,10 @@ RSpec.describe Neutraliser::ObjectAudio do
       'DTS:X IMAX' => ['dts', 'DTS-HD MA + DTS:X IMAX']
     }.each do |format, (codec, profile)|
       it "flags #{format} without a second probe" do
-        track = probed_track(codec: codec, profile: profile)
+        source = probed(codec: codec, profile: profile)
         expect(Neutraliser::FFmpegWrapper).not_to receive(:probe_audio_profile_mid_file)
 
-        verdict = described_class.detect('movie.mkv', track, name: 'movie.mkv')
+        verdict = described_class.detect(source, name: 'movie.mkv')
 
         expect(verdict).to have_attributes(status: :object_audio, profile: profile)
       end
@@ -38,10 +30,10 @@ RSpec.describe Neutraliser::ObjectAudio do
       'AAC' => %w[aac LC]
     }.each do |format, (codec, profile)|
       it "passes #{format}" do
-        track = probed_track(codec: codec, profile: profile)
+        source = probed(codec: codec, profile: profile)
         expect(Neutraliser::FFmpegWrapper).not_to receive(:probe_audio_profile_mid_file)
 
-        expect(described_class.detect('movie.mkv', track, name: 'movie.mkv').status).to eq(:none)
+        expect(described_class.detect(source, name: 'movie.mkv').status).to eq(:none)
       end
     end
   end
@@ -50,37 +42,37 @@ RSpec.describe Neutraliser::ObjectAudio do
     let(:name) { 'Severance.S02E01.2160p.ATVP.WEB-DL.DDP5.1.Atmos.H.265.mkv' }
 
     it 'confirms with a mid-file probe when the stream profile came back unknown' do
-      track = probed_track(codec: 'eac3')
+      source = probed(codec: 'eac3')
       allow(Neutraliser::FFmpegWrapper).to receive(:probe_audio_profile_mid_file)
-        .with('work.mkv', track).and_return('Dolby Digital Plus + Dolby Atmos')
+        .with(source).and_return('Dolby Digital Plus + Dolby Atmos')
 
-      verdict = described_class.detect('work.mkv', track, name: name)
+      verdict = described_class.detect(source, name: name)
 
       expect(verdict).to have_attributes(status: :object_audio, profile: 'Dolby Digital Plus + Dolby Atmos')
     end
 
     it 'never skips on the name alone: unconfirmed is only :suspected' do
-      track = probed_track(codec: 'eac3')
+      source = probed(codec: 'eac3')
       allow(Neutraliser::FFmpegWrapper).to receive(:probe_audio_profile_mid_file).and_return(nil)
 
-      verdict = described_class.detect('work.mkv', track, name: name)
+      verdict = described_class.detect(source, name: name)
 
       expect(verdict.status).to eq(:suspected)
       expect(verdict.object_audio?).to be(false)
     end
 
     it 'reads the track title as a hint too' do
-      track = probed_track(codec: 'truehd', title: 'TrueHD Atmos 7.1')
+      source = probed(codec: 'truehd', title: 'TrueHD Atmos 7.1')
       allow(Neutraliser::FFmpegWrapper).to receive(:probe_audio_profile_mid_file).and_return(nil)
 
-      expect(described_class.detect('work.mkv', track, name: 'movie.mkv').status).to eq(:suspected)
+      expect(described_class.detect(source, name: 'movie.mkv').status).to eq(:suspected)
     end
 
     it 'skips the second probe for codecs that cannot carry object audio' do
-      track = probed_track(codec: 'aac', channels: 2)
+      source = probed(codec: 'aac', channels: 2)
       expect(Neutraliser::FFmpegWrapper).not_to receive(:probe_audio_profile_mid_file)
 
-      expect(described_class.detect('work.mkv', track, name: name).status).to eq(:none)
+      expect(described_class.detect(source, name: name).status).to eq(:none)
     end
   end
 

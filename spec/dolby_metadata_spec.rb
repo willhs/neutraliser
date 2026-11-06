@@ -45,7 +45,7 @@ RSpec.describe 'Dolby loudness metadata through process --replace', :real_ffmpeg
 
       after_off = DolbyFixture.measure(mkv, *no_drc)
       expect(after_off[:lra]).to be_within(1.0).of(before_off[:lra])
-      stamp = Neutraliser::FFmpegWrapper.read_stamp(mkv)
+      stamp = Neutraliser::Source.new(mkv).stamp
       expect(stamp).to have_attributes(mode: 'linear', recipe: Neutraliser::Recipe::CURRENT)
       expect(stamp.measured_lra).to be_within(1.0).of(before_off[:lra])
       expect(stamp.measured_i).to be_within(0.5).of(before_off[:i])
@@ -78,8 +78,8 @@ RSpec.describe 'Dolby loudness metadata through process --replace', :real_ffmpeg
         gap_after = DolbyFixture.measure(near, *honours_dialnorm)[:i] - DolbyFixture.measure(quiet, *honours_dialnorm)[:i]
         expect(gap_after).to be_within(0.5).of(0.0)
         expect(Neutraliser::DolbyStream.dialnorm(DolbyFixture.raw_stream(quiet, codec))).to eq(-24)
-        expect(Neutraliser::FFmpegWrapper.read_stamp(quiet)).to have_attributes(mode: 'linear', source_codec: codec, source_dialnorm: -24)
-        expect(Neutraliser::FFmpegWrapper.read_stamp(near)).to be_nil
+        expect(Neutraliser::Source.new(quiet).stamp).to have_attributes(mode: 'linear', source_codec: codec, source_dialnorm: -24)
+        expect(Neutraliser::Source.new(near).stamp).to be_nil
       end
     end
   end

@@ -50,12 +50,13 @@ module Neutraliser
     end
 
     # Cheap pre-check: has this exact file+profile been fully processed
-    # before? A sidecar lookup, then one header-only ffprobe for the tags.
-    # No loudness measurement either way.
-    def already_processed?(file_path, profile)
+    # before? A sidecar lookup, then the file's tags (the Source's one probe,
+    # shared with whoever else is asking about this file). No loudness
+    # measurement either way.
+    def already_processed?(file_path, profile, source: Source.new(file_path))
       return true if sidecar_hit?(file_path, profile)
 
-      stamp = File.exist?(file_path) ? FFmpegWrapper.read_stamp(file_path) : nil
+      stamp = File.exist?(file_path) ? source.stamp : nil
       return false unless stamp&.profile == profile[:name] && !redo?(stamp.recipe) &&
                           stamp_meets_lra_target?(stamp)
 
@@ -67,11 +68,12 @@ module Neutraliser
     # verification is enabled) a quick-sample estimate within tolerance.
     # A quick-sample verdict is persisted through #mark_processed so it's
     # available as a cheap sidecar hit on the next run.
-    def skip?(file_path, profile, tolerance:)
-      return true if already_processed?(file_path, profile)
+    # source: the file as it is read (a staged copy of file_path, perhaps); its probe is reused.
+    def skip?(file_path, profile, tolerance:, source: Source.new(file_path))
+      return true if already_processed?(file_path, profile, source: source)
       return false unless @fast_verification
 
-      if quick_sample_verified?(file_path, profile, tolerance: tolerance)
+      if quick_sample_verified?(source, profile, tolerance: tolerance)
         Neutraliser.logger.log '  Quick sample: file likely within tolerance'
         mark_processed(file_path, profile, tolerance: tolerance)
         true
@@ -186,10 +188,9 @@ module Neutraliser
       stamp.measured_lra <= @lra_target + @tolerance.to_f
     end
 
-    def quick_sample_verified?(file_path, profile, tolerance:)
+    def quick_sample_verified?(source, profile, tolerance:)
       quick_result = FFmpegWrapper.quick_loudness_sample(
-        file_path, duration: QUICK_SAMPLE_DURATION_S, target_i: profile[:lufs],
-        audio_index: FFmpegWrapper.primary_audio_index(file_path)
+        source, duration: QUICK_SAMPLE_DURATION_S, target_i: profile[:lufs]
       )
       return false unless quick_result
 

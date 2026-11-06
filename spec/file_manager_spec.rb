@@ -178,36 +178,44 @@ RSpec.describe Neutraliser::FileManager do
     end
 
     it 'returns true when the probe succeeds and duration is present' do
-      allow(Neutraliser::FFmpegWrapper).to receive(:probe_duration).with(video).and_return(12.3)
+      stub_probe(duration: 12.3)
 
       expect(described_class.verify_file_integrity(video)).to be(true)
     end
 
     it 'returns false when the probe reports no usable duration (corrupt output)' do
-      allow(Neutraliser::FFmpegWrapper).to receive(:probe_duration).with(video).and_return(nil)
+      stub_probe(duration: nil)
+
+      expect(described_class.verify_file_integrity(video)).to be(false)
+    end
+
+    it 'returns false when ffprobe cannot read the output' do
+      stub_unreadable_probe
 
       expect(described_class.verify_file_integrity(video)).to be(false)
     end
 
     it 'returns false when the probe times out (treated as unverifiable output, not an environment problem)' do
-      allow(Neutraliser::FFmpegWrapper).to receive(:probe_duration).with(video)
-                                                                   .and_raise(Neutraliser::FFmpegTimeoutError, 'timed out')
+      allow(Neutraliser::FFmpegWrapper).to receive(:probe_file).and_raise(Neutraliser::FFmpegTimeoutError, 'timed out')
 
       expect(described_class.verify_file_integrity(video)).to be(false)
     end
 
     it 'raises FileManagerError, distinct from a corrupt-output false, when ffprobe is missing' do
-      allow(Neutraliser::FFmpegWrapper).to receive(:probe_duration).with(video)
-                                                                   .and_raise(Errno::ENOENT, 'ffprobe')
+      allow(Neutraliser::FFmpegWrapper).to receive(:probe_file).and_raise(Errno::ENOENT, 'ffprobe')
 
       expect { described_class.verify_file_integrity(video) }
         .to raise_error(Neutraliser::FileManagerError, /ffprobe not found/)
     end
 
-    it 'goes through FFmpegWrapper.probe_duration rather than an unbounded direct ffprobe call' do
-      expect(Neutraliser::FFmpegWrapper).to receive(:probe_duration).with(video).and_return(1.0)
+    it 'uses the Source it is handed, so the output is probed once for the integrity check and the comparison' do
+      allow(Neutraliser::FFmpegWrapper).to receive(:probe_file).and_return([ProbeFixture.json, ''])
+      output = Neutraliser::Source.new(video)
 
-      described_class.verify_file_integrity(video)
+      described_class.verify_file_integrity(video, output)
+      described_class.output_mismatch(ProbeFixture.source('in.mkv'), output, expected_audio_streams: 1)
+
+      expect(Neutraliser::FFmpegWrapper).to have_received(:probe_file).once
     end
 
     it 'returns false for missing files' do
@@ -216,31 +224,57 @@ RSpec.describe Neutraliser::FileManager do
   end
 
   describe '.output_mismatch' do
-    before do
-      allow(Neutraliser::FFmpegWrapper).to receive(:probe_duration) { |path| path.include?('short') ? 3.0 : 60.0 }
-      allow(Neutraliser::FFmpegWrapper).to receive(:detect_audio_tracks).and_return([{ index: 0 }, { index: 1 }])
-    end
+    let(:two_tracks) { [ProbeFixture.audio(language: 'eng', default: true), ProbeFixture.audio(language: 'spa')] }
+    let(:source) { ProbeFixture.source('in.mkv', audio: two_tracks, duration: 60.0) }
+
+    def written(**fixture) = ProbeFixture.source('out.mkv', audio: two_tracks, duration: 60.0, **fixture)
 
     it 'is nil for a faithful rewrite' do
-      expect(described_class.output_mismatch('in.mkv', 'out.mkv', expected_audio_streams: 2)).to be_nil
+      expect(described_class.output_mismatch(source, written, expected_audio_streams: 2)).to be_nil
     end
 
     it 'flags a truncated output' do
-      expect(described_class.output_mismatch('in.mkv', 'short.mkv', expected_audio_streams: 2))
+      expect(described_class.output_mismatch(source, written(duration: 3.0), expected_audio_streams: 2))
         .to eq('output is 3.0s long, source is 60.0s')
     end
 
     it 'flags a dropped audio stream' do
-      expect(described_class.output_mismatch('in.mkv', 'out.mkv', expected_audio_streams: 3))
+      expect(described_class.output_mismatch(source, written, expected_audio_streams: 3))
         .to eq('output has 2 audio stream(s), expected 3')
     end
 
-    it 'does not count the placeholder track ffprobe yields for no audio' do
-      allow(Neutraliser::FFmpegWrapper).to receive(:detect_audio_tracks)
-        .and_return([Neutraliser::FFmpegWrapper::UNKNOWN_AUDIO_TRACK])
-
-      expect(described_class.output_mismatch('in.mkv', 'out.mkv', expected_audio_streams: 1))
+    it 'does not count an output that shows no audio at all' do
+      expect(described_class.output_mismatch(source, written(audio: []), expected_audio_streams: 1))
         .to eq('output has 0 audio stream(s), expected 1')
+    end
+
+    it 'flags a lost video stream, subtitle, attachment or chapter' do
+      with_extras = ProbeFixture.source('in.mkv', audio: two_tracks, subtitles: ['subrip'], attachments: 1, chapters: 3, duration: 60.0)
+
+      expect(described_class.output_mismatch(with_extras, written(subtitles: ['subrip'], attachments: 1, chapters: 2), expected_audio_streams: 2))
+        .to eq('output has 2 chapter(s), source has 3')
+      expect(described_class.output_mismatch(with_extras, written(subtitles: [], attachments: 1, chapters: 3), expected_audio_streams: 2))
+        .to eq('output has 0 subtitle(s), source has 1')
+    end
+
+    it 'lets audio grow (--keep-original-audio)' do
+      expect(described_class.output_mismatch(source, written(audio: two_tracks + [ProbeFixture.audio]), expected_audio_streams: 3)).to be_nil
+    end
+
+    it 'flags a silent downmix of the primary track' do
+      surround = ProbeFixture.source('in.mkv', audio: [ProbeFixture.audio(codec: 'eac3', channels: 6, default: true)])
+      stereo = ProbeFixture.source('out.mkv', audio: [ProbeFixture.audio(codec: 'eac3', channels: 2, default: true)])
+
+      expect(described_class.output_mismatch(surround, stereo, expected_audio_streams: 1)).to match(/2 channels.*source has 6/)
+    end
+
+    it 'follows the primary track when it is not the first stream' do
+      source = ProbeFixture.source('in.mkv', audio: [ProbeFixture.audio(language: 'spa'),
+                                                     ProbeFixture.audio(channels: 6, language: 'eng', default: true)])
+      output = ProbeFixture.source('out.mkv', audio: [ProbeFixture.audio(language: 'spa'),
+                                                      ProbeFixture.audio(channels: 2, language: 'eng', default: true)])
+
+      expect(described_class.output_mismatch(source, output, expected_audio_streams: 2)).to match(/2 channels.*source has 6/)
     end
   end
 

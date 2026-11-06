@@ -146,8 +146,7 @@ RSpec.describe Neutraliser::Processor do
 
     before do
       File.write(video_file, 'video')
-      allow(Neutraliser::FFmpegWrapper).to receive(:detect_audio_tracks)
-        .and_return([{ index: 0, codec: 'aac', channels: 2, bit_rate: 256_000, sample_rate: 48_000 }])
+      stub_probe(audio: [ProbeFixture.audio(codec: 'aac', bit_rate: '256000')])
     end
 
     it 'skips unsupported file extensions' do
@@ -160,16 +159,44 @@ RSpec.describe Neutraliser::Processor do
 
     it 'skips files with no audio stream' do
       processor = described_class.new
-      movie = instance_double(FFMPEG::Movie, audio_stream: nil, valid?: true)
-      allow(FFMPEG::Movie).to receive(:new).and_return(movie)
+      stub_probe(audio: [])
 
       expect { processor.send(:process_file, video_file) }
         .to output(/No audio track found, skipping/).to_stdout
     end
 
+    it 'fails a file ffprobe cannot read as :unreadable, with one probe and no analysis' do
+      stub_unreadable_probe
+      processor = described_class.new
+      expect(processor).not_to receive(:analyze_loudness_for_path)
+
+      result = nil
+      expect { result = processor.send(:process_file, video_file) }.to output(/Unreadable: ffprobe could not read this file/).to_stdout
+
+      expect(result).to include(status: :failed, reason: :unreadable)
+      expect(Neutraliser::FFmpegWrapper).to have_received(:probe_file).once
+    end
+
+    it 'lets a probe that hangs end the file as a retryable :timeout, not an unreadable one' do
+      allow(Neutraliser::FFmpegWrapper).to receive(:probe_file).and_raise(Neutraliser::FFmpegTimeoutError, 'File probe timed out')
+
+      result = nil
+      expect { result = described_class.new.send(:process_file, video_file) }.to output(/Timed out/).to_stdout
+
+      expect(result).to include(status: :failed, reason: :timeout)
+    end
+
+    it 'asks ffprobe about a file once, however many checks and passes read its facts' do
+      processor = described_class.new(dry_run: true)
+      allow(processor).to receive(:analyze_loudness_for_path).and_return(Neutraliser::Measurement.already_at_target(processor.instance_variable_get(:@profile)))
+
+      expect { processor.send(:process_file, video_file) }.to output.to_stdout
+
+      expect(Neutraliser::FFmpegWrapper).to have_received(:probe_file).once
+    end
+
     it 'prints dry-run output using numeric conversion for measured input' do
       processor = described_class.new(dry_run: true)
-      movie = instance_double(FFMPEG::Movie, path: video_file, audio_stream: true)
       measured = Neutraliser::Measurement.from_loudnorm_json(
         'input_i' => '-18.0',
         'input_tp' => '-2.0',
@@ -178,7 +205,6 @@ RSpec.describe Neutraliser::Processor do
         'target_offset' => '2.0'
       )
 
-      allow(FFMPEG::Movie).to receive(:new).and_return(movie)
       allow(processor).to receive(:analyze_loudness_for_path).and_return(measured)
 
       expect { processor.send(:process_file, video_file) }
@@ -191,7 +217,6 @@ RSpec.describe Neutraliser::Processor do
       # followed then skipped the file as already normalised, silently
       # leaving it untouched — the exact sequence the README recommends.
       processor = described_class.new(dry_run: true)
-      movie = instance_double(FFMPEG::Movie, path: video_file, audio_stream: true)
       measured = Neutraliser::Measurement.from_loudnorm_json(
         'input_i' => '-40.0',
         'input_tp' => '-12.0',
@@ -201,7 +226,6 @@ RSpec.describe Neutraliser::Processor do
       )
       skip_decider = instance_double(Neutraliser::SkipDecider, already_processed?: false)
 
-      allow(FFMPEG::Movie).to receive(:new).and_return(movie)
       allow(processor).to receive(:analyze_loudness_for_path).and_return(measured)
       processor.instance_variable_set(:@skip_decider, skip_decider)
 
@@ -214,9 +238,6 @@ RSpec.describe Neutraliser::Processor do
 
     it 'handles analysis errors by reporting and continuing' do
       processor = described_class.new
-      movie = instance_double(FFMPEG::Movie, path: video_file, audio_stream: true)
-
-      allow(FFMPEG::Movie).to receive(:new).and_return(movie)
       allow(processor).to receive(:analyze_loudness_for_path).and_raise(StandardError, 'analysis failed')
 
       expect { processor.send(:process_file, video_file) }
@@ -225,9 +246,6 @@ RSpec.describe Neutraliser::Processor do
 
     it 'records a distinct :timeout reason for FFmpegTimeoutError, not the generic processing_error bucket' do
       processor = described_class.new
-      movie = instance_double(FFMPEG::Movie, path: video_file, audio_stream: true)
-
-      allow(FFMPEG::Movie).to receive(:new).and_return(movie)
       allow(processor).to receive(:analyze_loudness_for_path)
         .and_raise(Neutraliser::FFmpegTimeoutError, 'timed out')
 
@@ -241,9 +259,6 @@ RSpec.describe Neutraliser::Processor do
 
     it 'records a distinct :output_verification_failed reason, not the generic processing_error bucket' do
       processor = described_class.new
-      movie = instance_double(FFMPEG::Movie, path: video_file, audio_stream: true)
-
-      allow(FFMPEG::Movie).to receive(:new).and_return(movie)
       allow(processor).to receive(:analyze_loudness_for_path)
         .and_raise(Neutraliser::OutputVerificationError, 'Output file verification failed - processing aborted')
 
@@ -257,9 +272,6 @@ RSpec.describe Neutraliser::Processor do
 
     it 'records a distinct :ffmpeg_error reason for a non-timeout FFmpegError' do
       processor = described_class.new
-      movie = instance_double(FFMPEG::Movie, path: video_file, audio_stream: true)
-
-      allow(FFMPEG::Movie).to receive(:new).and_return(movie)
       allow(processor).to receive(:analyze_loudness_for_path)
         .and_raise(Neutraliser::FFmpegError, 'corrupt container')
 
@@ -277,8 +289,7 @@ RSpec.describe Neutraliser::Processor do
     before do
       FileUtils.mkdir_p(show_dir)
       episodes.each { |episode| File.write(episode, 'x') }
-      allow(Neutraliser::FFmpegWrapper).to receive(:unsupported_subtitles).and_return([])
-      allow(Neutraliser::FFmpegWrapper).to receive(:read_stamp).and_return(nil)
+      stub_probe
       allow(Neutraliser::FFmpegWrapper).to receive(:quick_loudness_sample).and_return(nil)
     end
 
@@ -287,7 +298,6 @@ RSpec.describe Neutraliser::Processor do
     it 'fails every file in a folder it cannot write to as :not_writable, before any analysis' do
       FileUtils.chmod(0o555, show_dir)
       processor = described_class.new(replace: true)
-      expect(FFMPEG::Movie).not_to receive(:new)
       expect(processor).not_to receive(:analyze_loudness_for_path)
 
       summary = nil
@@ -303,7 +313,7 @@ RSpec.describe Neutraliser::Processor do
 
     it 'leaves no trace of the write check in a writable folder' do
       processor = described_class.new
-      allow(FFMPEG::Movie).to receive(:new).and_return(instance_double(FFMPEG::Movie, audio_stream: nil, valid?: true))
+      stub_probe(audio: [])
 
       result = nil
       expect { result = processor.send(:process_file, episodes.first) }.to output.to_stdout
@@ -315,7 +325,7 @@ RSpec.describe Neutraliser::Processor do
     it 'does not check writability on a dry run, which writes nothing' do
       FileUtils.chmod(0o555, show_dir)
       processor = described_class.new(dry_run: true)
-      allow(FFMPEG::Movie).to receive(:new).and_return(instance_double(FFMPEG::Movie, audio_stream: nil, valid?: true))
+      stub_probe(audio: [])
 
       result = nil
       expect { result = processor.send(:process_file, episodes.first) }.to output.to_stdout
@@ -324,10 +334,9 @@ RSpec.describe Neutraliser::Processor do
     end
 
     it 'fails a file whose subtitles ffmpeg cannot copy as :unsupported_subtitle, before any analysis' do
-      allow(Neutraliser::FFmpegWrapper).to receive(:unsupported_subtitles)
-        .with(episodes.first).and_return(['stream 2 (S_TEXT/WEBVTT)'])
+      stub_probe(subtitles: [nil], stderr: ProbeFixture.unknown_subtitle_stderr('S_TEXT/WEBVTT'))
       processor = described_class.new
-      expect(FFMPEG::Movie).not_to receive(:new)
+      expect(processor).not_to receive(:analyze_loudness_for_path)
 
       result = nil
       expect { result = processor.send(:process_file, episodes.first) }
@@ -339,8 +348,6 @@ RSpec.describe Neutraliser::Processor do
 
     it 'takes the failure reason an FFmpegError recognised from the encode' do
       processor = described_class.new
-      allow(FFMPEG::Movie).to receive(:new).and_return(instance_double(FFMPEG::Movie, audio_stream: true))
-      allow(Neutraliser::FFmpegWrapper).to receive(:detect_audio_tracks).and_return([{ codec: 'aac' }])
       allow(Neutraliser::ObjectAudio).to receive(:detect).and_return(Neutraliser::ObjectAudio::NONE)
       allow(processor).to receive(:analyze_loudness_for_path)
         .and_raise(Neutraliser::FFmpegError.new('Normalization failed (exit 1): Subtitle codec 0 is not supported.',
@@ -363,13 +370,15 @@ RSpec.describe Neutraliser::Processor do
       allow(Neutraliser::AudioAnalyser).to receive(:new).and_return(analyser)
     end
 
-    it 'delegates to AudioAnalyser#analyze with staging paths, caching under the original path' do
+    let(:working) { ProbeFixture.source('/working/movie.mp4') }
+
+    it 'delegates to AudioAnalyser#analyze with the staged copy, caching under the original path' do
       measurement = Neutraliser::Measurement.already_at_target(profile)
       expect(analyser).to receive(:analyze)
-        .with('/working/movie.mp4', cached_as: '/orig/movie.mp4', profile: profile, tolerance: 1.0)
+        .with(working, cached_as: '/orig/movie.mp4', profile: profile, tolerance: 1.0)
         .and_return(measurement)
 
-      result = processor.send(:analyze_loudness_for_path, '/working/movie.mp4', '/orig/movie.mp4')
+      result = processor.send(:analyze_loudness_for_path, working, '/orig/movie.mp4')
 
       expect(result).to eq(measurement)
     end
@@ -377,7 +386,7 @@ RSpec.describe Neutraliser::Processor do
     it 'raises ffmpeg errors from measurement instead of using fake fallback data' do
       allow(analyser).to receive(:analyze).and_raise(Neutraliser::FFmpegError, 'boom')
 
-      expect { processor.send(:analyze_loudness_for_path, '/tmp/movie.mp4', '/tmp/movie.mp4') }
+      expect { processor.send(:analyze_loudness_for_path, working, '/tmp/movie.mp4') }
         .to raise_error(Neutraliser::FFmpegError, /boom/)
     end
   end
@@ -386,6 +395,7 @@ RSpec.describe Neutraliser::Processor do
     let(:processor) { described_class.new(replace: false) }
     let(:video_file) { File.join(temp_dir, 'movie.mp4') }
     let(:output_file) { File.join(temp_dir, 'movie_normalized.mp4') }
+    let(:working) { ProbeFixture.source(video_file, audio: [ProbeFixture.audio(codec: 'aac', bit_rate: '256000')]) }
     let(:measured_data) do
       Neutraliser::Measurement.from_loudnorm_json(
         'input_i' => '-18.0',
@@ -398,8 +408,8 @@ RSpec.describe Neutraliser::Processor do
 
     before do
       File.write(video_file, 'x')
-      allow(Neutraliser::FFmpegWrapper).to receive(:detect_audio_tracks).and_return([{ index: 0, codec: 'aac', channels: 2, bit_rate: 256_000, sample_rate: 48_000 }])
-      allow(Neutraliser::FFmpegWrapper).to receive(:apply_normalization) do |_input, output, *_rest, **_kwargs|
+      stub_probe(audio: [ProbeFixture.audio(codec: 'aac', bit_rate: '256000')])
+      allow(Neutraliser::FFmpegWrapper).to receive(:apply_normalization) do |_source, output, *_rest, **_kwargs|
         File.write(output, 'y')
         { encoder: 'aac', bitrate: 256_000, source_codec: 'aac', source_bitrate: 256_000, lossless_output: false }
       end
@@ -407,7 +417,7 @@ RSpec.describe Neutraliser::Processor do
     end
 
     it 'writes to _normalized output in copy mode' do
-      processor.send(:normalize_file_with_paths, video_file, video_file, measured_data)
+      processor.send(:normalize_file_with_paths, video_file, working, measured_data)
 
       expect(File.read(output_file)).to eq('y')
       expect(File.read(video_file)).to eq('x')
@@ -419,17 +429,17 @@ RSpec.describe Neutraliser::Processor do
       allow(File).to receive(:exist?).with(output_file).and_return(true)
       allow(FileUtils).to receive(:rm_f)
 
-      expect { processor.send(:normalize_file_with_paths, video_file, video_file, measured_data) }
+      expect { processor.send(:normalize_file_with_paths, video_file, working, measured_data) }
         .to raise_error(Neutraliser::OutputVerificationError, /Output file verification failed/)
     end
 
     it 'returns the codec decision including normalization_type' do
-      allow(Neutraliser::FFmpegWrapper).to receive(:apply_normalization) do |_input, output, *_rest, **_kwargs|
+      allow(Neutraliser::FFmpegWrapper).to receive(:apply_normalization) do |_source, output, *_rest, **_kwargs|
         File.write(output, 'y')
         { encoder: 'aac', bitrate: 256_000, source_codec: 'aac', source_bitrate: 256_000, lossless_output: false, normalization_type: 'Dynamic' }
       end
 
-      result = processor.send(:normalize_file_with_paths, video_file, video_file, measured_data)
+      result = processor.send(:normalize_file_with_paths, video_file, working, measured_data)
 
       expect(result[:normalization_type]).to eq('Dynamic')
     end
@@ -437,19 +447,18 @@ RSpec.describe Neutraliser::Processor do
     it 'passes allow_dynamic through to FFmpegWrapper' do
       linear_processor = described_class.new(replace: false, allow_dynamic: true)
       File.write(video_file, 'x')
-      allow(Neutraliser::FFmpegWrapper).to receive(:detect_audio_tracks).and_return([{ index: 0, codec: 'aac', channels: 2, bit_rate: 256_000, sample_rate: 48_000 }])
       allow(Neutraliser::FileManager).to receive(:verify_file_integrity).and_return(true)
 
-      linear_processor.send(:normalize_file_with_paths, video_file, video_file, measured_data)
+      linear_processor.send(:normalize_file_with_paths, video_file, working, measured_data)
 
       expect(Neutraliser::FFmpegWrapper).to have_received(:apply_normalization)
-        .with(video_file, anything, measured_data, anything, hash_including(allow_dynamic: true))
+        .with(working, anything, measured_data, anything, hash_including(allow_dynamic: true))
     end
 
     it 'cleans up the temp output file even when interrupted (not just on StandardError)' do
       allow(processor).to receive(:commit_output).and_raise(Interrupt)
 
-      expect { processor.send(:normalize_file_with_paths, video_file, video_file, measured_data) }
+      expect { processor.send(:normalize_file_with_paths, video_file, working, measured_data) }
         .to raise_error(Interrupt)
 
       expect(File.exist?(output_file)).to be(false)
@@ -462,7 +471,7 @@ RSpec.describe Neutraliser::Processor do
       File.write(output_file, 'normalized content')
       allow(processor).to receive(:commit_output)
 
-      processor.send(:normalize_file_with_paths, video_file, video_file, measured_data)
+      processor.send(:normalize_file_with_paths, video_file, working, measured_data)
 
       expect(File.exist?(output_file)).to be(true)
     end
@@ -560,14 +569,10 @@ RSpec.describe Neutraliser::Processor do
 
     before do
       File.write(video_file, 'x')
-      allow(Neutraliser::FFmpegWrapper).to receive(:detect_audio_tracks)
-        .and_return([{ index: 0, codec: 'aac', channels: 2, bit_rate: 256_000, sample_rate: 48_000 }])
+      stub_probe(audio: [ProbeFixture.audio(codec: 'aac', bit_rate: '256000')])
     end
 
     it 'uses fast single-pass in dry-run mode' do
-      movie = instance_double(FFMPEG::Movie, path: video_file, audio_stream: true)
-      allow(FFMPEG::Movie).to receive(:new).and_return(movie)
-
       result = processor.send(:process_file, video_file)
 
       expect(result[:status]).to eq(:done)
@@ -582,8 +587,7 @@ RSpec.describe Neutraliser::Processor do
 
     before do
       File.write(video_file, 'video content')
-      allow(Neutraliser::FFmpegWrapper).to receive(:detect_audio_tracks)
-        .and_return([{ index: 0, codec: 'aac', channels: 2, bit_rate: 256_000, sample_rate: 48_000 }])
+      stub_probe(audio: [ProbeFixture.audio(codec: 'aac', bit_rate: '256000')])
     end
 
     after do
@@ -591,8 +595,6 @@ RSpec.describe Neutraliser::Processor do
     end
 
     it 'stages file locally before processing' do
-      movie = instance_double(FFMPEG::Movie, path: anything, audio_stream: true)
-      allow(FFMPEG::Movie).to receive(:new).and_return(movie)
       allow(processor).to receive(:process_file_two_pass).and_return(
         { file: video_file, status: :done, reason: :dry_run, message: nil }
       )
@@ -603,8 +605,6 @@ RSpec.describe Neutraliser::Processor do
     end
 
     it 'cleans up staged file after processing' do
-      movie = instance_double(FFMPEG::Movie, path: anything, audio_stream: true)
-      allow(FFMPEG::Movie).to receive(:new).and_return(movie)
       allow(processor).to receive(:process_file_two_pass).and_return(
         { file: video_file, status: :done, reason: :dry_run, message: nil }
       )
@@ -619,9 +619,6 @@ RSpec.describe Neutraliser::Processor do
     it 'cleans up the staged input when processing is interrupted' do
       stager = Neutraliser::LocalStager.new(enabled: true, staging_dir: staging_dir)
       processor.instance_variable_set(:@stager, stager)
-      allow(FFMPEG::Movie).to receive(:new).and_return(
-        instance_double(FFMPEG::Movie, audio_stream: true)
-      )
       allow(processor).to receive(:process_file_two_pass).and_raise(Interrupt)
 
       expect { processor.send(:process_file, video_file) }.to raise_error(Interrupt)
@@ -632,8 +629,7 @@ RSpec.describe Neutraliser::Processor do
   describe 'object audio (Atmos / DTS:X)' do
     let(:video_file) { File.join(temp_dir, 'Show.S01E01.DDP5.1.Atmos.mkv') }
     let(:atmos_track) do
-      { index: 0, codec: 'eac3', profile: 'Dolby Digital Plus + Dolby Atmos', channels: 6, bit_rate: 768_000,
-        sample_rate: 48_000 }
+      ProbeFixture.audio(codec: 'eac3', profile: 'Dolby Digital Plus + Dolby Atmos', channels: 6, bit_rate: '768000')
     end
     let(:skip_decider) { instance_double(Neutraliser::SkipDecider, already_processed?: false) }
     let(:measured) do
@@ -643,8 +639,7 @@ RSpec.describe Neutraliser::Processor do
 
     before do
       File.write(video_file, 'x')
-      allow(FFMPEG::Movie).to receive(:new).and_return(instance_double(FFMPEG::Movie, audio_stream: true))
-      allow(Neutraliser::FFmpegWrapper).to receive(:detect_audio_tracks).and_return([atmos_track])
+      stub_probe(audio: [atmos_track])
       allow(skip_decider).to receive(:mark_processed)
       allow(skip_decider).to receive(:mark_left)
     end
@@ -684,22 +679,23 @@ RSpec.describe Neutraliser::Processor do
       expect(result[:reason]).to eq(:object_audio)
     end
 
-    it 'processes with an explicit warning under --allow-object-audio-loss, reusing the probed tracks' do
+    it 'processes with an explicit warning under --allow-object-audio-loss, on the one probe it already made' do
       processor = described_class.new(allow_object_audio_loss: true)
       allow(processor).to receive(:analyze_loudness_for_path).and_return(measured)
       expect(processor).to receive(:normalize_file_with_paths)
-        .with(video_file, video_file, measured, [atmos_track]).and_return({ normalization_type: 'Linear' })
+        .with(video_file, an_instance_of(Neutraliser::Source), measured).and_return({ normalization_type: 'Linear' })
 
       result, output = run(processor)
+
+      expect(Neutraliser::FFmpegWrapper).to have_received(:probe_file).once
 
       expect(result).to include(status: :done, reason: :normalized)
       expect(output).to match(/Warning: primary track is Dolby Digital Plus \+ Dolby Atmos; re-encoding drops/)
     end
 
     it 'processes a file whose name says Atmos when neither probe finds it, with a note' do
-      allow(Neutraliser::FFmpegWrapper).to receive_messages(
-        detect_audio_tracks: [atmos_track.merge(profile: nil)], probe_audio_profile_mid_file: nil
-      )
+      stub_probe(audio: [ProbeFixture.audio(codec: 'eac3', channels: 6, bit_rate: '768000')])
+      allow(Neutraliser::FFmpegWrapper).to receive(:probe_audio_profile_mid_file).and_return(nil)
       processor = described_class.new
       allow(processor).to receive(:analyze_loudness_for_path).and_return(measured)
       allow(processor).to receive(:normalize_file_with_paths).and_return({ normalization_type: 'Linear' })
@@ -767,10 +763,9 @@ RSpec.describe Neutraliser::Processor do
                                    input_thresh: -30.0, target_offset: 0.0)
     end
 
-    before do
-      allow(Neutraliser::FFmpegWrapper).to receive(:detect_audio_tracks)
-      File.write(path, 'x')
-    end
+    let(:working) { ProbeFixture.source(path) }
+
+    before { File.write(path, 'x') }
 
     it 'skips a file already at its max safe gain' do
       m = measurement(input_i: profile_lufs - 6, input_tp: tp - 0.2)
@@ -778,7 +773,7 @@ RSpec.describe Neutraliser::Processor do
       proc = described_class.new(replace: false)
       expect(proc).not_to receive(:normalize_file_with_paths)
 
-      result = proc.send(:process_file_two_pass, path, path, nil)
+      result = proc.send(:process_file_two_pass, path, working)
 
       expect(result).to include(status: :skipped, reason: :peak_limited)
     end
@@ -788,7 +783,7 @@ RSpec.describe Neutraliser::Processor do
       proc = described_class.new(replace: false, dry_run: true, tolerance: 2.0, min_gain: 1.0)
       allow(proc).to receive(:analyze_loudness_for_path).and_return(m)
 
-      expect(proc.send(:process_file_two_pass, path, path, nil)).to include(status: :skipped, reason: :peak_limited)
+      expect(proc.send(:process_file_two_pass, path, working)).to include(status: :skipped, reason: :peak_limited)
     end
 
     it 'names the measured level when a file really is within tolerance' do
@@ -796,7 +791,7 @@ RSpec.describe Neutraliser::Processor do
       proc = described_class.new(replace: false, tolerance: 2.0)
       allow(proc).to receive(:analyze_loudness_for_path).and_return(m)
 
-      expect { expect(proc.send(:process_file_two_pass, path, path, nil)).to include(reason: :within_tolerance) }
+      expect { expect(proc.send(:process_file_two_pass, path, working)).to include(reason: :within_tolerance) }
         .to output(/Already at target level \(-21\.5 LUFS, within 2\.0 LU of -20\.0\)/).to_stdout
     end
 
@@ -806,21 +801,19 @@ RSpec.describe Neutraliser::Processor do
       allow(proc).to receive(:analyze_loudness_for_path).and_return(m)
       expect(proc).not_to receive(:normalize_file_with_paths)
 
-      expect(proc.send(:process_file_two_pass, path, path, nil)).to include(status: :skipped, reason: :peak_limited)
+      expect(proc.send(:process_file_two_pass, path, working)).to include(status: :skipped, reason: :peak_limited)
     end
 
     it 'uses --min-gain, not --tolerance, as the floor on a peak-capped gain' do
       m = measurement(input_i: -26.0, input_tp: -3.0) # +1.5 dB available, 6 LU off target
-      allow(Neutraliser::FFmpegWrapper).to receive(:detect_audio_tracks)
-
       strict = described_class.new(replace: false, tolerance: 2.0)
       allow(strict).to receive(:analyze_loudness_for_path).and_return(m)
-      expect(strict.send(:process_file_two_pass, path, path, nil)).to include(reason: :peak_limited)
+      expect(strict.send(:process_file_two_pass, path, working)).to include(reason: :peak_limited)
 
       lenient = described_class.new(replace: false, tolerance: 2.0, min_gain: 1.0)
       allow(lenient).to receive(:analyze_loudness_for_path).and_return(m)
       allow(lenient).to receive(:normalize_file_with_paths).and_return({ normalization_type: 'Linear' })
-      expect(lenient.send(:process_file_two_pass, path, path, nil)).to include(status: :done, reason: :normalized)
+      expect(lenient.send(:process_file_two_pass, path, working)).to include(status: :done, reason: :normalized)
     end
 
     it 'rejects --limit-db combined with dynamic normalisation' do
@@ -839,12 +832,12 @@ RSpec.describe Neutraliser::Processor do
       m = measurement(input_i: -26.0, input_tp: -2.0) # plain cap: +0.5 dB -> skipped
       plain = described_class.new(replace: false)
       allow(plain).to receive(:analyze_loudness_for_path).and_return(m)
-      expect(plain.send(:process_file_two_pass, path, path, nil)).to include(reason: :peak_limited)
+      expect(plain.send(:process_file_two_pass, path, working)).to include(reason: :peak_limited)
 
       limited = described_class.new(replace: false, limit_db: 4.0)
       allow(limited).to receive(:analyze_loudness_for_path).and_return(m)
       allow(limited).to receive(:normalize_file_with_paths).and_return({ normalization_type: 'Limited' })
-      expect(limited.send(:process_file_two_pass, path, path, nil)).to include(status: :done, normalization_type: 'Limited')
+      expect(limited.send(:process_file_two_pass, path, working)).to include(status: :done, normalization_type: 'Limited')
     end
 
     it 'still processes a file with real achievable gain' do
@@ -853,7 +846,7 @@ RSpec.describe Neutraliser::Processor do
       allow(proc).to receive(:analyze_loudness_for_path).and_return(m)
       allow(proc).to receive(:normalize_file_with_paths).and_return({ normalization_type: 'Linear' })
 
-      result = proc.send(:process_file_two_pass, path, path, nil)
+      result = proc.send(:process_file_two_pass, path, working)
 
       expect(result).to include(status: :done, reason: :normalized)
     end
@@ -864,7 +857,7 @@ RSpec.describe Neutraliser::Processor do
       allow(proc).to receive(:analyze_loudness_for_path).and_return(m)
       allow(proc).to receive(:normalize_file_with_paths).and_return({ normalization_type: 'Dynamic' })
 
-      result = proc.send(:process_file_two_pass, path, path, nil)
+      result = proc.send(:process_file_two_pass, path, working)
 
       expect(result).to include(status: :done, reason: :normalized)
     end
@@ -872,7 +865,7 @@ RSpec.describe Neutraliser::Processor do
 
   describe 'prod-parity guards' do
     let(:video_file) { File.join(temp_dir, 'movie.mkv') }
-    let(:dts_track) { { index: 0, channels: 6, codec: 'dts', bit_rate: 1_509_000, sample_rate: 48_000 } }
+    let(:dts_track) { ProbeFixture.audio(codec: 'dts', channels: 6, bit_rate: '1509000') }
     let(:skip_decider) do
       instance_double(Neutraliser::SkipDecider, already_processed?: false, mark_processed: nil, mark_left: nil)
     end
@@ -883,9 +876,7 @@ RSpec.describe Neutraliser::Processor do
 
     before do
       File.write(video_file, 'x')
-      allow(FFMPEG::Movie).to receive(:new).and_return(instance_double(FFMPEG::Movie, audio_stream: true))
-      allow(Neutraliser::FFmpegWrapper).to receive(:detect_audio_tracks).and_return([dts_track])
-      allow(Neutraliser::FFmpegWrapper).to receive(:output_container) { |_in, out| File.extname(out).downcase }
+      stub_probe(audio: [dts_track])
       allow(Neutraliser::ObjectAudio).to receive(:detect).and_return(Neutraliser::ObjectAudio::Verdict.new(status: :none, profile: nil))
     end
 
@@ -918,9 +909,7 @@ RSpec.describe Neutraliser::Processor do
     end
 
     describe 'disk guard' do
-      let(:aac_track) { dts_track.merge(codec: 'aac') }
-
-      before { allow(Neutraliser::FFmpegWrapper).to receive(:detect_audio_tracks).and_return([aac_track]) }
+      before { stub_probe(audio: [ProbeFixture.audio(codec: 'aac', channels: 6, bit_rate: '1509000')]) }
 
       def guarded(verdict)
         guard = Neutraliser::DiskGuard.new(min_free: 1)
@@ -966,12 +955,14 @@ RSpec.describe Neutraliser::Processor do
     end
 
     describe 'output verification' do
-      let(:aac_track) { dts_track.merge(codec: 'aac') }
+      let(:working) { ProbeFixture.source(video_file, audio: [ProbeFixture.audio(codec: 'aac', channels: 6)]) }
+
+      before { stub_probe }
 
       def render(processor, mismatch)
         allow(Neutraliser::FileManager).to receive(:verify_file_integrity).and_return(true)
         allow(Neutraliser::FileManager).to receive(:output_mismatch).and_return(mismatch)
-        processor.send(:render_normalization, video_file, video_file, [aac_track], log_message: 'x') do |_wp, out, _t|
+        processor.send(:render_normalization, video_file, working, log_message: 'x') do |out|
           File.write(out, 'y')
           { encoder: 'aac' }
         end
@@ -990,7 +981,7 @@ RSpec.describe Neutraliser::Processor do
         render(processor, nil)
 
         expect(Neutraliser::FileManager).to have_received(:output_mismatch)
-          .with(video_file, anything, hash_including(expected_audio_streams: 2))
+          .with(working, an_instance_of(Neutraliser::Source), hash_including(expected_audio_streams: 2))
       end
     end
   end

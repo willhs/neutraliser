@@ -111,7 +111,7 @@ RSpec.describe 'Golden round trip over a real-structure clip', :real_ffmpeg do
         expect(after['chapters'].map { |c| c['start_time'].to_f.round(1) })
           .to eq(before['chapters'].map { |c| c['start_time'].to_f.round(1) })
 
-        stamp = Neutraliser::FFmpegWrapper.read_stamp(path)
+        stamp = Neutraliser::Source.new(path).stamp
         expect(stamp).not_to be_nil, 'NEUTRALISER_* stamp missing after process'
         expect(stamp).to have_attributes(profile: 'livingroom', mode: 'linear', source_codec: 'aac',
                                          version: Neutraliser::VERSION)
@@ -164,7 +164,7 @@ RSpec.describe 'Golden round trip over a real-structure clip', :real_ffmpeg do
           expect(tags[2]['handler_name']).to eq('(original, not normalised)')
         end
         expect(mean_volume(path, 1) - mean_volume(path, 2)).to be > 3.0
-        expect(Neutraliser::FFmpegWrapper.read_stamp(path)).to have_attributes(profile: 'livingroom')
+        expect(Neutraliser::Source.new(path).stamp).to have_attributes(profile: 'livingroom')
         expect(streams_of(after, 'video').length).to eq(streams_of(before, 'video').length)
 
         # A re-run is skipped: no second copy.

@@ -127,39 +127,38 @@ module Neutraliser
     # stream-dropping write, and quietly downmixes when the encoder can't hold
     # the layout (7.1 into E-AC3 comes out 5.x). A probe that merely parses
     # (verify_file_integrity) would pass all that, and then the original goes.
-    def self.output_mismatch(source_path, output_path, expected_audio_streams:, primary: nil)
-      source_duration = FFmpegWrapper.probe_duration(source_path)
-      output_duration = FFmpegWrapper.probe_duration(output_path)
-      if source_duration && output_duration && (source_duration - output_duration).abs >= DURATION_TOLERANCE_S
-        return "output is #{output_duration.round(1)}s long, source is #{source_duration.round(1)}s"
+    # Both arguments are Sources; the output's is its own probe of what was written.
+    def self.output_mismatch(source, output, expected_audio_streams:)
+      if source.duration && output.duration && (source.duration - output.duration).abs >= DURATION_TOLERANCE_S
+        return "output is #{output.duration.round(1)}s long, source is #{source.duration.round(1)}s"
       end
 
-      output_tracks = FFmpegWrapper.detect_audio_tracks(output_path).reject { |track| track[:unknown] }
+      output_tracks = output.audio_tracks
       if output_tracks.length != expected_audio_streams
         return "output has #{output_tracks.length} audio stream(s), expected #{expected_audio_streams}"
       end
 
-      lost_streams(source_path, output_path) || channel_change(primary, output_tracks)
+      lost_streams(source, output) || channel_change(source, output)
     end
 
-    # Counted independently of track detection, so a source it under-read can't
-    # lower the bar. Audio may legitimately grow (--keep-original-audio).
-    def self.lost_streams(source_path, output_path)
-      source = FFmpegWrapper.stream_counts(source_path)
-      output = FFmpegWrapper.stream_counts(output_path)
-      if output[:audio] < source[:audio]
-        return "output has #{output[:audio]} audio stream(s), source has #{source[:audio]}"
-      end
+    # Audio may legitimately grow (--keep-original-audio).
+    def self.lost_streams(source, output)
+      before = source.stream_counts
+      after = output.stream_counts
+      return "output has #{after[:audio]} audio stream(s), source has #{before[:audio]}" if after[:audio] < before[:audio]
 
-      changed = %i[video subtitle attachment chapter].find { |kind| output[kind] != source[kind] }
-      changed && "output has #{output[changed]} #{changed}(s), source has #{source[changed]}"
+      changed = %i[video subtitle attachment chapter].find { |kind| after[kind] != before[kind] }
+      changed && "output has #{after[changed]} #{changed}(s), source has #{before[changed]}"
     end
     private_class_method :lost_streams
 
-    def self.channel_change(primary, output_tracks)
-      return nil if primary.nil? || primary[:unknown] || primary[:channels].to_i.zero?
+    def self.channel_change(source, output)
+      return nil unless source.audio?
 
-      channels = output_tracks[primary[:index]]&.fetch(:channels)
+      primary = source.primary_track
+      return nil if primary[:channels].to_i.zero?
+
+      channels = output.audio_tracks[primary[:index]]&.fetch(:channels)
       return nil if channels.nil? || channels == primary[:channels]
 
       "normalised track has #{channels} channels, source has #{primary[:channels]}"
@@ -179,7 +178,7 @@ module Neutraliser
       File.join(dir, temp_name)
     end
 
-    def self.verify_file_integrity(file_path)
+    def self.verify_file_integrity(file_path, source = Source.new(file_path))
       # Basic file integrity check
       return false unless File.exist?(file_path)
       return false if File.size(file_path) == 0
@@ -189,7 +188,7 @@ module Neutraliser
       # freshly-written, possibly-truncated file, exactly the input most
       # likely to hang ffprobe indefinitely.
       begin
-        !FFmpegWrapper.probe_duration(file_path).nil?
+        !source.duration.nil?
       rescue Errno::ENOENT => e
         # ffprobe isn't installed/on PATH — an environment problem, not a
         # verdict on this file's integrity. Distinguish it from "corrupt

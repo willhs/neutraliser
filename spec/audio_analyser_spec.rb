@@ -10,7 +10,11 @@ RSpec.describe Neutraliser::AudioAnalyser do
   end
 
   describe '#analyze' do
-    before { allow(Neutraliser::FFmpegWrapper).to receive(:primary_audio_index).and_return(0) }
+    # Spanish first, English flagged default: the primary track is the second audio stream.
+    let(:source) do
+      ProbeFixture.source('/working/movie.mp4', audio: [ProbeFixture.audio(language: 'spa'),
+                                                        ProbeFixture.audio(language: 'eng', default: true)])
+    end
 
     context 'when the skip decider says the file is already normalised' do
       it 'returns an already-at-target Measurement without measuring' do
@@ -19,7 +23,7 @@ RSpec.describe Neutraliser::AudioAnalyser do
         allow_any_instance_of(Neutraliser::SkipDecider).to receive(:skip?).and_return(true)
         expect(Neutraliser::FFmpegWrapper).not_to receive(:measure_loudness)
 
-        result = analyser.analyze('/working/movie.mp4', cached_as: '/orig/movie.mp4', profile: profile)
+        result = analyser.analyze(source, cached_as: '/orig/movie.mp4', profile: profile)
 
         expect(result.already_at_target?).to be true
         expect(result.needs_normalization?(profile)).to be false
@@ -33,25 +37,25 @@ RSpec.describe Neutraliser::AudioAnalyser do
         expect_any_instance_of(Neutraliser::SkipDecider).not_to receive(:skip?)
         expect(Neutraliser::FFmpegWrapper).not_to receive(:measure_loudness)
 
-        result = analyser.analyze('/working/movie.mp4', cached_as: '/orig/movie.mp4', profile: profile)
+        result = analyser.analyze(source, cached_as: '/orig/movie.mp4', profile: profile)
 
         expect(result).to eq(measurement)
       end
     end
 
     context 'on a cache miss with no skip verdict' do
-      it 'measures the working path, caches it under cached_as, and returns the Measurement' do
+      it 'measures the working path\'s primary track, caches it under cached_as, and returns the Measurement' do
         analyser = described_class.new(cache_enabled: true, fast_verification: false)
         allow_any_instance_of(Neutraliser::CacheManager).to receive(:load_cached_analysis).and_return(nil)
         allow(Neutraliser::FFmpegWrapper).to receive(:measure_loudness)
           .with('/working/movie.mp4', target_i: profile[:lufs], target_tp: profile[:tp], target_lra: profile[:lra],
-                audio_index: 0)
+                audio_index: 1)
           .and_return(measurement)
 
         expect_any_instance_of(Neutraliser::CacheManager).to receive(:save_analysis)
           .with('/orig/movie.mp4', profile, measurement)
 
-        result = analyser.analyze('/working/movie.mp4', cached_as: '/orig/movie.mp4', profile: profile)
+        result = analyser.analyze(source, cached_as: '/orig/movie.mp4', profile: profile)
 
         expect(result).to eq(measurement)
       end
@@ -64,7 +68,7 @@ RSpec.describe Neutraliser::AudioAnalyser do
 
         expect(File).not_to receive(:write)
 
-        result = analyser.analyze('/working/movie.mp4', cached_as: '/orig/movie.mp4', profile: profile)
+        result = analyser.analyze(source, cached_as: '/orig/movie.mp4', profile: profile)
 
         expect(result).to eq(measurement)
       end
@@ -78,14 +82,14 @@ RSpec.describe Neutraliser::AudioAnalyser do
 
       expect(Neutraliser::SkipDecider).not_to receive(:new)
 
-      analyser.analyze('/working/movie.mp4', cached_as: '/orig/movie.mp4', profile: profile)
+      analyser.analyze(source, cached_as: '/orig/movie.mp4', profile: profile)
     end
 
     it 'raises ffmpeg errors instead of falling back to fake data' do
       analyser = described_class.new(cache_enabled: false, fast_verification: false)
       allow(Neutraliser::FFmpegWrapper).to receive(:measure_loudness).and_raise(Neutraliser::FFmpegError, 'boom')
 
-      expect { analyser.analyze('/working/movie.mp4', cached_as: '/orig/movie.mp4', profile: profile) }
+      expect { analyser.analyze(source, cached_as: '/orig/movie.mp4', profile: profile) }
         .to raise_error(Neutraliser::FFmpegError, /boom/)
     end
   end

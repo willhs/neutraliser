@@ -5,6 +5,18 @@ RSpec.describe Neutraliser::FFmpegWrapper do
   let(:ok_status) { instance_double(Process::Status, success?: true) }
   let(:fail_status) { instance_double(Process::Status, success?: false, exitstatus: 1) }
 
+  # A probed file whose audio tracks are given as plain hashes (codec, channels, bit_rate, sample_rate,
+  # language, title, default ...), read back through Source like the real thing.
+  def source_of(tracks, path = 'in.mkv', **fixture)
+    audio = tracks.map do |t|
+      ProbeFixture.audio(codec: t.fetch(:codec, 'aac'), channels: t.fetch(:channels, 2), layout: t[:channel_layout],
+                         language: t[:language], title: t[:title], default: t[:default] || false,
+                         bit_rate: t[:bit_rate]&.to_s || 'N/A', sample_rate: t[:sample_rate]&.to_s, profile: t[:profile],
+                         dispositions: t[:dispositions] || [], handler_name: t[:handler_name], tags: t[:tags] || {})
+    end
+    ProbeFixture.source(path, audio: audio, **fixture)
+  end
+
   describe '.measure_loudness' do
     it 'executes ffmpeg with loudnorm json output and parses results' do
       stderr = <<~OUT
@@ -85,47 +97,30 @@ RSpec.describe Neutraliser::FFmpegWrapper do
     end
   end
 
-  describe '.probe_duration' do
-    it 'returns the parsed duration on success' do
-      allow(described_class).to receive(:execute_with_timeout).and_return(['12.3', '', ok_status])
-
-      expect(described_class.probe_duration('test.mp4')).to eq(12.3)
-      expect(described_class).to have_received(:execute_with_timeout).with(
-        array_including('ffprobe', 'format=duration'), described_class::PROBE_TIMEOUT, 'Duration probe'
-      )
-    end
-
-    it 'returns nil when ffprobe reports failure' do
-      allow(described_class).to receive(:execute_with_timeout).and_return(['', 'bad', fail_status])
-
-      expect(described_class.probe_duration('bad.mp4')).to be_nil
-    end
-
-    it 'returns nil when duration is not a positive number' do
-      allow(described_class).to receive(:execute_with_timeout).and_return(['', '', ok_status])
-
-      expect(described_class.probe_duration('empty.mp4')).to be_nil
-    end
-
-    it 'propagates a timeout so callers can tell it apart from a bad probe result' do
-      allow(described_class).to receive(:execute_with_timeout).and_raise(Neutraliser::FFmpegTimeoutError, 'timed out')
-
-      expect { described_class.probe_duration('slow.mp4') }.to raise_error(Neutraliser::FFmpegTimeoutError)
-    end
-  end
-
   describe '.quick_loudness_sample' do
     it 'returns nil when file is too short for meaningful sample' do
-      allow(described_class).to receive(:execute_with_timeout).and_return(['40', '', ok_status])
+      allow(described_class).to receive(:execute_with_timeout)
 
-      result = described_class.quick_loudness_sample('short.mp4', duration: 30)
-      expect(result).to be_nil
+      expect(described_class.quick_loudness_sample(source_of([{}], 'short.mp4', duration: 40.0), duration: 30)).to be_nil
+      expect(described_class).not_to have_received(:execute_with_timeout)
     end
 
-    it 'returns nil (rather than raising) when the duration probe times out' do
-      allow(described_class).to receive(:probe_duration).and_raise(Neutraliser::FFmpegTimeoutError, 'timed out')
+    it 'returns nil (rather than raising) when the file could not be probed' do
+      allow(described_class).to receive(:probe_file).and_raise(Neutraliser::FFmpegTimeoutError, 'timed out')
 
-      expect(described_class.quick_loudness_sample('slow.mp4')).to be_nil
+      expect(described_class.quick_loudness_sample(Neutraliser::Source.new('slow.mp4'))).to be_nil
+    end
+
+    it 'samples the middle of the primary track, from the facts already probed' do
+      source = source_of([{ language: 'spa' }, { language: 'eng', default: true }], 'long.mkv', duration: 600.0)
+      allow(described_class).to receive(:execute_with_timeout)
+        .and_return(['', '{"input_i":"-18","input_tp":"-2","input_lra":"5","input_thresh":"-28","target_offset":"0"}', ok_status])
+
+      result = described_class.quick_loudness_sample(source, duration: 30, target_i: -20.0)
+
+      expect(result.input_i).to eq(-18.0)
+      expect(described_class).to have_received(:execute_with_timeout)
+        .with(array_including('-ss', '285.0', '-i', 'long.mkv', '-map', '0:a:1'), anything, anything)
     end
   end
 
@@ -133,20 +128,14 @@ RSpec.describe Neutraliser::FFmpegWrapper do
     it 'exposes only the intended ~8 methods' do
       expect(described_class.singleton_methods(false)).to contain_exactly(
         :measure_loudness,
-        :probe_duration,
+        :probe_file,
         :quick_loudness_sample,
         :apply_normalization,
         :apply_normalization_single_pass,
-        :detect_audio_tracks,
-        :read_stamp,
         :read_dialnorm,
-        :primary_audio_track,
-        :primary_audio_index,
         :probe_audio_profile_mid_file,
-        :stream_counts,
         :version,
         :wide_filter_options?,
-        :unsupported_subtitles,
         :codec_change,
         :output_audio_count
       )
@@ -167,8 +156,6 @@ RSpec.describe Neutraliser::FFmpegWrapper do
     let(:profile) { { lufs: -20.0, tp: -1.5, lra: 12.0 } }
 
     before do
-      allow(described_class).to receive(:stream_counts).and_return(video: 0, subtitle: 0)
-      allow(described_class).to receive(:output_container) { |_input, output| File.extname(output).downcase }
       allow(described_class).to receive(:source_dialnorm).and_return(nil)
     end
 
@@ -179,7 +166,7 @@ RSpec.describe Neutraliser::FFmpegWrapper do
       ]
       allow(described_class).to receive(:execute_with_timeout).and_return(['', 'Normalization Type:   Linear', ok_status])
 
-      result = described_class.apply_normalization('in.mkv', 'out.mkv', measured_data, profile, audio_tracks: tracks)
+      result = described_class.apply_normalization(source_of(tracks, 'in.mkv'), 'out.mkv', measured_data, profile)
 
       expect(described_class).to have_received(:execute_with_timeout) do |cmd, *_rest|
         expect(cmd).to include('-c:a:0', 'ac3', '-b:a:0', '448k')
@@ -197,7 +184,7 @@ RSpec.describe Neutraliser::FFmpegWrapper do
 
       def command_for(track)
         allow(described_class).to receive(:execute_with_timeout).and_return(['', 'Normalization Type:   Linear', ok_status])
-        result = described_class.apply_normalization('in.mkv', 'out.mkv', measured_data, profile, audio_tracks: [track])
+        result = described_class.apply_normalization(source_of([track], 'in.mkv'), 'out.mkv', measured_data, profile)
         captured = nil
         expect(described_class).to have_received(:execute_with_timeout) { |cmd, *_| captured ||= cmd }
         [captured, result]
@@ -211,7 +198,7 @@ RSpec.describe Neutraliser::FFmpegWrapper do
       end
 
       it 'gives the encoder the source dialnorm and stamps it' do
-        allow(described_class).to receive(:source_dialnorm).with('in.mkv', ac3_track).and_return(-24)
+        allow(described_class).to receive(:source_dialnorm).with('in.mkv', hash_including(codec: 'ac3')).and_return(-24)
 
         cmd, result = command_for(ac3_track)
 
@@ -254,8 +241,7 @@ RSpec.describe Neutraliser::FFmpegWrapper do
 
       def run(audio_tracks, **opts)
         allow(described_class).to receive(:execute_with_timeout).and_return(['', 'Normalization Type:   Linear', ok_status])
-        described_class.apply_normalization('in.mkv', 'out.mkv', measured_data, profile.merge(name: 'livingroom'),
-                                            audio_tracks: audio_tracks, **opts)
+        described_class.apply_normalization(source_of(audio_tracks), 'out.mkv', measured_data, profile.merge(name: 'livingroom'), **opts)
         captured = nil
         expect(described_class).to have_received(:execute_with_timeout) { |cmd, *_| captured ||= cmd }
         captured
@@ -302,8 +288,7 @@ RSpec.describe Neutraliser::FFmpegWrapper do
 
       def run(audio_tracks, **opts)
         allow(described_class).to receive(:execute_with_timeout).and_return(['', 'Normalization Type:   Linear', ok_status])
-        described_class.apply_normalization('in.mkv', 'out.mkv', measured_data, profile.merge(name: 'livingroom'),
-                                            audio_tracks: audio_tracks, **opts)
+        described_class.apply_normalization(source_of(audio_tracks), 'out.mkv', measured_data, profile.merge(name: 'livingroom'), **opts)
         captured = nil
         expect(described_class).to have_received(:execute_with_timeout) { |cmd, *_| captured ||= cmd }
         captured
@@ -341,7 +326,7 @@ RSpec.describe Neutraliser::FFmpegWrapper do
       ]
       allow(described_class).to receive(:execute_with_timeout).and_return(['', 'Normalization Type:   Linear', ok_status])
 
-      described_class.apply_normalization('in.mkv', 'out.mkv', measured_data, profile, audio_tracks: tracks)
+      described_class.apply_normalization(source_of(tracks, 'in.mkv'), 'out.mkv', measured_data, profile)
 
       expect(described_class).to have_received(:execute_with_timeout) do |cmd, *_rest|
         expect(cmd).to include('-map_metadata:s:a:0', '0:s:a:0')
@@ -349,16 +334,17 @@ RSpec.describe Neutraliser::FFmpegWrapper do
     end
 
     it 'maps per-stream metadata back to the primary track source audio index, not always 0' do
-      # Simulates a primary track that is not the first audio stream in the source file.
+      # A primary track that is not the first audio stream in the source file.
       tracks = [
-        { index: 2, channels: 2, codec: 'aac', bit_rate: 256_000, sample_rate: 44_100 }
+        { channels: 2, codec: 'aac', language: 'spa' }, { channels: 2, codec: 'aac', language: 'fra' },
+        { channels: 2, codec: 'aac', bit_rate: 256_000, sample_rate: 44_100, default: true }
       ]
       allow(described_class).to receive(:execute_with_timeout).and_return(['', 'Normalization Type:   Linear', ok_status])
 
-      described_class.apply_normalization('in.mkv', 'out.mkv', measured_data, profile, audio_tracks: tracks)
+      described_class.apply_normalization(source_of(tracks, 'in.mkv'), 'out.mkv', measured_data, profile)
 
       expect(described_class).to have_received(:execute_with_timeout) do |cmd, *_rest|
-        expect(cmd).to include('-map_metadata:s:a:0', '0:s:a:2')
+        expect(cmd).to include('-map_metadata:s:a:2', '0:s:a:2')
       end
     end
 
@@ -368,10 +354,10 @@ RSpec.describe Neutraliser::FFmpegWrapper do
       # and subtitle streams need their own explicit mapping too, or their
       # language/title tags come out empty despite being plain stream-copies.
       tracks = [{ index: 0, channels: 2, codec: 'aac', bit_rate: 128_000, sample_rate: 48_000 }]
-      allow(described_class).to receive(:stream_counts).and_return(video: 2, subtitle: 3)
       allow(described_class).to receive(:execute_with_timeout).and_return(['', 'Normalization Type:   Linear', ok_status])
 
-      described_class.apply_normalization('in.mkv', 'out.mkv', measured_data, profile, audio_tracks: tracks)
+      source = source_of(tracks, 'in.mkv', video: 2, subtitles: %w[subrip subrip subrip])
+      described_class.apply_normalization(source, 'out.mkv', measured_data, profile)
 
       expect(described_class).to have_received(:execute_with_timeout) do |cmd, *_rest|
         expect(cmd).to include('-map_metadata:s:v:0', '0:s:v:0', '-map_metadata:s:v:1', '0:s:v:1')
@@ -390,8 +376,7 @@ RSpec.describe Neutraliser::FFmpegWrapper do
       allow(described_class).to receive(:execute_with_timeout).and_return(['', 'Normalization Type:   Dynamic', ok_status])
       allow(FileUtils).to receive(:mv)
 
-      result = described_class.apply_normalization('in.mp4', 'out.mp4', measured_data, profile.merge(name: 'livingroom'),
-                                                   audio_tracks: tracks, allow_dynamic: true)
+      result = described_class.apply_normalization(source_of(tracks, 'in.mp4'), 'out.mp4', measured_data, profile.merge(name: 'livingroom'), allow_dynamic: true)
 
       expect(result[:normalization_type]).to eq('Dynamic')
       expect(described_class).to have_received(:execute_with_timeout).with(
@@ -405,8 +390,7 @@ RSpec.describe Neutraliser::FFmpegWrapper do
       tracks = [{ index: 0, channels: 2, codec: 'aac', bit_rate: 128_000, sample_rate: 48_000 }]
       allow(described_class).to receive(:execute_with_timeout).and_return(['', 'Normalization Type:   Linear', ok_status])
 
-      described_class.apply_normalization('in.mkv', 'out.mkv', measured_data, profile.merge(name: 'livingroom'),
-                                          audio_tracks: tracks, allow_dynamic: true)
+      described_class.apply_normalization(source_of(tracks, 'in.mkv'), 'out.mkv', measured_data, profile.merge(name: 'livingroom'), allow_dynamic: true)
 
       expect(described_class).to have_received(:execute_with_timeout).once
       expect(described_class).to have_received(:execute_with_timeout) do |cmd, *_rest|
@@ -421,8 +405,7 @@ RSpec.describe Neutraliser::FFmpegWrapper do
       tracks = [{ index: 0, channels: 2, codec: 'aac', bit_rate: 128_000, sample_rate: 48_000 }]
       allow(described_class).to receive(:execute_with_timeout).and_return(['', 'Normalization Type:   Dynamic', ok_status])
 
-      described_class.apply_normalization('in.mkv', 'out.mkv', wide, profile.merge(name: 'livingroom'),
-                                          audio_tracks: tracks, allow_dynamic: true)
+      described_class.apply_normalization(source_of(tracks, 'in.mkv'), 'out.mkv', wide, profile.merge(name: 'livingroom'), allow_dynamic: true)
 
       expect(described_class).to have_received(:execute_with_timeout).once
       expect(described_class).to have_received(:execute_with_timeout) do |cmd, *_rest|
@@ -434,8 +417,7 @@ RSpec.describe Neutraliser::FFmpegWrapper do
       tracks = [{ index: 0, channels: 2, codec: 'aac', bit_rate: 128_000, sample_rate: 48_000 }]
       allow(described_class).to receive(:execute_with_timeout).and_return(['', '', ok_status])
 
-      described_class.apply_normalization('in.mkv', 'out.mkv', measured_data, profile.merge(name: 'livingroom'),
-                                          audio_tracks: tracks)
+      described_class.apply_normalization(source_of(tracks, 'in.mkv'), 'out.mkv', measured_data, profile.merge(name: 'livingroom'))
 
       expect(described_class).to have_received(:execute_with_timeout) do |cmd, *_rest|
         expect(cmd.each_cons(2).to_a).to include(
@@ -456,8 +438,7 @@ RSpec.describe Neutraliser::FFmpegWrapper do
       allow(described_class).to receive(:mp4_mdta_safe?).and_return(true)
       allow(described_class).to receive(:execute_with_timeout).and_return(['', '', ok_status])
 
-      described_class.apply_normalization('in.mp4', 'out.mp4', measured_data, profile.merge(name: 'livingroom'),
-                                          audio_tracks: tracks)
+      described_class.apply_normalization(source_of(tracks, 'in.mp4'), 'out.mp4', measured_data, profile.merge(name: 'livingroom'))
 
       expect(described_class).to have_received(:execute_with_timeout) do |cmd, *_rest|
         expect(cmd.each_cons(2).to_a).to include(['-movflags', '+use_metadata_tags'])
@@ -469,7 +450,7 @@ RSpec.describe Neutraliser::FFmpegWrapper do
       allow(described_class).to receive(:mp4_mdta_safe?).and_return(true)
       allow(described_class).to receive(:execute_with_timeout).and_return(['', 'Normalization Type:   Dynamic', ok_status])
 
-      result = described_class.apply_normalization('in.mp4', 'out.mp4', measured_data, profile, audio_tracks: tracks)
+      result = described_class.apply_normalization(source_of(tracks, 'in.mp4'), 'out.mp4', measured_data, profile)
 
       expect(result[:normalization_type]).to eq('Linear')
       expect(described_class).to have_received(:execute_with_timeout) do |cmd, *_rest|
@@ -486,14 +467,13 @@ RSpec.describe Neutraliser::FFmpegWrapper do
     let(:tracks) { [{ index: 0, channels: 2, codec: 'aac', bit_rate: 128_000, sample_rate: 48_000 }] }
 
     before do
-      allow(described_class).to receive_messages(stream_counts: { video: 0, subtitle: 0 },
-                                                 execute_with_timeout: ['', '', ok_status])
+      allow(described_class).to receive(:execute_with_timeout).and_return(['', '', ok_status])
     end
 
     it 'reports how far a peak-capped file lands short of target' do
       peaky = Neutraliser::Measurement.from_loudnorm_json('input_i' => '-30.0', 'input_tp' => '-3.0', 'input_lra' => '5', 'input_thresh' => '-40', 'target_offset' => '0')
 
-      result = described_class.apply_normalization('in.mp4', 'out.mp4', peaky, profile, audio_tracks: tracks)
+      result = described_class.apply_normalization(source_of(tracks, 'in.mp4'), 'out.mp4', peaky, profile)
 
       expect(result[:shortfall_lu]).to eq(8.5)
     end
@@ -501,7 +481,7 @@ RSpec.describe Neutraliser::FFmpegWrapper do
     it 'reports no shortfall when the full gain fits under the peak ceiling' do
       safe = Neutraliser::Measurement.from_loudnorm_json('input_i' => '-25.0', 'input_tp' => '-10.0', 'input_lra' => '5', 'input_thresh' => '-40', 'target_offset' => '0')
 
-      result = described_class.apply_normalization('in.mp4', 'out.mp4', safe, profile, audio_tracks: tracks)
+      result = described_class.apply_normalization(source_of(tracks, 'in.mp4'), 'out.mp4', safe, profile)
 
       expect(result).not_to have_key(:shortfall_lu)
     end
@@ -510,17 +490,10 @@ RSpec.describe Neutraliser::FFmpegWrapper do
   describe '.apply_normalization_single_pass' do
     let(:profile) { { lufs: -20.0, tp: -1.5, lra: 12.0, name: 'livingroom' } }
 
-    before do
-      allow(described_class).to receive(:stream_counts).and_return(video: 0, subtitle: 0)
-    end
-
     it 'builds a loudnorm filter without measured values' do
-      allow(described_class).to receive(:detect_audio_tracks).and_return(
-        [{ index: 0, channels: 2, codec: 'aac', bit_rate: 256_000, sample_rate: 48_000 }]
-      )
       allow(described_class).to receive(:execute_with_progress)
 
-      described_class.apply_normalization_single_pass('/in.mp4', '/out.mp4', nil, profile)
+      described_class.apply_normalization_single_pass(source_of([{ bit_rate: 256_000, sample_rate: 48_000 }], '/in.mp4'), '/out.mp4', profile)
 
       expect(described_class).to have_received(:execute_with_progress) do |cmd|
         filter_arg = cmd[cmd.index('-filter_complex') + 1]
@@ -531,12 +504,9 @@ RSpec.describe Neutraliser::FFmpegWrapper do
     end
 
     it 'stamps the output as dynamic with no gain or measurement' do
-      allow(described_class).to receive(:detect_audio_tracks).and_return(
-        [{ index: 0, channels: 2, codec: 'aac', bit_rate: 256_000, sample_rate: 48_000 }]
-      )
       allow(described_class).to receive(:execute_with_progress)
 
-      described_class.apply_normalization_single_pass('/in.mp4', '/out.mp4', nil, profile)
+      described_class.apply_normalization_single_pass(source_of([{ bit_rate: 256_000, sample_rate: 48_000 }], '/in.mp4'), '/out.mp4', profile)
 
       expect(described_class).to have_received(:execute_with_progress) do |cmd|
         expect(cmd).to include('NEUTRALISER_MODE=dynamic', 'NEUTRALISER_GAIN_DB=', 'NEUTRALISER_MEASURED_I=')
@@ -544,95 +514,17 @@ RSpec.describe Neutraliser::FFmpegWrapper do
     end
 
     it 'returns a codec decision hash' do
-      allow(described_class).to receive(:detect_audio_tracks).and_return(
-        [{ index: 0, channels: 2, codec: 'aac', bit_rate: 256_000, sample_rate: 48_000 }]
-      )
       allow(described_class).to receive(:execute_with_progress)
 
-      result = described_class.apply_normalization_single_pass('/in.mp4', '/out.mp4', nil, profile)
+      result = described_class.apply_normalization_single_pass(source_of([{ bit_rate: 256_000, sample_rate: 48_000 }], '/in.mp4'), '/out.mp4', profile)
 
       expect(result).to include(encoder: 'aac', source_codec: 'aac')
     end
   end
 
-  describe '.read_stamp' do
-    def probe_json(stream_tags: nil, format_tags: nil)
-      JSON.generate(streams: [{ tags: stream_tags }.compact], format: { tags: format_tags }.compact)
-    end
-
-    it 'reads the stamp from the primary audio stream' do
-      json = probe_json(stream_tags: { 'NEUTRALISER_PROFILE' => 'night', 'NEUTRALISER_MODE' => 'dynamic' },
-                        format_tags: { 'NEUTRALISER_PROFILE' => 'livingroom' })
-      allow(described_class).to receive(:execute_with_timeout).and_return([json, '', ok_status])
-
-      stamp = described_class.read_stamp('in.mkv')
-
-      expect(stamp).to have_attributes(profile: 'night', mode: 'dynamic')
-    end
-
-    it 'falls back to container tags (all MP4 keeps)' do
-      json = probe_json(stream_tags: { 'language' => 'eng' },
-                        format_tags: { 'NEUTRALISER_PROFILE' => 'livingroom', 'NEUTRALISER_GAIN_DB' => '3.20' })
-      allow(described_class).to receive(:execute_with_timeout).and_return([json, '', ok_status])
-
-      expect(described_class.read_stamp('in.mp4')).to have_attributes(profile: 'livingroom', gain_db: 3.2)
-    end
-
-    it 'is nil for an unstamped file or a failed probe' do
-      allow(described_class).to receive(:execute_with_timeout).and_return([probe_json(stream_tags: { 'a' => 'b' }), '', ok_status])
-      expect(described_class.read_stamp('plain.mkv')).to be_nil
-
-      allow(described_class).to receive(:execute_with_timeout).and_return(['', 'bad', fail_status])
-      expect(described_class.read_stamp('bad.mkv')).to be_nil
-    end
-  end
-
-  describe '.unsupported_subtitles' do
-    it 'names subtitle streams ffmpeg has no codec for, with the Matroska codec ID' do
-      stdout = JSON.generate(streams: [{ index: 2 }, { index: 3, codec_name: 'subrip' }, { index: 4 }])
-      stderr = "[matroska,webm @ 0x1] Unknown/unsupported AVCodecID S_TEXT/WEBVTT.\n" \
-               "[matroska,webm @ 0x1] Unknown/unsupported AVCodecID S_TEXT/FOO.\n"
-      allow(described_class).to receive(:execute_with_timeout).and_return([stdout, stderr, ok_status])
-
-      expect(described_class.unsupported_subtitles('episode.mkv'))
-        .to eq(['stream 2 (S_TEXT/WEBVTT)', 'stream 4 (S_TEXT/FOO)'])
-    end
-
-    it 'returns nothing when every subtitle has a codec' do
-      stdout = JSON.generate(streams: [{ index: 2, codec_name: 'hdmv_pgs_subtitle' }])
-      allow(described_class).to receive(:execute_with_timeout).and_return([stdout, '', ok_status])
-
-      expect(described_class.unsupported_subtitles('movie.mkv')).to eq([])
-    end
-
-    it 'is best effort: a failed probe blocks nothing' do
-      allow(described_class).to receive(:execute_with_timeout).and_return(['', 'boom', fail_status])
-
-      expect(described_class.unsupported_subtitles('movie.mkv')).to eq([])
-    end
-  end
-
-  describe '.primary_audio_track' do
-    it 'is the default-disposition track, else the first' do
-      tracks = [{ index: 0 }, { index: 1, default: true }]
-      expect(described_class.primary_audio_track(tracks)).to eq(index: 1, default: true)
-      expect(described_class.primary_audio_track([{ index: 0 }, { index: 1 }])).to eq(index: 0)
-    end
-
-    it 'prefers the first English track over the first track when none is flagged default' do
-      tracks = [{ index: 0, language: 'spa' }, { index: 1, language: 'fra' }, { index: 2, language: 'eng' }]
-      expect(described_class.primary_audio_track(tracks)).to eq(index: 2, language: 'eng')
-    end
-
-    it 'lets the default flag beat the English fallback' do
-      tracks = [{ index: 0, language: 'spa', default: true }, { index: 1, language: 'eng' }]
-      expect(described_class.primary_audio_track(tracks)).to include(index: 0)
-    end
-  end
-
   describe '.codec_change' do
     def change(codec, out, **track)
-      described_class.codec_change({ codec: codec, channels: 6, **track }, out)
+      described_class.codec_change(source_of([{ codec: codec, channels: 6, **track }]), out)
     end
 
     it 'is nil when the codec re-encodes to itself in the container' do
@@ -649,7 +541,7 @@ RSpec.describe Neutraliser::FFmpegWrapper do
     end
 
     it 'does not judge a track whose format could not be read' do
-      expect(change('unknown', 'a.mkv', unknown: true)).to be_nil
+      expect(described_class.codec_change(ProbeFixture.source('in.mkv', audio: []), 'a.mkv')).to be_nil
     end
   end
 
@@ -671,109 +563,15 @@ RSpec.describe Neutraliser::FFmpegWrapper do
     end
   end
 
-  describe '.detect_audio_tracks' do
-    it 'parses ffprobe json output by field name, not positional order' do
-      # ffprobe emits fields in canonical order (index,codec_name,sample_rate,channels,bit_rate)
-      # regardless of the order requested in -show_entries — parsing must be name-based.
-      ffprobe_json = {
-        streams: [
-          { index: 1, codec_name: 'ac3', sample_rate: '48000', channels: 6, channel_layout: '5.1(side)', bit_rate: '640000' },
-          { index: 2, codec_name: 'aac', sample_rate: '44100', channels: 2, bit_rate: '256000' }
-        ]
-      }.to_json
-      allow(described_class).to receive(:execute_with_timeout).and_return([ffprobe_json, '', ok_status])
-
-      result = described_class.detect_audio_tracks('test.mkv')
-
-      expect(described_class).to have_received(:execute_with_timeout).with(
-        array_including('-of', 'json'), described_class::PROBE_TIMEOUT, 'Audio track detection'
-      )
-      expect(result).to eq([
-                             { index: 0, stream_index: 1, channels: 6, channel_layout: '5.1(side)', codec: 'ac3', profile: nil, title: nil, handler_name: nil, language: nil, default: false, dispositions: [], bit_rate: 640_000,
-                               sample_rate: 48_000 },
-                             { index: 1, stream_index: 2, channels: 2, channel_layout: nil, codec: 'aac', profile: nil, title: nil, handler_name: nil, language: nil, default: false, dispositions: [], bit_rate: 256_000,
-                               sample_rate: 44_100 }
-                           ])
-    end
-
-    it 'flags the default-disposition track' do
-      json = { streams: [{ index: 1, codec_name: 'aac', disposition: { default: 0 } },
-                         { index: 2, codec_name: 'ac3', disposition: { default: 1 } }] }.to_json
-      allow(described_class).to receive(:execute_with_timeout).and_return([json, '', ok_status])
-      expect(described_class.detect_audio_tracks('a.mkv').map { |t| t[:default] }).to eq([false, true])
-    end
-
-    it 'reads the codec profile and track title, treating "unknown" as no profile' do
-      ffprobe_json = {
-        streams: [
-          { index: 1, codec_name: 'truehd', profile: 'Dolby TrueHD + Dolby Atmos', channels: 8,
-            tags: { title: 'TrueHD Atmos 7.1' } },
-          { index: 2, codec_name: 'eac3', profile: 'unknown', channels: 6 }
-        ]
-      }.to_json
-      allow(described_class).to receive(:execute_with_timeout).and_return([ffprobe_json, '', ok_status])
-
-      result = described_class.detect_audio_tracks('test.mkv')
-
-      expect(result.map { |t| t.slice(:profile, :title) }).to eq([
-                                                                   { profile: 'Dolby TrueHD + Dolby Atmos',
-                                                                     title: 'TrueHD Atmos 7.1' },
-                                                                   { profile: nil, title: nil }
-                                                                 ])
-    end
-
-    it 'raises FFmpegError when ffprobe fails, instead of fabricating a track' do
-      # A failed probe must not silently pass a made-up stereo track
-      # downstream to drive real encoder/bitrate selection.
-      allow(described_class).to receive(:execute_with_timeout).and_return(['', 'err', fail_status])
-
-      expect { described_class.detect_audio_tracks('bad.mp4') }
-        .to raise_error(Neutraliser::FFmpegError, /Audio track detection failed/)
-    end
-
-    it 'treats an absent bit_rate field as nil rather than defaulting to stereo/FLAC' do
-      # MKV streams commonly omit bit_rate entirely (not "N/A") when unknown.
-      ffprobe_json = {
-        streams: [
-          { index: 1, codec_name: 'flac', sample_rate: '48000', channels: 6 }
-        ]
-      }.to_json
-      allow(described_class).to receive(:execute_with_timeout).and_return([ffprobe_json, '', ok_status])
-
-      result = described_class.detect_audio_tracks('test.mkv')
-
-      expect(result.first[:codec]).to eq('flac')
-      expect(result.first[:channels]).to eq(6)
-      expect(result.first[:bit_rate]).to be_nil
-      expect(result.first[:sample_rate]).to eq(48_000)
-    end
-
-    it 'returns an explicitly-marked unknown track when ffprobe emits unparseable json' do
-      allow(described_class).to receive(:execute_with_timeout).and_return(['not json', '', ok_status])
-
-      result = described_class.detect_audio_tracks('bad.mkv')
-      expect(result).to eq([described_class::UNKNOWN_AUDIO_TRACK])
-      expect(result.first[:unknown]).to be(true)
-    end
-
-    it 'returns an explicitly-marked unknown track when ffprobe reports no audio streams' do
-      allow(described_class).to receive(:execute_with_timeout).and_return([{ streams: [] }.to_json, '', ok_status])
-
-      result = described_class.detect_audio_tracks('no_audio.mkv')
-      expect(result).to eq([described_class::UNKNOWN_AUDIO_TRACK])
-    end
-  end
-
   describe '.probe_audio_profile_mid_file' do
-    let(:track) { { index: 1, codec: 'eac3' } }
+    let(:source) { source_of([{ codec: 'aac' }, { codec: 'eac3', default: true }], 'movie.mkv', duration: 3600.0) }
 
     it 'stream-copies a slice from mid-file and returns the profile ffprobe decodes from it' do
-      allow(described_class).to receive(:probe_duration).and_return(3600.0)
       allow(described_class).to receive(:execute_with_timeout) do |cmd, _timeout, _name|
         cmd.first == 'ffprobe' ? ["Dolby Digital Plus + Dolby Atmos\n", '', ok_status] : ['', '', ok_status]
       end
 
-      expect(described_class.probe_audio_profile_mid_file('movie.mkv', track))
+      expect(described_class.probe_audio_profile_mid_file(source))
         .to eq('Dolby Digital Plus + Dolby Atmos')
       expect(described_class).to have_received(:execute_with_timeout).with(
         array_including('-ss', '1800', '-i', 'movie.mkv', '-map', '0:a:1', '-c', 'copy'),
@@ -782,19 +580,17 @@ RSpec.describe Neutraliser::FFmpegWrapper do
     end
 
     it 'returns nil for an unnamed profile' do
-      allow(described_class).to receive_messages(probe_duration: 60.0,
-                                                 execute_with_timeout: ["unknown\n", '', ok_status])
+      allow(described_class).to receive(:execute_with_timeout).and_return(["unknown\n", '', ok_status])
 
-      expect(described_class.probe_audio_profile_mid_file('movie.mkv', track)).to be_nil
+      expect(described_class.probe_audio_profile_mid_file(source)).to be_nil
     end
 
     it 'returns nil instead of raising when the slice fails or times out' do
-      allow(described_class).to receive(:probe_duration).and_return(60.0)
       allow(described_class).to receive(:execute_with_timeout).and_return(['', 'err', fail_status])
-      expect(described_class.probe_audio_profile_mid_file('movie.mkv', track)).to be_nil
+      expect(described_class.probe_audio_profile_mid_file(source)).to be_nil
 
       allow(described_class).to receive(:execute_with_timeout).and_raise(Neutraliser::FFmpegTimeoutError, 'slow')
-      expect(described_class.probe_audio_profile_mid_file('movie.mkv', track)).to be_nil
+      expect(described_class.probe_audio_profile_mid_file(source)).to be_nil
     end
   end
 
@@ -894,20 +690,16 @@ RSpec.describe Neutraliser::FFmpegWrapper do
     end
 
     it 'estimates bitrate from the container BPS tag when stream bit_rate is N/A (MKV)' do
-      allow(described_class).to receive(:execute_with_timeout)
-        .with(array_including('stream_tags=BPS'), described_class::PROBE_TIMEOUT, anything)
-        .and_return(["192000\n", '', ok_status])
+      expect(described_class).not_to receive(:execute_with_timeout)
+      track = make_track(codec: 'aac', bit_rate: nil).merge(tags: { 'BPS' => '192000' })
 
-      result = described_class.send(:select_output_codec, make_track(codec: 'aac', bit_rate: nil), 'out.mkv', 'in.mkv')
+      result = described_class.send(:select_output_codec, track, 'out.mkv', 'in.mkv')
 
       expect(result[:encoder]).to eq('aac')
       expect(result[:bitrate]).to eq(192_000)
     end
 
-    it 'falls back to packet-size sampling when no BPS tag is present' do
-      allow(described_class).to receive(:execute_with_timeout)
-        .with(array_including('stream_tags=BPS'), described_class::PROBE_TIMEOUT, anything)
-        .and_return(['N/A', '', ok_status])
+    it 'falls back to packet-size sampling when the track has no BPS tag' do
       allow(described_class).to receive(:execute_with_timeout)
         .with(array_including('packet=size'), described_class::PROBE_TIMEOUT, anything)
         .and_return(["24000\n24000\n24000\n24000\n24000\n", '', ok_status])
@@ -921,9 +713,6 @@ RSpec.describe Neutraliser::FFmpegWrapper do
 
     it 'uses an estimate above the floor as the source bitrate for the floor/cap logic' do
       allow(described_class).to receive(:execute_with_timeout)
-        .with(array_including('stream_tags=BPS'), described_class::PROBE_TIMEOUT, anything)
-        .and_return(['N/A', '', ok_status])
-      allow(described_class).to receive(:execute_with_timeout)
         .with(array_including('packet=size'), described_class::PROBE_TIMEOUT, anything)
         .and_return(["48000\n48000\n48000\n48000\n48000\n", '', ok_status])
 
@@ -935,9 +724,6 @@ RSpec.describe Neutraliser::FFmpegWrapper do
     end
 
     it 'falls back to the floor when neither the BPS tag nor packet sampling yield a usable number' do
-      allow(described_class).to receive(:execute_with_timeout)
-        .with(array_including('stream_tags=BPS'), described_class::PROBE_TIMEOUT, anything)
-        .and_return(['N/A', '', ok_status])
       allow(described_class).to receive(:execute_with_timeout)
         .with(array_including('packet=size'), described_class::PROBE_TIMEOUT, anything)
         .and_return(['', '', fail_status])
@@ -1048,11 +834,11 @@ RSpec.describe Neutraliser::FFmpegWrapper do
         end
         raise 'fixture generation failed' unless File.exist?(input)
 
-        audio_tracks = described_class.detect_audio_tracks(input)
-        expect(audio_tracks.map { |t| t[:bit_rate] }).to all(be_nil) # MKV: no reported bit_rate, forces estimation
+        source = Neutraliser::Source.new(input)
+        expect(source.audio_tracks.map { |t| t[:bit_rate] }).to all(be_nil) # MKV: no reported bit_rate, forces estimation
 
         profile = { lufs: -20.0, tp: -1.5, lra: 12.0 }
-        result = described_class.apply_normalization_single_pass(input, output, audio_tracks, profile)
+        result = described_class.apply_normalization_single_pass(source, output, profile)
 
         primary_tags = ffprobe_stream(output, 'a:0', 'stream_tags=language,title')['tags']
         expect(primary_tags['language']).to eq('eng')
@@ -1111,15 +897,15 @@ RSpec.describe Neutraliser::FFmpegWrapper do
           make_fixture(input)
           measured = described_class.measure_loudness(input, target_i: profile[:lufs])
 
-          described_class.apply_normalization(input, output, measured, profile)
+          described_class.apply_normalization(Neutraliser::Source.new(input), output, measured, profile)
 
-          stamp = described_class.read_stamp(output)
+          stamp = Neutraliser::Source.new(output).stamp
           expect(stamp).to have_attributes(profile: 'livingroom', mode: 'linear', source_codec: 'aac',
                                            version: Neutraliser::VERSION)
           expect(stamp.gain_db).to be_within(0.01).of(Neutraliser::GainPlan.for(measured, profile).applied.round(2))
           expect(stamp.measured_i).to be_within(0.01).of(measured.input_i)
           expect(language(output)).to eq('eng')
-          expect(described_class.read_stamp(input)).to be_nil
+          expect(Neutraliser::Source.new(input).stamp).to be_nil
         end
       end
 
@@ -1132,7 +918,7 @@ RSpec.describe Neutraliser::FFmpegWrapper do
 
           described_class.send(:restamp, path, stamp)
 
-          expect(described_class.read_stamp(path)).to have_attributes(profile: 'night', mode: 'dynamic')
+          expect(Neutraliser::Source.new(path).stamp).to have_attributes(profile: 'night', mode: 'dynamic')
           expect(language(path)).to eq('eng')
           expect(Dir.children(dir)).to eq(["clip.#{ext}"])
         end
@@ -1153,7 +939,7 @@ RSpec.describe Neutraliser::FFmpegWrapper do
       marker = File.join(Dir.mktmpdir, 'pwned')
       malicious_path = "/nonexistent; touch #{marker}; echo '.mp4"
 
-      expect(described_class.probe_duration(malicious_path)).to be_nil
+      expect { described_class.probe_file(malicious_path) }.to raise_error(Neutraliser::FFmpegError)
       expect(File.exist?(marker)).to be(false)
     end
 
@@ -1161,7 +947,7 @@ RSpec.describe Neutraliser::FFmpegWrapper do
       marker = File.join(Dir.mktmpdir, 'pwned')
       malicious_path = "/nonexistent/$(touch #{marker}).mp4"
 
-      expect(described_class.probe_duration(malicious_path)).to be_nil
+      expect { described_class.probe_file(malicious_path) }.to raise_error(Neutraliser::FFmpegError)
       expect(File.exist?(marker)).to be(false)
     end
 
@@ -1169,7 +955,7 @@ RSpec.describe Neutraliser::FFmpegWrapper do
       dir = Dir.mktmpdir
       weird_path = File.join(dir, %(a "quoted" 'file' & spaced 名前.mp4))
 
-      expect(described_class.probe_duration(weird_path)).to be_nil
+      expect { described_class.probe_file(weird_path) }.to raise_error(Neutraliser::FFmpegError)
     ensure
       FileUtils.remove_entry(dir) if dir
     end
@@ -1235,14 +1021,14 @@ RSpec.describe 'Neutraliser::FFmpegWrapper timeouts' do
         output = File.join(dir, 'out.mkv')
         measured = Neutraliser::FFmpegWrapper.measure_loudness(input, target_i: profile[:lufs])
 
-        decision = Neutraliser::FFmpegWrapper.apply_normalization(input, output, measured, profile)
+        decision = Neutraliser::FFmpegWrapper.apply_normalization(Neutraliser::Source.new(input), output, measured, profile)
 
         format = `ffprobe -v error -show_entries format=format_name -of csv=p=0 #{output.shellescape}`
         subs = `ffprobe -v error -select_streams s -show_entries stream=codec_name -of csv=p=0 #{output.shellescape}`
         expect(format).to include('mp4')
         expect(subs.strip).to eq('mov_text')
         expect(decision[:encoder]).to eq('aac')
-        expect(Neutraliser::FFmpegWrapper.read_stamp(output)).to have_attributes(profile: 'livingroom', mode: 'linear')
+        expect(Neutraliser::Source.new(output).stamp).to have_attributes(profile: 'livingroom', mode: 'linear')
       end
     end
   end

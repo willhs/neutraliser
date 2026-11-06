@@ -51,7 +51,7 @@ Output File
 
 When re-encoding normalised audio, the codec and bitrate are selected to match the source as closely as possible:
 
-1. **Probe** — `detect_audio_tracks` reads codec, profile, bitrate, sample rate, channel count and track title via ffprobe. This happens once per file, before measuring.
+1. **Probe** — `Source` (`lib/neutraliser/source.rb`) reads codec, profile, bitrate, sample rate, channel count and track title, with every other fact about the file, from one ffprobe run. It happens once per file, before measuring, and the answer is passed on (see [One probe per file](#one-probe-per-file)).
 2. **Match** — `select_output_codec` tries to re-encode to the same codec at `max(source_bitrate, quality_floor)`, capped at a per-codec maximum.
 3. **Fallback** — non-encodable codecs (DTS, TrueHD) fall back to FLAC in MKV or EAC3/AC3 in MP4. Lossless sources stay lossless when the container supports it.
 4. **Log** — every normalisation logs the decision (e.g., `Audio: ac3 448k -> ac3 448k`).
@@ -68,7 +68,7 @@ The default normalisation pass is a constant `volume=` gain (`FFmpegWrapper.buil
 
 ### Every change is recorded in the file (Stamp)
 
-The normalise pass writes a `Stamp` (`lib/neutraliser/stamp.rb`) as `NEUTRALISER_*` tags in the same ffmpeg command: on the normalised audio stream (`-metadata:s:a:0`) and on the container (`-metadata`). They come after the explicit per-stream `-map_metadata` mappings, so language and title tags are kept and the stamp is added on top. MP4/M4V/MOV only keep custom keys at container level, and only with `-movflags +use_metadata_tags`, so that flag is added for them. MKV/WebM/FLV/WMV keep the tags; AVI drops them, and there the sidecar is the only record. `FFmpegWrapper.read_stamp` prefers the stream tags and falls back to the container. The schema is in [data_contracts](../ops/data_contracts.md).
+The normalise pass writes a `Stamp` (`lib/neutraliser/stamp.rb`) as `NEUTRALISER_*` tags in the same ffmpeg command: on the normalised audio stream (`-metadata:s:a:0`) and on the container (`-metadata`). They come after the explicit per-stream `-map_metadata` mappings, so language and title tags are kept and the stamp is added on top. MP4/M4V/MOV only keep custom keys at container level, and only with `-movflags +use_metadata_tags`, so that flag is added for them. MKV/WebM/FLV/WMV keep the tags; AVI drops them, and there the sidecar is the only record. `Source#stamp` prefers the primary track's stream tags and falls back to the container. The schema is in [data_contracts](../ops/data_contracts.md).
 
 The mode tag has to be written before ffmpeg runs, but with `--allow-dynamic` loudnorm only says afterwards whether it stayed linear. So `predict_loudnorm_type` copies loudnorm's own rule (valid measured values, gain fits under the true-peak ceiling, source LRA ≤ target LRA). If loudnorm's summary disagrees, `restamp` stream-copies the output once with corrected tags before it is committed. The tags never claim the wrong mode. Constant gain (the default) is always linear and `--fast` is always dynamic, so neither needs a prediction.
 
@@ -143,3 +143,11 @@ Both flags are independent and can be combined.
 - 2026-03-08 (agent:implement-plan): Added performance flags section, LocalStager component
 - 2026-08-06 (agent:improve-architecture): Removed stale ParallelProcessor row, added ProcessedTracker
 - 2026-08-07 (agent:consolidate-already-normalised-decision): Replaced ProcessedTracker + FastVerifier with a single SkipDecider (one sidecar, one staleness rule); quick-sample tolerance margin is now an explicit documented constant instead of a hidden `tolerance * 0.8`
+
+### One probe per file
+
+Facts about a file come from one `ffprobe -show_streams -show_format -show_chapters` run (`FFmpegWrapper.probe_file`), parsed by `Source`: audio tracks (with their stream tags), the primary track, stream and chapter counts, duration, whether the bytes are MP4, cover art, container tags, the stamp and subtitle streams ffmpeg has no codec for. A `Source` probes lazily, on the first fact asked for, and keeps the answer, including a failure (every fact then raises the same `FFmpegError`; `readable?` asks without raising, and `stamp` is the one best-effort fact). `Processor` builds one per file and hands it to the guards, `SkipDecider`, `AudioAnalyser`, `ObjectAudio` and the command builder; a local-staged working copy shares it (`Source#for_copy`). A file the sidecar already marks done costs no probe at all.
+
+- The primary track is chosen in `Source#primary_track` (default disposition, else first English, else first) and nowhere else. A file with no audio answers `Source::UNKNOWN_AUDIO_TRACK` there, and `Source#audio?` is how a caller asks.
+- The output gets its own `Source` after it is written (one probe, for the integrity check and the comparison with the source). Verification never reuses the source's numbers.
+- Measured on a 2-audio-track mkv with `benchmark/probe_count.sh`: 15 ffprobe calls per `process --replace` before, 2 after (source and output).

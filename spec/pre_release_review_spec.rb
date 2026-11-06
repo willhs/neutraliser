@@ -123,7 +123,7 @@ RSpec.describe 'pre-release review', :real_ffmpeg do
     [out.scrub, status]
   end
 
-  def profile_stamp(path) = Neutraliser::FFmpegWrapper.read_stamp(path)&.profile
+  def profile_stamp(path) = Neutraliser::Source.new(path).stamp&.profile
 
   def probe(path, *args)
     out, = Open3.capture2e('ffprobe', '-v', 'error', *args, '-of', 'csv=p=0', path)
@@ -562,8 +562,10 @@ RSpec.describe 'pre-release review', :real_ffmpeg do
     end
 
     describe 'output verification' do
-      def mismatch(source, output, expected: 1, primary: nil)
-        Neutraliser::FileManager.output_mismatch(source, output, expected_audio_streams: expected, primary: primary)
+      # Real files, each read by the real ffprobe through its own Source.
+      def mismatch(source, output, expected: 1)
+        Neutraliser::FileManager.output_mismatch(Neutraliser::Source.new(source), Neutraliser::Source.new(output),
+                                                 expected_audio_streams: expected)
       end
 
       def audio(path, layout)
@@ -583,9 +585,8 @@ RSpec.describe 'pre-release review', :real_ffmpeg do
       it 'catches a silent downmix of the primary track' do
         source = audio(File.join(dir, 'six.mkv'), '5.1')
         output = audio(File.join(dir, 'two.mkv'), 'stereo')
-        primary = Neutraliser::FFmpegWrapper.detect_audio_tracks(source).first
 
-        expect(mismatch(source, output, primary: primary)).to match(/2 channels.*source has 6/)
+        expect(mismatch(source, output)).to match(/2 channels.*source has 6/)
       end
 
       it 'catches a lost attachment' do
@@ -612,7 +613,7 @@ RSpec.describe 'pre-release review', :real_ffmpeg do
         expect(mismatch(source, output, expected: 2)).to match(/chapter/)
       end
 
-      it 'catches a lost audio track even when track detection under-counted the source' do
+      it 'catches a lost audio track' do
         source = place(ReviewFixtures.rich)
         output = File.join(dir, 'one_track.mkv')
         ReviewFixtures.ffmpeg('-i', source, '-map', '0:v', '-map', '0:a:0', '-map', '0:s', '-map', '0:t', '-c', 'copy', output)
@@ -634,7 +635,7 @@ RSpec.describe 'pre-release review', :real_ffmpeg do
       run(film, replace: true, allow_dynamic: true)
 
       expect(probe(film, '-select_streams', 'a:1', '-show_entries', 'stream_tags=NEUTRALISER_MODE')).to eq('linear')
-      expect(Neutraliser::FFmpegWrapper.read_stamp(film).mode).to eq('linear')
+      expect(Neutraliser::Source.new(film).stamp.mode).to eq('linear')
     end
   end
 
@@ -770,7 +771,7 @@ RSpec.describe 'pre-release review', :real_ffmpeg do
 
         expect(first[:results].first[:reason]).to eq(:peak_limited)
         expect(second[:results].first[:reason]).to eq(:normalized)
-        expect(Neutraliser::FFmpegWrapper.read_stamp(film).mode).to eq('limited')
+        expect(Neutraliser::Source.new(film).stamp.mode).to eq('limited')
       end
     else
       it 'refuses --limit-db up front, naming the ffmpeg it needs, rather than failing inside ffmpeg' do

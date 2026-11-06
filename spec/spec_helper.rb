@@ -1,6 +1,7 @@
 require 'rspec'
 require 'tmpdir'
 require_relative '../lib/neutraliser'
+require_relative 'support/probe_fixture'
 
 RSpec.configure do |config|
   config.expect_with :rspec do |expectations|

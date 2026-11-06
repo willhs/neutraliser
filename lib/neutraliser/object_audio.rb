@@ -27,11 +27,12 @@ module Neutraliser
 
     NONE = Verdict.new(status: :none, profile: nil)
 
-    def self.detect(input_path, track, name:)
+    def self.detect(source, name:)
+      track = source.primary_track
       return Verdict.new(status: :object_audio, profile: track[:profile]) if object_profile?(track[:profile])
       return NONE unless CODECS.include?(track[:codec]) && hinted?(name, track[:title])
 
-      deep_profile = FFmpegWrapper.probe_audio_profile_mid_file(input_path, track)
+      deep_profile = FFmpegWrapper.probe_audio_profile_mid_file(source)
       return Verdict.new(status: :object_audio, profile: deep_profile) if object_profile?(deep_profile)
 
       Verdict.new(status: :suspected, profile: nil)

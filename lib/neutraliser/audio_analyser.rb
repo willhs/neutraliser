@@ -15,15 +15,16 @@ module Neutraliser
     # Measurement. Owns the full path: cache lookup -> skip decision ->
     # ffmpeg measurement -> cache write.
     #
-    # working_path and cached_as are separate to express staging: the file
-    # may be measured from a local working copy while the sidecar cache is
-    # keyed by (and lives next to) the original path.
+    # source and cached_as are separate to express staging: the file may be
+    # measured from a local working copy (source.path) while the sidecar cache
+    # is keyed by (and lives next to) the original path. The Source brings the
+    # primary track and the stamp already probed.
     #
     # The cache is checked before the skip decision so a genuine cached
     # measurement is always preferred over the already-at-target sentinel —
     # a skip verdict (sidecar hit or quick sample) never has real numbers to
     # offer, so it must never override real cached data.
-    def analyze(working_path, cached_as:, profile:, tolerance: 1.0)
+    def analyze(source, cached_as:, profile:, tolerance: 1.0)
       if @cache_enabled
         cached = @cache_manager.load_cached_analysis(cached_as, profile)
         if cached
@@ -32,17 +33,17 @@ module Neutraliser
         end
       end
 
-      if skip_decider_for(cached_as).skip?(cached_as, profile, tolerance: tolerance)
+      if skip_decider_for(cached_as).skip?(cached_as, profile, tolerance: tolerance, source: source)
         Neutraliser.logger.log '  Skip decision: file already at target level'
         return Measurement.already_at_target(profile)
       end
 
       measurement = FFmpegWrapper.measure_loudness(
-        working_path,
+        source.path,
         target_i: profile[:lufs],
         target_tp: profile[:tp],
         target_lra: profile[:lra],
-        audio_index: FFmpegWrapper.primary_audio_index(working_path)
+        audio_index: source.primary_track[:index]
       )
 
       @cache_manager.save_analysis(cached_as, profile, measurement) if @cache_enabled

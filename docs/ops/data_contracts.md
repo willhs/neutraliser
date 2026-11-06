@@ -53,7 +53,7 @@ Where the tags live:
 | FLV, WMV | yes | yes |
 | AVI | no | no. The sidecar is the only record |
 
-`FFmpegWrapper.read_stamp` reads the primary audio stream first and falls back to the container.
+`Source#stamp` reads the primary audio stream first and falls back to the container.
 
 ### Sidecar cache: `.neutraliser`
 

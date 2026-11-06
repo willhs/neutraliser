@@ -160,15 +160,14 @@ RSpec.describe 'Dialogue figures' do
 
   describe Neutraliser::Report do
     let(:dir) { Dir.mktmpdir }
-    let(:tracks) do
-      { 'film.mkv' => { index: 0, channels: 6, channel_layout: '5.1', codec: 'ac3' },
-        'show.mkv' => { index: 0, channels: 2, channel_layout: 'stereo', codec: 'aac' } }
+    let(:files) do
+      { 'film.mkv' => { audio: [ProbeFixture.audio(codec: 'ac3', channels: 6, layout: '5.1')] },
+        'show.mkv' => { audio: [ProbeFixture.audio(codec: 'aac', channels: 2, layout: 'stereo')] } }
     end
 
     before do
-      tracks.each_key { |name| File.write(File.join(dir, name), 'x') }
-      allow(Neutraliser::FFmpegWrapper).to receive(:read_stamp).and_return(nil)
-      allow(Neutraliser::FFmpegWrapper).to receive(:detect_audio_tracks) { |path| [tracks.fetch(File.basename(path))] }
+      files.each_key { |name| File.write(File.join(dir, name), 'x') }
+      stub_probes(files)
       allow(Neutraliser::FFmpegWrapper).to receive(:read_dialnorm).and_return(-27)
       allow(Neutraliser::FFmpegWrapper).to receive(:measure_loudness) do |_path, pre_filter: nil, **|
         level = pre_filter ? -27.0 : -21.0

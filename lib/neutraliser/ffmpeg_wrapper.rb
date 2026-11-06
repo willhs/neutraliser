@@ -52,14 +52,6 @@ module Neutraliser
     # Codecs considered lossless
     LOSSLESS_CODECS = %w[flac pcm_s16le pcm_s16be pcm_s24le pcm_f32le truehd pcm_s32le].freeze
 
-    # Single-sourced placeholder used wherever a real audio track can't be
-    # determined. `unknown: true` marks it so callers can tell "we genuinely
-    # don't know this file's audio format" apart from a real stereo/unknown
-    # track and react deliberately (e.g. warn before letting it drive
-    # encoder/bitrate selection) instead of silently trusting fabricated data.
-    UNKNOWN_AUDIO_TRACK = { index: 0, channels: 2, codec: 'unknown', bit_rate: nil, sample_rate: nil,
-                            unknown: true }.freeze
-
     # Minimum quality floor bitrates per encoder (in bps)
     QUALITY_FLOORS = {
       'aac' => { 2 => 128_000, 6 => 256_000 },
@@ -100,14 +92,6 @@ module Neutraliser
 
     # Container tags the muxer writes itself, which say nothing about the film.
     MP4_TECHNICAL_TAGS = %w[major_brand minor_version compatible_brands encoder creation_time].freeze
-
-    # Disposition flags a filtered stream loses and has to be given back. Named,
-    # not copied from ffprobe, because ffprobe also reports flags that older
-    # ffmpegs refuse on the command line. `default` is handled on its own.
-    PRESERVED_DISPOSITIONS = %w[dub original comment lyrics karaoke forced hearing_impaired visual_impaired
-                                clean_effects captions descriptions].freeze
-
-    NO_STREAMS = { video: 0, audio: 0, subtitle: 0, attachment: 0, chapter: 0 }.freeze
 
     # Seconds a subprocess gets to exit after SIGTERM before it is killed.
     STOP_GRACE_S = 2
@@ -189,23 +173,21 @@ module Neutraliser
       wide_filter_options? ? lra : [lra, LEGACY_LOUDNORM_MAX_LRA].min
     end
 
-    # Probes a file's duration via ffprobe, timeboxed like every other
-    # subprocess call here. Returns nil when ffprobe runs but reports
-    # failure (e.g. a corrupt/truncated container) or when its output is
-    # unparseable; raises Errno::ENOENT if ffprobe itself isn't installed
-    # and FFmpegTimeoutError if it hangs — both distinct from "the media is
-    # bad", so callers (e.g. FileManager) can tell the difference.
-    def self.probe_duration(input_path)
+    # The one ffprobe run a file gets: every stream, the container and the chapters, as JSON, plus the
+    # stderr of a `-v info` run (which names subtitle codec ids ffmpeg has no decoder for). Returns
+    # [stdout, stderr]. Timeboxed like every other subprocess call here. Raises FFmpegError when ffprobe
+    # reports failure (a corrupt or truncated container, a file still being written), FFmpegTimeoutError
+    # if it hangs, and Errno::ENOENT if ffprobe isn't installed: each distinct from "the media is
+    # fine". Callers go through Source, which keeps the answer.
+    def self.probe_file(input_path)
       cmd = [
-        'ffprobe', '-v', 'error', '-show_entries', 'format=duration',
-        '-of', 'default=nw=1:nk=1', input_path
+        'ffprobe', '-hide_banner', '-v', 'info', '-show_streams', '-show_format', '-show_chapters',
+        '-of', 'json', input_path
       ]
+      stdout, stderr, status = execute_with_timeout(cmd, PROBE_TIMEOUT, 'File probe')
+      raise FFmpegError.from_run('File probe', stderr, status) unless status.success?
 
-      stdout, _stderr, status = execute_with_timeout(cmd, PROBE_TIMEOUT, 'Duration probe')
-      return nil unless status.success?
-
-      duration = stdout.to_f
-      duration.positive? ? duration : nil
+      [stdout, stderr]
     end
 
     # Second opinion on an audio track's profile, from a slice cut out of the
@@ -215,8 +197,10 @@ module Neutraliser
     # .mka and probing that decodes different frames. Returns the profile name,
     # or nil if there is none or the probe fails (best effort, like
     # quick_loudness_sample).
-    def self.probe_audio_profile_mid_file(input_path, track, seconds: 10)
-      start = (probe_duration(input_path) || 0) / 2
+    def self.probe_audio_profile_mid_file(source, seconds: 10)
+      input_path = source.path
+      track = source.primary_track
+      start = (source.duration || 0) / 2
       Dir.mktmpdir('neutraliser-profile') do |dir|
         slice = File.join(dir, 'slice.mka')
         cmd = [
@@ -232,17 +216,19 @@ module Neutraliser
           '-show_entries', 'stream=profile', '-of', 'default=nw=1:nk=1', slice
         ]
         stdout, _, status = execute_with_timeout(cmd, PROBE_TIMEOUT, 'Profile probe')
-        status.success? ? parse_profile(stdout.strip) : nil
+        status.success? ? Source.profile_name(stdout.strip) : nil
       end
     rescue StandardError
       nil
     end
 
-    def self.quick_loudness_sample(input_path, duration: 30, target_i: -20.0, audio_index: 0)
+    def self.quick_loudness_sample(source, duration: 30, target_i: -20.0)
       # Quick LUFS estimation using a sample from the middle of the file
       # Much faster than analyzing the entire file
 
-      total_duration = probe_duration(input_path)
+      input_path = source.path
+      audio_index = source.primary_track[:index]
+      total_duration = source.duration
       return nil unless total_duration
       return nil if total_duration < duration * 2 # File too short for meaningful sample
 
@@ -271,52 +257,33 @@ module Neutraliser
       nil
     end
 
-    # The track that gets measured and normalised: the one flagged default,
-    # else the first English one, else the first. Players pick the default
-    # track, so that is the one whose level the viewer hears; with no flag,
-    # multi-language releases (Spanish first, English second) are heard in
-    # English, not in whichever stream happens to come first.
-    def self.primary_audio_track(tracks)
-      tracks.find { |t| t[:default] } || tracks.find { |t| t[:language] == 'eng' } || tracks.first || UNKNOWN_AUDIO_TRACK
-    end
-
-    # Index (among audio streams) of the primary track, for `0:a:N` maps.
-    def self.primary_audio_index(input_path)
-      primary_audio_track(detect_audio_tracks(input_path))[:index]
-    end
-
     # The container the output is really written in. A release can be MP4
     # bytes named .mkv (Lost S01 "MULTi"); trusting the extension then picks
     # the wrong codec table and muxes mov_text subtitles into Matroska, which
     # fails. Only the MP4 family is sniffed: it is the one the extension has
     # been seen to lie about.
-    def self.output_container(input_path, output_path)
+    def self.output_container(source, output_path)
       ext = File.extname(output_path).downcase
       return ext if MP4_FAMILY.include?(ext)
 
-      cmd = ['ffprobe', '-v', 'error', '-show_entries', 'format=format_name', '-of', 'csv=p=0', input_path]
-      stdout, _stderr, status = execute_with_timeout(cmd, PROBE_TIMEOUT, 'Container probe')
-      status.success? && stdout.include?('mp4') ? '.mp4' : ext
-    rescue FFmpegTimeoutError
-      raise
-    rescue StandardError
-      ext
+      source.mp4_family? ? '.mp4' : ext
     end
 
     # The encoder that would replace the track's own codec, or nil when it can
     # be re-encoded to itself. Changing codec (DTS/TrueHD to FLAC or E-AC3)
     # drops what the original was: a bitstream an AVR can decode, or lossless
     # turned lossy.
-    def self.codec_change(track, output_path, input_path = nil)
-      return nil if track[:unknown]
+    def self.codec_change(source, output_path)
+      return nil unless source.audio?
 
-      source = track[:codec].to_s.downcase
-      container = output_container(input_path, output_path)
+      track = source.primary_track
+      codec = track[:codec].to_s.downcase
+      container = output_container(source, output_path)
       allowed = CONTAINER_CODECS.fetch(container, CONTAINER_CODECS['.mkv'])
-      direct = ENCODABLE_CODECS[source]
+      direct = ENCODABLE_CODECS[codec]
       return nil if direct && allowed.include?(direct)
 
-      resolve_encoder(source, allowed, container, track[:channels].to_i.then { |n| n.zero? ? 2 : n })
+      resolve_encoder(codec, allowed, container, track[:channels].to_i.then { |n| n.zero? ? 2 : n })
     end
 
     # Audio streams the output should have: every source stream, plus the kept
@@ -331,12 +298,12 @@ module Neutraliser
       container == File.extname(output_path).downcase ? [] : ['-f', container.delete_prefix('.')]
     end
 
-    def self.apply_normalization(input_path, output_path, measured_data, profile, audio_tracks: nil, allow_dynamic: false,
+    def self.apply_normalization(source, output_path, measured_data, profile, allow_dynamic: false,
                                  keep_original: false, limit_db: 0.0, compression: nil)
-      audio_tracks ||= detect_audio_tracks(input_path)
-      primary_track = primary_audio_track(audio_tracks)
+      input_path = source.path
+      primary_track = source.primary_track
 
-      container = output_container(input_path, output_path)
+      container = output_container(source, output_path)
       codec_decision = carry_dialnorm(select_output_codec(primary_track, output_path, input_path, container: container),
                                       input_path, primary_track)
       codec_args = build_codec_args(codec_decision, primary_track[:index])
@@ -358,11 +325,10 @@ module Neutraliser
         build_stamp(profile, type, codec_decision, gain: gain, measured: measured_data, compression: compression)
       end
       container_opts = container_args(container, output_path)
-      mdta = mp4_mdta_safe?(input_path, container)
+      mdta = mp4_mdta_safe?(source, container)
 
       cmd = build_complete_ffmpeg_command(
-        input_path, output_path, audio_filter,
-        codec_args, audio_tracks, stream_counts(input_path),
+        source, output_path, audio_filter, codec_args,
         tags: stamp_args(stamp_for.call(predicted_type), container, primary_track[:index], mdta: mdta),
         keep_original: keep_original, container_opts: container_opts
       )
@@ -381,11 +347,11 @@ module Neutraliser
       plan.shortfall.positive? ? codec_decision.merge(shortfall_lu: plan.shortfall) : codec_decision
     end
 
-    def self.apply_normalization_single_pass(input_path, output_path, audio_tracks, profile, keep_original: false)
-      audio_tracks ||= detect_audio_tracks(input_path)
-      primary_track = primary_audio_track(audio_tracks)
+    def self.apply_normalization_single_pass(source, output_path, profile, keep_original: false)
+      input_path = source.path
+      primary_track = source.primary_track
 
-      container = output_container(input_path, output_path)
+      container = output_container(source, output_path)
       codec_decision = carry_dialnorm(select_output_codec(primary_track, output_path, input_path, container: container),
                                       input_path, primary_track)
       codec_args = build_codec_args(codec_decision, primary_track[:index])
@@ -398,9 +364,8 @@ module Neutraliser
       # filter's default linear setting.
       stamp = build_stamp(profile, 'Dynamic', codec_decision, gain: nil, measured: nil)
       cmd = build_complete_ffmpeg_command(
-        input_path, output_path, loudnorm_filter,
-        codec_args, audio_tracks, stream_counts(input_path),
-        tags: stamp_args(stamp, container, primary_track[:index], mdta: mp4_mdta_safe?(input_path, container)),
+        source, output_path, loudnorm_filter, codec_args,
+        tags: stamp_args(stamp, container, primary_track[:index], mdta: mp4_mdta_safe?(source, container)),
         keep_original: keep_original, container_opts: container_args(container, output_path)
       )
 
@@ -408,148 +373,6 @@ module Neutraliser
       normalization_type = parse_normalization_type(ffmpeg_output) || 'Dynamic'
 
       codec_decision.merge(normalization_type: normalization_type)
-    end
-
-    # Reads the NEUTRALISER_* record a previous run left in the file. The
-    # primary audio stream's tags win; container tags are the fallback,
-    # because MP4 only keeps custom tags at container level. Returns nil when
-    # the file carries no record or can't be probed (best effort: a miss just
-    # means "not known to be processed").
-    def self.read_stamp(input_path)
-      cmd = [
-        'ffprobe', '-v', 'error', '-select_streams', 'a',
-        '-show_entries', 'stream_tags:stream_disposition=default:format_tags', '-of', 'json', input_path
-      ]
-      stdout, _stderr, status = execute_with_timeout(cmd, PROBE_TIMEOUT, 'Stamp probe')
-      return nil unless status.success?
-
-      data = JSON.parse(stdout)
-      Stamp.from_tags(primary_stream_tags(data['streams'])) || Stamp.from_tags(data.dig('format', 'tags'))
-    rescue StandardError
-      nil
-    end
-
-    def self.primary_stream_tags(streams)
-      streams = Array(streams)
-      stream = streams.find { |st| st.dig('disposition', 'default') == 1 } || streams.first
-      stream&.dig('tags')
-    end
-
-    # Counts each kind of stream, plus chapters. build_complete_ffmpeg_command
-    # uses it to emit an explicit -map_metadata:s:v:N / :s:s:N / :s:t:N pair for
-    # each stream. Once the audio loop below issues any stream-scoped
-    # -map_metadata, ffmpeg's implicit "auto-copy every output stream's metadata
-    # from its matching input stream" behaviour is disabled for the whole
-    # command — other streams need the same explicit treatment or their tags
-    # come out empty despite being stream-copied, and an attachment with no
-    # filename tag stops Matroska writing at all. FileManager.output_mismatch
-    # compares source and output with it. Best-effort: a failed probe reads as
-    # nothing there, so no extra mappings, and verification can't pass an output
-    # it couldn't count unless the source couldn't be counted either.
-    def self.stream_counts(input_path)
-      cmd = ['ffprobe', '-v', 'error', '-show_entries', 'stream=codec_type:chapter=id', '-of', 'json', input_path]
-      stdout, _stderr, status = execute_with_timeout(cmd, PROBE_TIMEOUT, 'Stream count')
-      return NO_STREAMS unless status.success?
-
-      data = JSON.parse(stdout)
-      kinds = Array(data['streams']).map { |stream| stream['codec_type'] }.tally
-      {
-        video: kinds.fetch('video', 0), audio: kinds.fetch('audio', 0), subtitle: kinds.fetch('subtitle', 0),
-        attachment: kinds.fetch('attachment', 0), chapter: Array(data['chapters']).length
-      }
-    rescue StandardError
-      NO_STREAMS
-    end
-
-    # Subtitle streams this ffmpeg has no codec for ("Subtitle: none"), each
-    # described as "stream N (CODEC_ID)" when the demuxer names the ID.
-    # `-c:s copy` can't carry such a stream — the encode fails with
-    # "Subtitle codec 0 is not supported" — and no ffmpeg release maps
-    # Matroska's S_TEXT/WEBVTT (only D_WEBVTT/*), so upgrading doesn't help.
-    # -v info because the demuxer reports the unknown ID at info level.
-    # Best effort: a failed probe returns [] and any real problem surfaces
-    # (classified) from the encode itself.
-    def self.unsupported_subtitles(input_path)
-      cmd = [
-        'ffprobe', '-hide_banner', '-v', 'info', '-select_streams', 's',
-        '-show_entries', 'stream=index,codec_name', '-of', 'json', input_path
-      ]
-      stdout, stderr, status = execute_with_timeout(cmd, PROBE_TIMEOUT, 'Subtitle probe')
-      return [] unless status.success?
-
-      codec_ids = stderr.scan(%r{Unknown/unsupported AVCodecID (\S+?)\.?$}).flatten
-      unknown = (JSON.parse(stdout)['streams'] || []).reject { |stream| stream['codec_name'] }
-      unknown.each_with_index.map do |stream, i|
-        id = codec_ids[i] || 'unknown codec'
-        "stream #{stream['index']} (#{id})"
-      end
-    rescue FFmpegTimeoutError
-      raise
-    rescue StandardError
-      []
-    end
-
-    def self.detect_audio_tracks(input_path)
-      cmd = [
-        'ffprobe', '-v', 'error', '-select_streams', 'a',
-        '-show_entries', 'stream=index,codec_name,profile,sample_rate,channels,channel_layout,bit_rate:stream_tags=title,language,handler_name:stream_disposition',
-        '-of', 'json', input_path
-      ]
-
-      stdout, stderr, status = execute_with_timeout(cmd, PROBE_TIMEOUT, 'Audio track detection')
-      unless status.success?
-        # A genuinely failed probe is a hard error, not "assume stereo" —
-        # letting it silently pass a fabricated track downstream would have
-        # it drive real encoder/bitrate selection on made-up data.
-        raise FFmpegError.from_run('Audio track detection', stderr, status)
-      end
-
-      tracks = parse_audio_tracks_json(stdout)
-
-      # The probe itself succeeded but yielded nothing usable (no audio
-      # streams, or unparseable JSON) — return an explicitly-marked unknown
-      # track rather than raising, since callers already know audio exists
-      # here (Processor checks movie.audio_stream first) and can still
-      # proceed, just deliberately, with conservative defaults.
-      tracks.empty? ? [UNKNOWN_AUDIO_TRACK] : tracks
-    end
-
-    def self.parse_audio_tracks_json(json_text)
-      data = JSON.parse(json_text)
-      streams = data['streams'] || []
-
-      streams.each_with_index.map do |stream, idx|
-        {
-          index: idx,
-          stream_index: stream['index'].to_i,
-          channels: stream['channels'].to_i,
-          channel_layout: stream['channel_layout'],
-          codec: stream['codec_name'] || 'unknown',
-          profile: parse_profile(stream['profile']),
-          title: stream.dig('tags', 'title'),
-          handler_name: stream.dig('tags', 'handler_name'),
-          language: stream.dig('tags', 'language')&.downcase,
-          default: stream.dig('disposition', 'default') == 1,
-          dispositions: PRESERVED_DISPOSITIONS.select { |flag| stream.dig('disposition', flag) == 1 },
-          bit_rate: parse_bit_rate(stream['bit_rate']),
-          sample_rate: stream['sample_rate']&.to_i
-        }
-      end
-    rescue JSON::ParserError
-      []
-    end
-
-    # ffprobe prints "unknown" when the decoder named no profile.
-    def self.parse_profile(value)
-      return nil if value.nil? || value == 'unknown'
-
-      value
-    end
-
-    def self.parse_bit_rate(value)
-      return nil if value.nil? || value == 'N/A'
-
-      value.to_i
     end
 
     # NOTE: `private` here has no effect on `def self.foo` methods (Ruby
@@ -723,31 +546,20 @@ module Neutraliser
     end
 
     # Estimates a stream's real bitrate when ffprobe reports bit_rate as N/A
-    # (common for MKV). Checks the container's BPS tag (written by mkvmerge)
+    # (common for MKV). Checks the container's BPS tag (written by mkvmerge,
+    # already in the track from the one probe)
     # first, then falls back to sampling packet sizes over a short window.
     # Returns nil when neither source yields a usable number, so callers fall
     # through to the existing quality-floor logic.
     def self.estimate_source_bitrate(input_path, track)
-      stream_spec = "a:#{track[:index]}"
-      estimate_bitrate_from_tag(input_path, stream_spec) || estimate_bitrate_from_packets(input_path, stream_spec)
+      bitrate_from_tag(track) || estimate_bitrate_from_packets(input_path, "a:#{track[:index]}")
     end
 
-    def self.estimate_bitrate_from_tag(input_path, stream_spec)
-      cmd = [
-        'ffprobe', '-v', 'error', '-select_streams', stream_spec,
-        '-show_entries', 'stream_tags=BPS',
-        '-of', 'default=nw=1:nk=1', input_path
-      ]
-
-      stdout, _stderr, status = execute_with_timeout(cmd, PROBE_TIMEOUT, 'BPS tag probe')
-      return nil unless status.success?
-
-      value = stdout.strip
+    def self.bitrate_from_tag(track)
+      value = track.dig(:tags, 'BPS').to_s.strip
       return nil if value.empty? || value == 'N/A'
 
       value.to_i
-    rescue StandardError
-      nil
     end
 
     def self.estimate_bitrate_from_packets(input_path, stream_spec, sample_seconds: 10)
@@ -883,24 +695,13 @@ module Neutraliser
     # stamp would cost the cover and hide the tags from anything reading iTunes
     # atoms. Least lossy wins: those files keep their atoms and the sidecar holds
     # their record, as for AVI. A file already stamped this way has no atoms left
-    # to lose. A failed probe answers no: the record can be lost, the tags can't
-    # be brought back.
-    def self.mp4_mdta_safe?(input_path, container)
+    # to lose.
+    def self.mp4_mdta_safe?(source, container)
       return true unless MP4_FAMILY.include?(container)
+      return false if source.attached_picture?
 
-      cmd = ['ffprobe', '-v', 'error', '-show_entries', 'format_tags:stream_disposition=attached_pic', '-of', 'json', input_path]
-      stdout, _stderr, status = execute_with_timeout(cmd, PROBE_TIMEOUT, 'MP4 tag probe')
-      return false unless status.success?
-
-      data = JSON.parse(stdout)
-      return false if Array(data['streams']).any? { |stream| stream.dig('disposition', 'attached_pic') == 1 }
-
-      tags = (data.dig('format', 'tags') || {}).keys.map(&:downcase)
+      tags = source.container_tag_names
       tags.any? { |tag| tag.start_with?('neutraliser_') } || (tags - MP4_TECHNICAL_TAGS).empty?
-    rescue FFmpegTimeoutError
-      raise
-    rescue StandardError
-      false
     end
 
     # Rewrites only the stamp, stream-copying everything else. No
@@ -928,9 +729,11 @@ module Neutraliser
       match && match[1].capitalize
     end
 
-    def self.build_complete_ffmpeg_command(input_path, output_path, loudnorm_filter, primary_codec, audio_tracks,
-                                           stream_counts = { video: 0, subtitle: 0 }, tags: [], keep_original: false,
-                                           container_opts: [])
+    def self.build_complete_ffmpeg_command(source, output_path, loudnorm_filter, primary_codec, tags: [],
+                                           keep_original: false, container_opts: [])
+      input_path = source.path
+      audio_tracks = source.audio_tracks
+      stream_counts = source.stream_counts
       cmd = [
         # The decode hears the stream as the viewer who turned DRC off does, as the measurement did.
         'ffmpeg', '-hide_banner', '-y', *DolbyStream::DRC_OFF, '-i', input_path,
@@ -941,7 +744,7 @@ module Neutraliser
       # Output audio order matches input order: the primary track (the
       # default-disposition one, else the first) is replaced in place by its
       # normalised version; the rest are stream-copied around it.
-      primary = primary_audio_track(audio_tracks)
+      primary = source.primary_track
       cmd += ['-filter_complex', "[0:a:#{primary[:index]}]#{loudnorm_filter}[norm]"]
 
       # With keep_original, a stream-copy of the untouched primary track
@@ -990,13 +793,13 @@ module Neutraliser
       if keep_original
         cmd += kept_original_args(kept_output, primary, output_path)
       end
-      stream_counts[:video].to_i.times do |i|
+      stream_counts[:video].times do |i|
         cmd += ["-map_metadata:s:v:#{i}", "0:s:v:#{i}"]
       end
-      stream_counts[:subtitle].to_i.times do |i|
+      stream_counts[:subtitle].times do |i|
         cmd += ["-map_metadata:s:s:#{i}", "0:s:s:#{i}"]
       end
-      stream_counts[:attachment].to_i.times do |i|
+      stream_counts[:attachment].times do |i|
         cmd += ["-map_metadata:s:t:#{i}", "0:s:t:#{i}"]
       end
       cmd += [
@@ -1041,8 +844,7 @@ module Neutraliser
 
     # The real public surface is measure_loudness, apply_normalization,
     # apply_normalization_single_pass, quick_loudness_sample,
-    # detect_audio_tracks, probe_audio_profile_mid_file, read_stamp, stream_counts,
-    # version and probe_duration —
+    # probe_audio_profile_mid_file, probe_file, version and codec_change —
     # everything else is an implementation detail and made genuinely private here (see the NOTE
     # above `execute_with_timeout` on why the old `private` keyword didn't
     # do this).
@@ -1053,14 +855,11 @@ module Neutraliser
                          :timeout_variable,
                          :pin_sample_rate,
                          :parse_loudnorm_json,
-                         :parse_audio_tracks_json,
-                         :parse_profile,
-                         :parse_bit_rate,
                          :select_output_codec,
                          :resolve_encoder,
                          :resolve_bitrate,
                          :estimate_source_bitrate,
-                         :estimate_bitrate_from_tag,
+                         :bitrate_from_tag,
                          :estimate_bitrate_from_packets,
                          :lossless_encoder?,
                          :build_codec_args,
@@ -1075,7 +874,6 @@ module Neutraliser
                          :stamp_args,
                          :mp4_mdta_safe?,
                          :restamp,
-                         :primary_stream_tags,
                          :build_complete_ffmpeg_command,
                          :original_title,
                          :original_copy?,

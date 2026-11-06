@@ -8,7 +8,7 @@ RSpec.describe Neutraliser::SkipDecider do
 
   before do
     File.write(video_path, 'x' * 100)
-    allow(Neutraliser::FFmpegWrapper).to receive(:read_stamp).and_return(nil)
+    stub_stamp(nil)
   end
   after { FileUtils.remove_entry(temp_dir) if Dir.exist?(temp_dir) }
 
@@ -91,7 +91,7 @@ RSpec.describe Neutraliser::SkipDecider do
     end
 
     it 'counts a file stamped for the same profile as processed, with no sidecar (moved, or a new root)' do
-      allow(Neutraliser::FFmpegWrapper).to receive(:read_stamp).with(video_path).and_return(stamped('livingroom'))
+      stub_stamp(stamped('livingroom'))
       other_root = Dir.mktmpdir
 
       expect(described_class.new(other_root).already_processed?(video_path, profile)).to be true
@@ -100,22 +100,22 @@ RSpec.describe Neutraliser::SkipDecider do
     end
 
     it 'does not count a stamp for a different profile' do
-      allow(Neutraliser::FFmpegWrapper).to receive(:read_stamp).with(video_path).and_return(stamped('night'))
+      stub_stamp(stamped('night'))
 
       expect(described_class.new(temp_dir).already_processed?(video_path, profile)).to be false
     end
 
     it 'refreshes the sidecar cache on a tag hit, so the next check skips the probe' do
-      allow(Neutraliser::FFmpegWrapper).to receive(:read_stamp).with(video_path).and_return(stamped('livingroom'))
+      stub_stamp(stamped('livingroom'))
       described_class.new(temp_dir).already_processed?(video_path, profile)
 
       next_run = described_class.new(temp_dir)
-      expect(Neutraliser::FFmpegWrapper).not_to receive(:read_stamp)
+      expect(Neutraliser::FFmpegWrapper).not_to receive(:probe_file)
       expect(next_run.already_processed?(video_path, profile)).to be true
     end
 
     it 'lets #skip? short-circuit on the stamp without a quick sample' do
-      allow(Neutraliser::FFmpegWrapper).to receive(:read_stamp).with(video_path).and_return(stamped('livingroom'))
+      stub_stamp(stamped('livingroom'))
 
       expect(Neutraliser::FFmpegWrapper).not_to receive(:quick_loudness_sample)
       expect(described_class.new(temp_dir).skip?(video_path, profile, tolerance: 1.0)).to be true
@@ -141,7 +141,7 @@ RSpec.describe Neutraliser::SkipDecider do
     it 'marks the sidecar (not a separate marker file) when a quick sample verifies within tolerance' do
       decider = described_class.new(temp_dir, fast_verification: true)
       quick_result = Neutraliser::Measurement.already_at_target(profile)
-      allow(Neutraliser::FFmpegWrapper).to receive_messages(quick_loudness_sample: quick_result, primary_audio_index: 0)
+      allow(Neutraliser::FFmpegWrapper).to receive(:quick_loudness_sample).and_return(quick_result)
 
       expect(decider.skip?(video_path, profile, tolerance: 1.0)).to be true
       expect(decider.already_processed?(video_path, profile)).to be true
@@ -156,7 +156,7 @@ RSpec.describe Neutraliser::SkipDecider do
         'input_i' => (profile[:lufs] + 0.9).to_s, 'input_tp' => '0', 'input_lra' => '0',
         'input_thresh' => '0', 'target_offset' => '0'
       )
-      allow(Neutraliser::FFmpegWrapper).to receive_messages(quick_loudness_sample: quick_result, primary_audio_index: 0)
+      allow(Neutraliser::FFmpegWrapper).to receive(:quick_loudness_sample).and_return(quick_result)
 
       expect(decider.skip?(video_path, profile, tolerance: 1.0)).to be false
     end
@@ -181,7 +181,7 @@ RSpec.describe Neutraliser::SkipDecider do
 
     it 'counts a file made by any recipe as done, so a new default never re-levels on its own' do
       [1, nil, 2].each do |recipe|
-        allow(Neutraliser::FFmpegWrapper).to receive(:read_stamp).and_return(stamp_for.call(recipe))
+        stub_stamp(stamp_for.call(recipe))
 
         FileUtils.rm_f(File.join(temp_dir, '.neutraliser'))
 
@@ -192,21 +192,21 @@ RSpec.describe Neutraliser::SkipDecider do
     it 'does the files of a named recipe over, and no others' do
       redo_old = described_class.new(temp_dir, redo_recipes: [1])
 
-      allow(Neutraliser::FFmpegWrapper).to receive(:read_stamp).and_return(stamp_for.call(1))
+      stub_stamp(stamp_for.call(1))
       expect(redo_old.already_processed?(video_path, profile)).to be false
-      allow(Neutraliser::FFmpegWrapper).to receive(:read_stamp).and_return(stamp_for.call(2))
+      stub_stamp(stamp_for.call(2))
       expect(redo_old.already_processed?(video_path, profile)).to be true
     end
 
     it 'does unversioned files over when asked, and not before' do
-      allow(Neutraliser::FFmpegWrapper).to receive(:read_stamp).and_return(stamp_for.call(nil))
+      stub_stamp(stamp_for.call(nil))
 
       expect(described_class.new(temp_dir).already_processed?(video_path, profile)).to be true
       expect(described_class.new(temp_dir, redo_recipes: [nil]).already_processed?(video_path, profile)).to be false
     end
 
     it 'remembers a tag hit under the file\'s own recipe, not the current one' do
-      allow(Neutraliser::FFmpegWrapper).to receive(:read_stamp).and_return(stamp_for.call(1))
+      stub_stamp(stamp_for.call(1))
       described_class.new(temp_dir).already_processed?(video_path, profile)
 
       entry = JSON.parse(File.read(File.join(temp_dir, '.neutraliser')))['movie.mp4']
@@ -294,30 +294,31 @@ RSpec.describe Neutraliser::SkipDecider do
     def decider(lra_target: 10.0) = described_class.new(temp_dir, tolerance: 1.0, lra_target: lra_target)
 
     it 'does not take a file normalised without compression as done when its LRA was over the target' do
-      allow(Neutraliser::FFmpegWrapper).to receive(:read_stamp).and_return(stamp(mode: 'linear', measured_lra: 16.0))
+      stub_stamp(stamp(mode: 'linear', measured_lra: 16.0))
 
       expect(decider.already_processed?(video_path, profile)).to be false
       expect(described_class.new(temp_dir).already_processed?(video_path, profile)).to be true
     end
 
     it 'takes one whose recorded LRA was already within target + tolerance' do
-      allow(Neutraliser::FFmpegWrapper).to receive(:read_stamp).and_return(stamp(mode: 'linear', measured_lra: 11.0))
+      stub_stamp(stamp(mode: 'linear', measured_lra: 11.0))
 
       expect(decider.already_processed?(video_path, profile)).to be true
     end
 
     it 'takes a compressed file as done, so compression is not stacked on a re-run' do
-      allow(Neutraliser::FFmpegWrapper).to receive(:read_stamp).and_return(stamp(mode: 'compressed', measured_lra: 16.0))
+      stub_stamp(stamp(mode: 'compressed', measured_lra: 16.0))
 
       expect(decider.already_processed?(video_path, profile)).to be true
     end
 
     it 'takes a dynamic or LRA-less stamp as done: loudnorm already worked on it, or nothing says otherwise' do
-      allow(Neutraliser::FFmpegWrapper).to receive(:read_stamp).and_return(stamp(mode: 'dynamic', measured_lra: 16.0),
-                                                                           stamp(mode: 'linear', measured_lra: nil))
+      [stamp(mode: 'dynamic', measured_lra: 16.0), stamp(mode: 'linear', measured_lra: nil)].each do |stamped|
+        stub_stamp(stamped)
+        FileUtils.rm_f(File.join(temp_dir, Neutraliser::SkipDecider::FILENAME)) # judged by the stamp, not an earlier sidecar entry
 
-      expect(decider.already_processed?(video_path, profile)).to be true
-      expect(decider.already_processed?(video_path, profile)).to be true
+        expect(decider.already_processed?(video_path, profile)).to be true
+      end
     end
 
     it 'trusts a sidecar entry only if it was written under a target at least as strict' do

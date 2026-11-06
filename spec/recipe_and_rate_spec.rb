@@ -67,7 +67,7 @@ RSpec.describe 'Recipe versions, left-alone records and the remote-free rate', :
       make_clip(File.join(dir, 'quiet.mkv'), quiet)
       process(dir)
 
-      stamp = Neutraliser::FFmpegWrapper.read_stamp(File.join(dir, 'quiet.mkv'))
+      stamp = Neutraliser::Source.new(File.join(dir, 'quiet.mkv')).stamp
       expect(stamp).to have_attributes(profile: 'livingroom', recipe: Neutraliser::Recipe::CURRENT, mode: 'linear')
       expect(Neutraliser::Report.new(dir).summary).to include("Recipes: #{Neutraliser::Recipe::CURRENT}=1")
     end
@@ -77,7 +77,7 @@ RSpec.describe 'Recipe versions, left-alone records and the remote-free rate', :
       make_clip(path, quiet)
       process(dir)
       strip_recipe(path)
-      expect(Neutraliser::FFmpegWrapper.read_stamp(path)).to have_attributes(profile: 'livingroom', recipe: nil)
+      expect(Neutraliser::Source.new(path).stamp).to have_attributes(profile: 'livingroom', recipe: nil)
       before = Digest::SHA256.file(path).hexdigest
       File.delete(File.join(dir, '.neutraliser'))
 

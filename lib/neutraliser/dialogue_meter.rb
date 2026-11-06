@@ -16,7 +16,7 @@ module Neutraliser
 
     module_function
 
-    # track: one of FFmpegWrapper.detect_audio_tracks. Raises FFmpegError if the read itself fails.
+    # track: a Source's primary_track. Raises FFmpegError if the read itself fails.
     def estimate(file, track)
       return DialogueEstimate.unavailable(no_centre_reason(track)) unless centre_channel?(track)
 

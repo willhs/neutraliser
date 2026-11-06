@@ -12,6 +12,7 @@ All notable changes to this project are documented here. The format follows
 
 ### Changed
 
+- **One ffprobe run per file.** A `process --replace` of a 2-audio-track mkv used to run ffprobe 15 times (audio tracks, stamp, container, stream counts, duration, subtitles, and the `streamio-ffmpeg` gem's own probe, each asked separately and repeated); it now runs it twice, once for the source and once for the output it verifies. On a NAS each one opened the file over SMB. The facts live in a new `Source` value passed to the guards, the skip decision, the loudness measurement and the command builder; the primary track and the "no audio" rule are decided in one place. A file the sidecar marks done still costs no probe. The `streamio-ffmpeg` dependency is gone. The one visible difference: a file is judged by its primary track's stamp, where the old stamp read took the first default-flagged audio track.
 - Docs only: the vision now says dialogue steady across the library with loud moments limited, and the README no longer claims the tool never compresses. No behaviour change. The 0.1 criteria are in `docs/work/roadmap.md`; 0.1 is undated until they pass.
 
 ### Fixed

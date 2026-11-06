@@ -41,14 +41,16 @@ module Neutraliser
       @within_lu = within_lu
       @lra_limit = lra_limit
       deciders = {}
+      sources = {}
       @rows = video_files(path).map do |file|
-        stamp = FFmpegWrapper.read_stamp(file)
+        source = sources[file] = Source.new(file)
+        stamp = source.stamp
         Row.new(file: file, stamp: stamp, left: stamp ? nil : SkipDecider.left_record_for(file, deciders))
       end
       # Judged now, not on first use: a caller may delete the files (the rate harness does) once built.
       @final_levels = {}
       @dialogue = {}
-      rows.each { |row| judge(row, dialogue_anchor) }
+      rows.each { |row| judge(row, sources.fetch(row.file), dialogue_anchor) }
       @rate = RemoteFreeRate.new(@final_levels, within_lu: @within_lu, lra_limit: @lra_limit)
       @dialogue_rate = DialogueRate.new(@dialogue, anchor: dialogue_anchor, within_lu: @within_lu) if dialogue_anchor && @measure
     end
@@ -186,10 +188,10 @@ module Neutraliser
 
     # Fills @final_levels (and @dialogue, when the files are read) for one row. Judged at construction, not on
     # first use: a caller may delete the files (the rate harness does) once built.
-    def judge(row, anchor)
+    def judge(row, source, anchor)
       return @final_levels[row.file] = FinalLevels.computed(stamp: row.stamp, left: row.left) unless @measure
 
-      track = FFmpegWrapper.primary_audio_track(FFmpegWrapper.detect_audio_tracks(row.file))
+      track = source.primary_track
       levels = measured_levels(row, track)
       @final_levels[row.file] = levels
       @dialogue[row.file] = dialogue_of(row, track, levels) if anchor && levels
