@@ -124,6 +124,31 @@ RSpec.describe Neutraliser::FFmpegWrapper do
     end
   end
 
+  describe '.decide_codec' do
+    let(:source) { source_of([{ codec: 'aac', bit_rate: nil }], 'in.mkv') }
+
+    def sampled_bitrate(packets)
+      allow(described_class).to receive(:execute_with_timeout)
+        .with(array_including('packet=size'), described_class::PROBE_TIMEOUT, anything).and_return(packets)
+      described_class.decide_codec(source, 'out.mkv')[:bitrate]
+    end
+
+    it 'samples packet sizes when ffprobe gave no bitrate and there is no BPS tag' do
+      # 5 packets * 48000 bytes over the 10s window => 192000 bps, above the 128000 floor
+      expect(sampled_bitrate(["48000\n" * 5, '', ok_status])).to eq(192_000)
+    end
+
+    it 'falls to the floor when sampling fails' do
+      expect(sampled_bitrate(['', '', fail_status])).to eq(128_000)
+    end
+  end
+
+  describe '.output_container' do
+    it 'is the output extension' do
+      expect(described_class.output_container(source_of([{}]), 'a.mkv')).to eq('.mkv')
+    end
+  end
+
   describe 'public surface' do
     it 'exposes only the intended ~8 methods' do
       expect(described_class.singleton_methods(false)).to contain_exactly(
@@ -136,7 +161,8 @@ RSpec.describe Neutraliser::FFmpegWrapper do
         :probe_audio_profile_mid_file,
         :version,
         :wide_filter_options?,
-        :codec_change
+        :output_container,
+        :decide_codec
       )
     end
   end
@@ -521,29 +547,6 @@ RSpec.describe Neutraliser::FFmpegWrapper do
     end
   end
 
-  describe '.codec_change' do
-    def change(codec, out, **track)
-      described_class.codec_change(source_of([{ codec: codec, channels: 6, **track }]), out)
-    end
-
-    it 'is nil when the codec re-encodes to itself in the container' do
-      expect(change('aac', 'a.mkv')).to be_nil
-      expect(change('eac3', 'a.mp4')).to be_nil
-      expect(change('mp3', 'a.mkv')).to be_nil
-    end
-
-    it 'names the replacement encoder when the codec cannot be kept' do
-      expect(change('dts', 'a.mkv')).to eq('flac')
-      expect(change('truehd', 'a.mkv')).to eq('flac')
-      expect(change('dts', 'a.mp4')).to eq('eac3')
-      expect(change('flac', 'a.mp4')).to eq('eac3') # flac has no home in MP4
-    end
-
-    it 'does not judge a track whose format could not be read' do
-      expect(described_class.codec_change(ProbeFixture.source('in.mkv', audio: []), 'a.mkv')).to be_nil
-    end
-  end
-
   describe '.measure_loudness audio_index' do
     it 'maps the requested audio stream' do
       allow(described_class).to receive(:execute_with_timeout).and_return(['', '{"input_i":"-18","input_tp":"-2","input_lra":"5","input_thresh":"-28","target_offset":"0"}', ok_status])
@@ -580,146 +583,6 @@ RSpec.describe Neutraliser::FFmpegWrapper do
 
       allow(described_class).to receive(:execute_with_timeout).and_raise(Neutraliser::FFmpegTimeoutError, 'slow')
       expect(described_class.probe_audio_profile_mid_file(source)).to be_nil
-    end
-  end
-
-  describe '.select_output_codec' do
-    def make_track(codec:, channels: 2, bit_rate: 256_000, sample_rate: 48_000)
-      { index: 0, stream_index: 0, channels: channels, codec: codec, bit_rate: bit_rate, sample_rate: sample_rate }
-    end
-
-    it 'matches source AAC codec and bitrate for MP4' do
-      result = described_class.send(:select_output_codec, make_track(codec: 'aac', bit_rate: 512_000), 'out.mp4')
-      expect(result[:encoder]).to eq('aac')
-      expect(result[:bitrate]).to eq(320_000) # capped at AAC stereo max
-    end
-
-    it 'round-trips AAC-in-MKV as AAC instead of falling back to FLAC' do
-      # Regression: with correct field-name parsing, an AAC source in an MKV
-      # container must map to the AAC encoder per ADR-0001 priority — not the
-      # MKV lossless-fallback (FLAC) that a broken codec parse would trigger.
-      result = described_class.send(:select_output_codec, make_track(codec: 'aac', bit_rate: 128_000), 'out.mkv')
-      expect(result[:encoder]).to eq('aac')
-      expect(result[:lossless_output]).to eq(false)
-    end
-
-    it 'matches source AC3 for MKV' do
-      result = described_class.send(:select_output_codec, make_track(codec: 'ac3', channels: 6, bit_rate: 448_000), 'out.mkv')
-      expect(result[:encoder]).to eq('ac3')
-      expect(result[:bitrate]).to eq(448_000)
-    end
-
-    it 'enforces quality floor when source bitrate is low' do
-      result = described_class.send(:select_output_codec, make_track(codec: 'aac', bit_rate: 64_000), 'out.mp4')
-      expect(result[:encoder]).to eq('aac')
-      expect(result[:bitrate]).to eq(128_000)
-    end
-
-    it 'caps bitrate at codec maximum' do
-      result = described_class.send(:select_output_codec, make_track(codec: 'ac3', channels: 6, bit_rate: 900_000), 'out.mp4')
-      expect(result[:bitrate]).to eq(640_000)
-    end
-
-    it 'falls back to FLAC for DTS source in MKV' do
-      result = described_class.send(:select_output_codec, make_track(codec: 'dts', channels: 6, bit_rate: 1_509_000), 'out.mkv')
-      expect(result[:encoder]).to eq('flac')
-      expect(result[:lossless_output]).to eq(true)
-      expect(result[:bitrate]).to be_nil
-    end
-
-    it 'falls back to EAC3 for DTS source in MP4' do
-      result = described_class.send(:select_output_codec, make_track(codec: 'dts', channels: 6, bit_rate: 1_509_000), 'out.mp4')
-      expect(result[:encoder]).to eq('eac3')
-    end
-
-    it 'falls back to FLAC for TrueHD source in MKV' do
-      result = described_class.send(:select_output_codec, make_track(codec: 'truehd', channels: 6, bit_rate: 0), 'out.mkv')
-      expect(result[:encoder]).to eq('flac')
-      expect(result[:lossless_output]).to eq(true)
-    end
-
-    it 'preserves FLAC for lossless source in MKV' do
-      result = described_class.send(:select_output_codec, make_track(codec: 'flac', channels: 2, bit_rate: 0), 'out.mkv')
-      expect(result[:encoder]).to eq('flac')
-      expect(result[:lossless_output]).to eq(true)
-    end
-
-    it 'falls back to high-bitrate AAC for FLAC source in MP4' do
-      result = described_class.send(:select_output_codec, make_track(codec: 'flac', channels: 2, bit_rate: 0), 'out.mp4')
-      expect(result[:encoder]).to eq('aac')
-      expect(result[:bitrate]).to eq(128_000)
-    end
-
-    it 'uses libopus for Opus source in WebM' do
-      result = described_class.send(:select_output_codec, make_track(codec: 'opus', bit_rate: 128_000), 'out.webm')
-      expect(result[:encoder]).to eq('libopus')
-      expect(result[:bitrate]).to eq(128_000)
-    end
-
-    it 'uses libmp3lame for MP3 source in MP4' do
-      result = described_class.send(:select_output_codec, make_track(codec: 'mp3', bit_rate: 320_000), 'out.mp4')
-      expect(result[:encoder]).to eq('libmp3lame')
-      expect(result[:bitrate]).to eq(320_000)
-    end
-
-    it 'handles unknown source codec with container fallback' do
-      result = described_class.send(:select_output_codec, make_track(codec: 'unknown', bit_rate: 0), 'out.mp4')
-      expect(result[:encoder]).to eq('aac')
-    end
-
-    it 'uses quality floor when source bitrate is unknown' do
-      result = described_class.send(:select_output_codec, make_track(codec: 'aac', bit_rate: 0), 'out.mp4')
-      expect(result[:bitrate]).to eq(128_000)
-    end
-
-    it 'uses the floor when source bitrate is unknown and no input_path is given for estimation' do
-      expect(described_class).not_to receive(:execute_with_timeout)
-      result = described_class.send(:select_output_codec, make_track(codec: 'aac', bit_rate: nil), 'out.mp4')
-      expect(result[:bitrate]).to eq(128_000)
-    end
-
-    it 'estimates bitrate from the container BPS tag when stream bit_rate is N/A (MKV)' do
-      expect(described_class).not_to receive(:execute_with_timeout)
-      track = make_track(codec: 'aac', bit_rate: nil).merge(tags: { 'BPS' => '192000' })
-
-      result = described_class.send(:select_output_codec, track, 'out.mkv', 'in.mkv')
-
-      expect(result[:encoder]).to eq('aac')
-      expect(result[:bitrate]).to eq(192_000)
-    end
-
-    it 'falls back to packet-size sampling when the track has no BPS tag' do
-      allow(described_class).to receive(:execute_with_timeout)
-        .with(array_including('packet=size'), described_class::PROBE_TIMEOUT, anything)
-        .and_return(["24000\n24000\n24000\n24000\n24000\n", '', ok_status])
-
-      result = described_class.send(:select_output_codec, make_track(codec: 'aac', bit_rate: nil), 'out.mkv', 'in.mkv')
-
-      # 5 packets * 24000 bytes = 120000 bytes over the 10s default sample window
-      # => (120000 * 8) / 10 = 96000 bps, floored to the AAC stereo minimum (128000)
-      expect(result[:bitrate]).to eq(128_000)
-    end
-
-    it 'uses an estimate above the floor as the source bitrate for the floor/cap logic' do
-      allow(described_class).to receive(:execute_with_timeout)
-        .with(array_including('packet=size'), described_class::PROBE_TIMEOUT, anything)
-        .and_return(["48000\n48000\n48000\n48000\n48000\n", '', ok_status])
-
-      result = described_class.send(:select_output_codec, make_track(codec: 'aac', bit_rate: nil), 'out.mkv', 'in.mkv')
-
-      # 5 packets * 48000 bytes = 240000 bytes over the 10s default sample window
-      # => (240000 * 8) / 10 = 192000 bps, above the 128000 floor
-      expect(result[:bitrate]).to eq(192_000)
-    end
-
-    it 'falls back to the floor when neither the BPS tag nor packet sampling yield a usable number' do
-      allow(described_class).to receive(:execute_with_timeout)
-        .with(array_including('packet=size'), described_class::PROBE_TIMEOUT, anything)
-        .and_return(['', '', fail_status])
-
-      result = described_class.send(:select_output_codec, make_track(codec: 'aac', bit_rate: nil), 'out.mkv', 'in.mkv')
-
-      expect(result[:bitrate]).to eq(128_000)
     end
   end
 

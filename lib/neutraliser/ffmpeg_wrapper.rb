@@ -32,60 +32,6 @@ module Neutraliser
     NORMALIZATION_TIMEOUT = env_timeout('NORMALIZATION', 1800)
     PROBE_TIMEOUT = env_timeout('PROBE', 30)
 
-    # Mapping from source codec to ffmpeg encoder name
-    # Only codecs that ffmpeg can reliably encode
-    ENCODABLE_CODECS = {
-      'aac' => 'aac',
-      'ac3' => 'ac3',
-      'eac3' => 'eac3',
-      'mp3' => 'libmp3lame',
-      'mp2' => 'libtwolame',
-      'opus' => 'libopus',
-      'vorbis' => 'libvorbis',
-      'flac' => 'flac',
-      'pcm_s16le' => 'pcm_s16le',
-      'pcm_s16be' => 'pcm_s16be',
-      'pcm_s24le' => 'pcm_s24le',
-      'pcm_f32le' => 'pcm_f32le'
-    }.freeze
-
-    # Codecs considered lossless
-    LOSSLESS_CODECS = %w[flac pcm_s16le pcm_s16be pcm_s24le pcm_f32le truehd pcm_s32le].freeze
-
-    # Minimum quality floor bitrates per encoder (in bps)
-    QUALITY_FLOORS = {
-      'aac' => { 2 => 128_000, 6 => 256_000 },
-      'ac3' => { 2 => 192_000, 6 => 384_000 },
-      'eac3' => { 2 => 128_000, 6 => 256_000 },
-      'libmp3lame' => { 2 => 192_000 },
-      'libtwolame' => { 2 => 192_000 },
-      'libopus' => { 2 => 128_000, 6 => 256_000 },
-      'libvorbis' => { 2 => 128_000, 6 => 256_000 }
-    }.freeze
-
-    # Maximum useful bitrates per encoder (in bps)
-    QUALITY_CAPS = {
-      'aac' => { 2 => 320_000, 6 => 512_000 },
-      'ac3' => { 2 => 640_000, 6 => 640_000 },
-      'eac3' => { 2 => 640_000, 6 => 1_536_000 },
-      'libmp3lame' => { 2 => 320_000 },
-      'libtwolame' => { 2 => 384_000 },
-      'libopus' => { 2 => 256_000, 6 => 510_000 },
-      'libvorbis' => { 2 => 256_000, 6 => 500_000 }
-    }.freeze
-
-    # Container compatibility — which encoders work in which containers
-    CONTAINER_CODECS = {
-      '.mp4' => %w[aac ac3 eac3 libmp3lame libopus],
-      '.m4v' => %w[aac ac3 eac3 libmp3lame libopus],
-      '.mov' => %w[aac ac3 eac3 libmp3lame pcm_s16le pcm_s24le],
-      '.mkv' => %w[aac ac3 eac3 libmp3lame libtwolame libopus libvorbis flac pcm_s16le pcm_s24le pcm_f32le],
-      '.webm' => %w[libopus libvorbis],
-      '.avi' => %w[aac ac3 libmp3lame pcm_s16le],
-      '.wmv' => %w[aac ac3 libmp3lame],
-      '.flv' => %w[aac libmp3lame]
-    }.freeze
-
     # Containers that keep custom tags only at container level, and only
     # with -movflags +use_metadata_tags.
     MP4_FAMILY = %w[.mp4 .m4v .mov].freeze
@@ -95,18 +41,6 @@ module Neutraliser
 
     # Seconds a subprocess gets to exit after SIGTERM before it is killed.
     STOP_GRACE_S = 2
-
-    # Preferred fallback codec per container when source codec can't be matched
-    CONTAINER_FALLBACKS = {
-      '.mkv' => 'flac',
-      '.mp4' => 'aac',
-      '.m4v' => 'aac',
-      '.mov' => 'aac',
-      '.webm' => 'libopus',
-      '.avi' => 'aac',
-      '.wmv' => 'aac',
-      '.flv' => 'aac'
-    }.freeze
 
     # input_args are inserted before -i (e.g. ["-headers", "X-Plex-Token: ...\r\n"]
     # for authenticating a remote stream). That keeps the credential out of the
@@ -269,28 +203,12 @@ module Neutraliser
       source.mp4_family? ? '.mp4' : ext
     end
 
-    # The encoder that would replace the track's own codec, or nil when it can
-    # be re-encoded to itself. Changing codec (DTS/TrueHD to FLAC or E-AC3)
-    # drops what the original was: a bitstream an AVR can decode, or lossless
-    # turned lossy.
-    def self.codec_change(source, output_path)
-      return nil unless source.audio?
-
-      track = source.primary_track
-      codec = track[:codec].to_s.downcase
-      container = output_container(source, output_path)
-      allowed = CONTAINER_CODECS.fetch(container, CONTAINER_CODECS['.mkv'])
-      direct = ENCODABLE_CODECS[codec]
-      return nil if direct && allowed.include?(direct)
-
-      resolve_encoder(codec, allowed, container, track[:channels].to_i.then { |n| n.zero? ? 2 : n })
-    end
-
     # What the primary track is re-encoded to, with the source's dialnorm carried across.
     def self.decide_codec(source, output_path)
       track = source.primary_track
-      container = output_container(source, output_path)
-      carry_dialnorm(select_output_codec(track, output_path, source.path, container: container), source.path, track)
+      choice = CodecChoice.decide(track, output_container(source, output_path),
+                                  sample: ->(t) { estimate_bitrate_from_packets(source.path, "a:#{t[:index]}") })
+      carry_dialnorm(choice, source.path, track)
     end
 
     def self.remux_plan(source, output_path, filter, codec_decision, stamp, keep_original:)
@@ -455,92 +373,8 @@ module Neutraliser
       raise FFmpegError, "Failed to parse loudnorm JSON: #{e.message}"
     end
 
-    def self.select_output_codec(track, output_path, input_path = nil, container: nil)
-      source_codec = track[:codec]&.downcase || 'unknown'
-      channels = track[:channels].to_i
-      channels = 2 if channels == 0
-      source_bitrate = track[:bit_rate].to_i
-      container ||= File.extname(output_path).downcase
-
-      allowed = CONTAINER_CODECS.fetch(container, CONTAINER_CODECS['.mkv'])
-
-      encoder = resolve_encoder(source_codec, allowed, container, channels)
-
-      if source_bitrate <= 0 && input_path
-        estimated = estimate_source_bitrate(input_path, track)
-        source_bitrate = estimated if estimated && estimated > 0
-      end
-
-      bitrate = resolve_bitrate(encoder, source_bitrate, channels)
-
-      {
-        encoder: encoder,
-        bitrate: bitrate,
-        source_codec: source_codec,
-        source_profile: track[:profile],
-        source_bitrate: source_bitrate,
-        lossless_output: lossless_encoder?(encoder)
-      }
-    end
-
-    def self.resolve_encoder(source_codec, allowed, container, channels)
-      # 1. Try direct match — same codec if encodable and allowed in container
-      direct = ENCODABLE_CODECS[source_codec]
-      return direct if direct && allowed.include?(direct)
-
-      # 2. Lossless source — prefer lossless output if container supports it
-      if LOSSLESS_CODECS.include?(source_codec)
-        return 'flac' if allowed.include?('flac')
-        return 'pcm_s24le' if allowed.include?('pcm_s24le')
-        return 'pcm_s16le' if allowed.include?('pcm_s16le')
-      end
-
-      # 3. Non-encodable surround — prefer lossless if container supports it, else AC3/EAC3
-      if channels >= 6
-        return 'flac' if allowed.include?('flac')
-        return 'eac3' if allowed.include?('eac3')
-        return 'ac3' if allowed.include?('ac3')
-      end
-
-      # 4. Container default fallback
-      fallback = CONTAINER_FALLBACKS.fetch(container, 'aac')
-      return fallback if allowed.include?(fallback)
-
-      # 5. Last resort — first allowed codec
-      allowed.first || 'aac'
-    end
-
-    def self.resolve_bitrate(encoder, source_bitrate, channels)
-      return nil if lossless_encoder?(encoder)
-
-      channel_key = channels >= 6 ? 6 : 2
-      floor = QUALITY_FLOORS.dig(encoder, channel_key) || QUALITY_FLOORS.dig(encoder, 2) || 128_000
-      cap = QUALITY_CAPS.dig(encoder, channel_key) || QUALITY_CAPS.dig(encoder, 2) || 640_000
-
-      if source_bitrate > 0
-        [[source_bitrate, floor].max, cap].min
-      else
-        floor
-      end
-    end
-
-    # Estimates a stream's real bitrate when ffprobe reports bit_rate as N/A
-    # (common for MKV). Checks the container's BPS tag (written by mkvmerge,
-    # already in the track from the one probe)
-    # first, then falls back to sampling packet sizes over a short window.
-    # Returns nil when neither source yields a usable number, so callers fall
-    # through to the existing quality-floor logic.
-    def self.estimate_source_bitrate(input_path, track)
-      bitrate_from_tag(track) || estimate_bitrate_from_packets(input_path, "a:#{track[:index]}")
-    end
-
-    def self.bitrate_from_tag(track)
-      value = track.dig(:tags, 'BPS').to_s.strip
-      return nil if value.empty? || value == 'N/A'
-
-      value.to_i
-    end
-
+    # Samples packet sizes over a short window for a stream ffprobe gave no bit_rate (common for MKV).
+    # nil when it yields no usable number, so the codec choice falls through to the quality floor.
     def self.estimate_bitrate_from_packets(input_path, stream_spec, sample_seconds: 10)
       cmd = [
         'ffprobe', '-v', 'error', '-select_streams', stream_spec,
@@ -559,10 +393,6 @@ module Neutraliser
       ((total_bytes * 8) / sample_seconds.to_f).round
     rescue StandardError
       nil
-    end
-
-    def self.lossless_encoder?(encoder)
-      encoder.start_with?('flac', 'pcm_')
     end
 
     # The Dolby encoders write dialnorm -31 unless told otherwise, which would strip a source's
@@ -699,7 +529,7 @@ module Neutraliser
 
     # The real public surface is measure_loudness, apply_normalization,
     # apply_normalization_single_pass, quick_loudness_sample,
-    # probe_audio_profile_mid_file, probe_file, version and codec_change —
+    # probe_audio_profile_mid_file, probe_file, version, output_container and decide_codec —
     # everything else is an implementation detail and made genuinely private here (see the NOTE
     # above `execute_with_timeout` on why the old `private` keyword didn't
     # do this).
@@ -709,23 +539,15 @@ module Neutraliser
                          :timeout_variable,
                          :pin_sample_rate,
                          :parse_loudnorm_json,
-                         :select_output_codec,
-                         :resolve_encoder,
-                         :resolve_bitrate,
-                         :estimate_source_bitrate,
-                         :bitrate_from_tag,
                          :estimate_bitrate_from_packets,
-                         :lossless_encoder?,
                          :loudnorm_lra,
                          :build_loudnorm_filter,
                          :build_audio_filter,
                          :parse_mode,
                          :predict_mode,
                          :build_stamp,
-                         :output_container,
                          :mp4_mdta_safe?,
                          :restamp,
-                         :decide_codec,
                          :remux_plan,
                          :carry_dialnorm,
                          :source_dialnorm,

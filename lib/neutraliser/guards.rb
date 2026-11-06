@@ -145,11 +145,12 @@ module Neutraliser
     # the track. Skipped unless the user accepts it.
     def codec_change(original_path, working)
       return PROCEED if @allow_codec_change
+      return PROCEED unless working.audio?
 
-      encoder = FFmpegWrapper.codec_change(working, original_path)
-      return PROCEED unless encoder
+      choice = CodecChoice.decide(working.primary_track, FFmpegWrapper.output_container(working, original_path))
+      return PROCEED unless choice[:changes_codec]
 
-      message = "#{working.primary_track[:codec]} would be re-encoded as #{encoder}"
+      message = "#{working.primary_track[:codec]} would be re-encoded as #{choice[:encoder]}"
       left_alone(:codec_change, message,
                  "  Codec change (#{message}), skipping (--allow-codec-change to process anyway)")
     end

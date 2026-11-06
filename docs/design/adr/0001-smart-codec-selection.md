@@ -54,7 +54,7 @@ Quality floors and caps are defined per encoder and channel count to prevent enc
 # Links
 
 - Task spec: `docs/tasks/0004-preserve-audio-quality/task.md`
-- Implementation: `lib/neutraliser/ffmpeg_wrapper.rb` (constants and `select_output_codec`)
+- Implementation: `lib/neutraliser/codec_choice.rb` (`CodecChoice.decide`) and `lib/neutraliser/codec_tables.rb` (the tables); the codec-change guard and the encode both read `CodecChoice.decide`
 
 ### Change Log
 - 2026-03-07 (agent:implement-plan): created
