@@ -122,23 +122,24 @@ module Neutraliser
     DURATION_TOLERANCE_S = 1.0
 
     # nil when the output is a faithful rewrite of the source (same duration
-    # within a second, every stream and chapter still there, primary track's
-    # channels intact), else what is wrong. ffmpeg can exit 0 on a short or
-    # stream-dropping write, and quietly downmixes when the encoder can't hold
-    # the layout (7.1 into E-AC3 comes out 5.x). A probe that merely parses
+    # within a second, the audio streams the layout says, every other stream and
+    # chapter still there, the normalised track's channels intact), else what is
+    # wrong. ffmpeg can exit 0 on a short or stream-dropping write, and quietly
+    # downmixes when the encoder can't hold the layout (7.1 into E-AC3 comes out 5.x). A probe that merely parses
     # (verify_file_integrity) would pass all that, and then the original goes.
-    # Both arguments are Sources; the output's is its own probe of what was written.
-    def self.output_mismatch(source, output, expected_audio_streams:)
+    # source and output are Sources (the output's is its own probe of what was written);
+    # layout is the AudioLayout the output was planned with.
+    def self.output_mismatch(source, output, layout:)
       if source.duration && output.duration && (source.duration - output.duration).abs >= DURATION_TOLERANCE_S
         return "output is #{output.duration.round(1)}s long, source is #{source.duration.round(1)}s"
       end
 
       output_tracks = output.audio_tracks
-      if output_tracks.length != expected_audio_streams
-        return "output has #{output_tracks.length} audio stream(s), expected #{expected_audio_streams}"
+      if output_tracks.length != layout.size
+        return "output has #{output_tracks.length} audio stream(s), expected #{layout.size}"
       end
 
-      lost_streams(source, output) || channel_change(source, output)
+      lost_streams(source, output) || channel_change(source, output, layout)
     end
 
     # Audio may legitimately grow (--keep-original-audio).
@@ -152,13 +153,13 @@ module Neutraliser
     end
     private_class_method :lost_streams
 
-    def self.channel_change(source, output)
-      return nil unless source.audio?
+    def self.channel_change(source, output, layout)
+      return nil unless layout.normalised
 
       primary = source.primary_track
       return nil if primary[:channels].to_i.zero?
 
-      channels = output.audio_tracks[primary[:index]]&.fetch(:channels)
+      channels = output.audio_tracks[layout.normalised.index]&.fetch(:channels)
       return nil if channels.nil? || channels == primary[:channels]
 
       "normalised track has #{channels} channels, source has #{primary[:channels]}"

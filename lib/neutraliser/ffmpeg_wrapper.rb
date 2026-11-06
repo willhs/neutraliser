@@ -286,27 +286,23 @@ module Neutraliser
       resolve_encoder(codec, allowed, container, track[:channels].to_i.then { |n| n.zero? ? 2 : n })
     end
 
-    # Audio streams the output should have: every source stream, plus the kept
-    # original unless an earlier run already left one.
-    def self.output_audio_count(audio_tracks, keep_original:)
-      keep_original &&= audio_tracks.none? { |track| original_copy?(track) }
-      audio_tracks.length + (keep_original ? 1 : 0)
+    # What the primary track is re-encoded to, with the source's dialnorm carried across.
+    def self.decide_codec(source, output_path)
+      track = source.primary_track
+      container = output_container(source, output_path)
+      carry_dialnorm(select_output_codec(track, output_path, source.path, container: container), source.path, track)
     end
 
-    # `-f` for an output whose extension doesn't say its container.
-    def self.container_args(container, output_path)
-      container == File.extname(output_path).downcase ? [] : ['-f', container.delete_prefix('.')]
+    def self.remux_plan(source, output_path, filter, codec_decision, stamp, keep_original:)
+      container = output_container(source, output_path)
+      RemuxPlan.new(source, output_path, container: container, mdta: mp4_mdta_safe?(source, container), filter: filter,
+                                         codec_decision: codec_decision, stamp: stamp, keep_original: keep_original)
     end
 
     def self.apply_normalization(source, output_path, measured_data, profile, allow_dynamic: false,
                                  keep_original: false, limit_db: 0.0, compression: nil)
-      input_path = source.path
       primary_track = source.primary_track
-
-      container = output_container(source, output_path)
-      codec_decision = carry_dialnorm(select_output_codec(primary_track, output_path, input_path, container: container),
-                                      input_path, primary_track)
-      codec_args = build_codec_args(codec_decision, primary_track[:index])
+      codec_decision = decide_codec(source, output_path)
 
       # A CompressionPlan (--lra-target) wraps the GainPlan for the compressed signal.
       plan = compression || (GainPlan.for(measured_data, profile, limit_db: limit_db) unless allow_dynamic)
@@ -324,21 +320,15 @@ module Neutraliser
                end
         build_stamp(profile, mode, codec_decision, gain: gain, measured: measured_data, compression: compression)
       end
-      container_opts = container_args(container, output_path)
-      mdta = mp4_mdta_safe?(source, container)
+      remux = remux_plan(source, output_path, audio_filter, codec_decision, stamp_for.call(predicted_mode),
+                         keep_original: keep_original)
 
-      cmd = build_complete_ffmpeg_command(
-        source, output_path, audio_filter, codec_args,
-        tags: stamp_args(stamp_for.call(predicted_mode), container, primary_track[:index], mdta: mdta),
-        keep_original: keep_original, container_opts: container_opts
-      )
-
-      ffmpeg_output = execute_with_progress(cmd)
+      ffmpeg_output = execute_with_progress(remux.argv)
       mode = forced_mode || parse_mode(ffmpeg_output) || Mode::UNKNOWN
       # Rare: loudnorm disagreed with the prediction. A stream-copy remux
       # corrects the record rather than leave a tag that lies.
       if [Mode::LINEAR, Mode::DYNAMIC].include?(mode) && mode != predicted_mode
-        restamp(output_path, stamp_for.call(mode), container, primary_track[:index], mdta: mdta)
+        restamp(output_path, stamp_for.call(mode), remux.container, remux.layout.normalised.index, mdta: remux.mdta)
       end
 
       codec_decision = codec_decision.merge(mode: mode)
@@ -348,13 +338,8 @@ module Neutraliser
     end
 
     def self.apply_normalization_single_pass(source, output_path, profile, keep_original: false)
-      input_path = source.path
       primary_track = source.primary_track
-
-      container = output_container(source, output_path)
-      codec_decision = carry_dialnorm(select_output_codec(primary_track, output_path, input_path, container: container),
-                                      input_path, primary_track)
-      codec_args = build_codec_args(codec_decision, primary_track[:index])
+      codec_decision = decide_codec(source, output_path)
 
       loudnorm_filter = "loudnorm=I=#{profile[:lufs]}:TP=#{profile[:tp]}:LRA=#{loudnorm_lra(profile[:lra])}:print_format=summary"
       loudnorm_filter += ",#{pin_sample_rate(primary_track[:sample_rate])}" if primary_track[:sample_rate]
@@ -363,13 +348,9 @@ module Neutraliser
       # behaves as dynamic (per-frame) normalization regardless of the
       # filter's default linear setting.
       stamp = build_stamp(profile, Mode::DYNAMIC, codec_decision, gain: nil, measured: nil)
-      cmd = build_complete_ffmpeg_command(
-        source, output_path, loudnorm_filter, codec_args,
-        tags: stamp_args(stamp, container, primary_track[:index], mdta: mp4_mdta_safe?(source, container)),
-        keep_original: keep_original, container_opts: container_args(container, output_path)
-      )
+      remux = remux_plan(source, output_path, loudnorm_filter, codec_decision, stamp, keep_original: keep_original)
 
-      ffmpeg_output = execute_with_progress(cmd)
+      ffmpeg_output = execute_with_progress(remux.argv)
       codec_decision.merge(mode: parse_mode(ffmpeg_output) || Mode::DYNAMIC)
     end
 
@@ -584,13 +565,6 @@ module Neutraliser
       encoder.start_with?('flac', 'pcm_')
     end
 
-    def self.build_codec_args(codec_decision, output_index = 0)
-      args = ["-c:a:#{output_index}", codec_decision[:encoder]]
-      args += ["-b:a:#{output_index}", "#{codec_decision[:bitrate] / 1000}k"] if codec_decision[:bitrate]
-      args += ["-dialnorm:a:#{output_index}", codec_decision[:dialnorm].to_s] if codec_decision[:dialnorm]
-      args
-    end
-
     # The Dolby encoders write dialnorm -31 unless told otherwise, which would strip a source's
     # attenuation (see DolbyStream). Adds the source's own value to the decision when both ends are
     # Dolby and it can be read; a track it can't be read from gets the encoder's default, as before.
@@ -675,18 +649,6 @@ module Neutraliser
       )
     end
 
-    # The stamp goes on the normalised audio stream and on the container.
-    # MP4/MOV only keep arbitrary keys at container level, and only with
-    # use_metadata_tags; their stream-level copy is silently dropped. mdta: false
-    # leaves that flag off, and the muxer then drops the stamp altogether.
-    def self.stamp_args(stamp, container, output_index = 0, mdta: true)
-      args = stamp.to_tags.flat_map do |key, value|
-        ["-metadata:s:a:#{output_index}", "#{key}=#{value}", '-metadata', "#{key}=#{value}"]
-      end
-      args += ['-movflags', '+use_metadata_tags'] if mdta && MP4_FAMILY.include?(container)
-      args
-    end
-
     # use_metadata_tags is the only way to get a custom tag into an MP4, but it
     # writes every tag as an mdta key instead of iTunes' ilst atoms, and cover art
     # lives only in ilst. So on a file with a cover or descriptive tags, the
@@ -709,8 +671,8 @@ module Neutraliser
       temp = File.join(File.dirname(path), ".restamp-#{File.basename(path)}")
       cmd = [
         'ffmpeg', '-hide_banner', '-v', 'error', '-y', '-i', path,
-        '-map', '0', '-c', 'copy', '-map_metadata', '0', *stamp_args(stamp, container, output_index, mdta: mdta),
-        *container_args(container, temp), temp
+        '-map', '0', '-c', 'copy', '-map_metadata', '0', *RemuxPlan.stamp_args(stamp, container, output_index, mdta: mdta),
+        *RemuxPlan.container_args(container, temp), temp
       ]
       _, stderr, status = execute_with_timeout(cmd, NORMALIZATION_TIMEOUT, 'Restamp')
       raise FFmpegError.from_run('Rewriting the neutraliser tags', stderr, status) unless status.success?
@@ -725,111 +687,6 @@ module Neutraliser
 
       match = ffmpeg_output.match(/Normalization Type:\s*(Linear|Dynamic)/i)
       match && Mode.parse(match[1])
-    end
-
-    def self.build_complete_ffmpeg_command(source, output_path, loudnorm_filter, primary_codec, tags: [],
-                                           keep_original: false, container_opts: [])
-      input_path = source.path
-      audio_tracks = source.audio_tracks
-      stream_counts = source.stream_counts
-      cmd = [
-        # The decode hears the stream as the viewer who turned DRC off does, as the measurement did.
-        'ffmpeg', '-hide_banner', '-y', *DolbyStream::DRC_OFF, '-i', input_path,
-        # Video stream - always copy
-        '-map', '0:v?', '-c:v', 'copy'
-      ]
-
-      # Output audio order matches input order: the primary track (the
-      # default-disposition one, else the first) is replaced in place by its
-      # normalised version; the rest are stream-copied around it.
-      primary = source.primary_track
-      cmd += ['-filter_complex', "[0:a:#{primary[:index]}]#{loudnorm_filter}[norm]"]
-
-      # With keep_original, a stream-copy of the untouched primary track
-      # follows the normalised one, so every later track's output index
-      # shifts by one. A file that already carries a kept original (from an
-      # earlier run) is not given a second copy.
-      keep_original &&= audio_tracks.none? { |track| original_copy?(track) }
-      source_for_output = []
-      normalised_output = kept_output = nil
-      audio_tracks.each do |track|
-        output_index = source_for_output.length + (kept_output ? 1 : 0)
-        if track.equal?(primary)
-          normalised_output = output_index
-          cmd += ['-map', '[norm]'] + primary_codec
-          source_for_output << [output_index, track]
-          if keep_original
-            kept_output = output_index + 1
-            cmd += ['-map', "0:a:#{track[:index]}", "-c:a:#{kept_output}", 'copy']
-          end
-        else
-          cmd += ['-map', "0:a:#{track[:index]}", "-c:a:#{output_index}", 'copy']
-          source_for_output << [output_index, track]
-        end
-      end
-
-      # Metadata and subtitles preservation. The primary track goes through
-      # filter_complex into a fresh [norm] stream, which loses its source
-      # stream association — -map_metadata 0 (global/container-level only)
-      # doesn't carry per-stream tags (language, title) onto it, so it needs
-      # an explicit per-stream mapping back to its source audio index. Once
-      # any stream-scoped -map_metadata is given, ffmpeg drops its default
-      # automatic per-stream metadata copy entirely for the whole command —
-      # so every audio, video, and subtitle output stream (not just the
-      # primary audio one) needs its own explicit mapping, or streams that
-      # are otherwise a plain stream-copy would go from implicitly-correct
-      # to silently stripped of language/title tags.
-      cmd += ['-map_chapters', '0', '-map_metadata', '0']
-      source_for_output.each do |output_index, track|
-        cmd += ["-map_metadata:s:a:#{output_index}", "0:s:a:#{track[:index]}"]
-      end
-      # A filtered stream carries no disposition of its own, so every flag the
-      # source track had (hearing_impaired, forced ...) has to be given back.
-      flags = Array(primary[:dispositions])
-      flags = ['default', *flags] if keep_original || primary[:default]
-      cmd += ["-disposition:a:#{normalised_output}", flags.join('+')] if flags.any?
-      if keep_original
-        cmd += kept_original_args(kept_output, primary, output_path)
-      end
-      stream_counts[:video].times do |i|
-        cmd += ["-map_metadata:s:v:#{i}", "0:s:v:#{i}"]
-      end
-      stream_counts[:subtitle].times do |i|
-        cmd += ["-map_metadata:s:s:#{i}", "0:s:s:#{i}"]
-      end
-      stream_counts[:attachment].times do |i|
-        cmd += ["-map_metadata:s:t:#{i}", "0:s:t:#{i}"]
-      end
-      cmd += [
-        '-map', '0:s?', '-c:s', 'copy',
-        # Attachments are mostly the fonts styled subtitles need to render.
-        '-map', '0:t?', '-c:t', 'copy',
-        *tags,
-        *container_opts,
-        output_path
-      ]
-
-      cmd
-    end
-
-    def self.kept_original_args(output_index, primary, output_path)
-      title = original_title(primary)
-      args = ["-map_metadata:s:a:#{output_index}", "0:s:a:#{primary[:index]}",
-              "-metadata:s:a:#{output_index}", "title=#{title}", "-disposition:a:#{output_index}", '0']
-      # MP4 has no stream title; players show its handler name instead.
-      mp4 = MP4_FAMILY.include?(File.extname(output_path).downcase)
-      mp4 ? args + ["-metadata:s:a:#{output_index}", "handler_name=#{title}"] : args
-    end
-
-    ORIGINAL_TITLE_SUFFIX = '(original, not normalised)'.freeze
-
-    def self.original_title(track)
-      [track[:title], ORIGINAL_TITLE_SUFFIX].compact.reject(&:empty?).join(' ')
-    end
-
-    # A track a previous --keep-original-audio run preserved.
-    def self.original_copy?(track)
-      [track[:title], track[:handler_name]].any? { |name| name.to_s.end_with?(ORIGINAL_TITLE_SUFFIX) }
     end
 
     def self.execute_with_progress(cmd)
@@ -847,7 +704,6 @@ module Neutraliser
     # above `execute_with_timeout` on why the old `private` keyword didn't
     # do this).
     private_class_method :execute_with_timeout,
-                         :kept_original_args,
                          :stop_process,
                          :valid_utf8,
                          :timeout_variable,
@@ -860,21 +716,17 @@ module Neutraliser
                          :bitrate_from_tag,
                          :estimate_bitrate_from_packets,
                          :lossless_encoder?,
-                         :build_codec_args,
                          :loudnorm_lra,
                          :build_loudnorm_filter,
                          :build_audio_filter,
                          :parse_mode,
                          :predict_mode,
                          :build_stamp,
-                         :container_args,
                          :output_container,
-                         :stamp_args,
                          :mp4_mdta_safe?,
                          :restamp,
-                         :build_complete_ffmpeg_command,
-                         :original_title,
-                         :original_copy?,
+                         :decide_codec,
+                         :remux_plan,
                          :carry_dialnorm,
                          :source_dialnorm,
                          :execute_with_progress

@@ -136,8 +136,7 @@ RSpec.describe Neutraliser::FFmpegWrapper do
         :probe_audio_profile_mid_file,
         :version,
         :wide_filter_options?,
-        :codec_change,
-        :output_audio_count
+        :codec_change
       )
     end
   end
@@ -542,16 +541,6 @@ RSpec.describe Neutraliser::FFmpegWrapper do
 
     it 'does not judge a track whose format could not be read' do
       expect(described_class.codec_change(ProbeFixture.source('in.mkv', audio: []), 'a.mkv')).to be_nil
-    end
-  end
-
-  describe '.output_audio_count' do
-    it 'adds the kept original unless one is already there' do
-      tracks = [{ title: 'English' }, { title: 'French' }]
-      expect(described_class.output_audio_count(tracks, keep_original: false)).to eq(2)
-      expect(described_class.output_audio_count(tracks, keep_original: true)).to eq(3)
-      kept = tracks + [{ title: 'English (original, not normalised)' }]
-      expect(described_class.output_audio_count(kept, keep_original: true)).to eq(3)
     end
   end
 

@@ -591,7 +591,7 @@ module Neutraliser
       end
 
       mismatch = FileManager.output_mismatch(
-        working, output, expected_audio_streams: FFmpegWrapper.output_audio_count(audio_tracks, keep_original: @keep_original_audio)
+        working, output, layout: AudioLayout.for(working, keep_original: @keep_original_audio)
       )
       raise OutputVerificationError, "Output does not match the source: #{mismatch}" if mismatch
 

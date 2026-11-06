@@ -92,6 +92,7 @@ Ranked. Dependency category per `improve-architecture`'s DEEPENING guide.
   expected shape; the real-ffmpeg round trip stays as the integration check.
 - **Risk**: the argv order matters to ffmpeg (stamp tags come after the explicit mappings). The task says
   to keep the round trip unchanged and green.
+- **Done** (task `0860afcd`): `AudioLayout` (`lib/neutraliser/audio_layout.rb`: output order, roles, dispositions, the keep-original rule) and `RemuxPlan` (`lib/neutraliser/remux_plan.rb`: the argv). `stream_counts` had already lost its default in the Source change (`33366f5`); `build_complete_ffmpeg_command`, `output_audio_count` and the kept-original helpers are gone from `FFmpegWrapper`, `apply_normalization` / `apply_normalization_single_pass` share `decide_codec` + `remux_plan`, and `FileManager.output_mismatch` takes `layout:`. Argv diffed byte-for-byte before and after over 288 scenarios (track layouts x container x keep-original x two-pass/dynamic/restamp/single-pass). Not done: the check does not yet compare dispositions in the written file, and `Processor` builds its `AudioLayout` from the same (source, keep_original) as `apply_*` rather than receiving the plan back.
 
 ### 2. Source: ask ffprobe once per file. **Strong.** Task `fb62003d` (M)
 

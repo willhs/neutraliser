@@ -563,9 +563,10 @@ RSpec.describe 'pre-release review', :real_ffmpeg do
 
     describe 'output verification' do
       # Real files, each read by the real ffprobe through its own Source.
-      def mismatch(source, output, expected: 1)
-        Neutraliser::FileManager.output_mismatch(Neutraliser::Source.new(source), Neutraliser::Source.new(output),
-                                                 expected_audio_streams: expected)
+      def mismatch(source, output)
+        src = Neutraliser::Source.new(source)
+        Neutraliser::FileManager.output_mismatch(src, Neutraliser::Source.new(output),
+                                                 layout: Neutraliser::AudioLayout.for(src, keep_original: false))
       end
 
       def audio(path, layout)
@@ -579,7 +580,7 @@ RSpec.describe 'pre-release review', :real_ffmpeg do
         film = place(ReviewFixtures.rich, 'a.mkv')
         copy = place(ReviewFixtures.rich, 'b.mkv')
 
-        expect(mismatch(film, copy, expected: 2)).to be_nil
+        expect(mismatch(film, copy)).to be_nil
       end
 
       it 'catches a silent downmix of the primary track' do
@@ -594,7 +595,7 @@ RSpec.describe 'pre-release review', :real_ffmpeg do
         output = File.join(dir, 'no_font.mkv')
         ReviewFixtures.ffmpeg('-i', source, '-map', '0:v', '-map', '0:a', '-map', '0:s', '-c', 'copy', output)
 
-        expect(mismatch(source, output, expected: 2)).to match(/attachment/)
+        expect(mismatch(source, output)).to match(/attachment/)
       end
 
       it 'catches a lost subtitle' do
@@ -602,7 +603,7 @@ RSpec.describe 'pre-release review', :real_ffmpeg do
         output = File.join(dir, 'no_subs.mkv')
         ReviewFixtures.ffmpeg('-i', source, '-map', '0:v', '-map', '0:a', '-map', '0:t', '-c', 'copy', output)
 
-        expect(mismatch(source, output, expected: 2)).to match(/subtitle/)
+        expect(mismatch(source, output)).to match(/subtitle/)
       end
 
       it 'catches lost chapters' do
@@ -610,7 +611,7 @@ RSpec.describe 'pre-release review', :real_ffmpeg do
         output = File.join(dir, 'no_chapters.mkv')
         ReviewFixtures.ffmpeg('-i', source, '-map', '0', '-map_chapters', '-1', '-c', 'copy', output)
 
-        expect(mismatch(source, output, expected: 2)).to match(/chapter/)
+        expect(mismatch(source, output)).to match(/chapter/)
       end
 
       it 'catches a lost audio track' do
@@ -618,7 +619,7 @@ RSpec.describe 'pre-release review', :real_ffmpeg do
         output = File.join(dir, 'one_track.mkv')
         ReviewFixtures.ffmpeg('-i', source, '-map', '0:v', '-map', '0:a:0', '-map', '0:s', '-map', '0:t', '-c', 'copy', output)
 
-        expect(mismatch(source, output, expected: 1)).to match(/audio/)
+        expect(mismatch(source, output)).to match(/audio/)
       end
     end
 

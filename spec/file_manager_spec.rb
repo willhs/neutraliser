@@ -213,7 +213,8 @@ RSpec.describe Neutraliser::FileManager do
       output = Neutraliser::Source.new(video)
 
       described_class.verify_file_integrity(video, output)
-      described_class.output_mismatch(ProbeFixture.source('in.mkv'), output, expected_audio_streams: 1)
+      source = ProbeFixture.source('in.mkv')
+      described_class.output_mismatch(source, output, layout: Neutraliser::AudioLayout.for(source, keep_original: false))
 
       expect(Neutraliser::FFmpegWrapper).to have_received(:probe_file).once
     end
@@ -229,43 +230,45 @@ RSpec.describe Neutraliser::FileManager do
 
     def written(**fixture) = ProbeFixture.source('out.mkv', audio: two_tracks, duration: 60.0, **fixture)
 
+    def layout_of(source, keep_original: false) = Neutraliser::AudioLayout.for(source, keep_original: keep_original)
+
     it 'is nil for a faithful rewrite' do
-      expect(described_class.output_mismatch(source, written, expected_audio_streams: 2)).to be_nil
+      expect(described_class.output_mismatch(source, written, layout: layout_of(source))).to be_nil
     end
 
     it 'flags a truncated output' do
-      expect(described_class.output_mismatch(source, written(duration: 3.0), expected_audio_streams: 2))
+      expect(described_class.output_mismatch(source, written(duration: 3.0), layout: layout_of(source)))
         .to eq('output is 3.0s long, source is 60.0s')
     end
 
     it 'flags a dropped audio stream' do
-      expect(described_class.output_mismatch(source, written, expected_audio_streams: 3))
+      expect(described_class.output_mismatch(source, written, layout: layout_of(source, keep_original: true)))
         .to eq('output has 2 audio stream(s), expected 3')
     end
 
     it 'does not count an output that shows no audio at all' do
-      expect(described_class.output_mismatch(source, written(audio: []), expected_audio_streams: 1))
-        .to eq('output has 0 audio stream(s), expected 1')
+      expect(described_class.output_mismatch(source, written(audio: []), layout: layout_of(source)))
+        .to eq('output has 0 audio stream(s), expected 2')
     end
 
     it 'flags a lost video stream, subtitle, attachment or chapter' do
       with_extras = ProbeFixture.source('in.mkv', audio: two_tracks, subtitles: ['subrip'], attachments: 1, chapters: 3, duration: 60.0)
 
-      expect(described_class.output_mismatch(with_extras, written(subtitles: ['subrip'], attachments: 1, chapters: 2), expected_audio_streams: 2))
+      expect(described_class.output_mismatch(with_extras, written(subtitles: ['subrip'], attachments: 1, chapters: 2), layout: layout_of(with_extras)))
         .to eq('output has 2 chapter(s), source has 3')
-      expect(described_class.output_mismatch(with_extras, written(subtitles: [], attachments: 1, chapters: 3), expected_audio_streams: 2))
+      expect(described_class.output_mismatch(with_extras, written(subtitles: [], attachments: 1, chapters: 3), layout: layout_of(with_extras)))
         .to eq('output has 0 subtitle(s), source has 1')
     end
 
     it 'lets audio grow (--keep-original-audio)' do
-      expect(described_class.output_mismatch(source, written(audio: two_tracks + [ProbeFixture.audio]), expected_audio_streams: 3)).to be_nil
+      expect(described_class.output_mismatch(source, written(audio: two_tracks + [ProbeFixture.audio]), layout: layout_of(source, keep_original: true))).to be_nil
     end
 
     it 'flags a silent downmix of the primary track' do
       surround = ProbeFixture.source('in.mkv', audio: [ProbeFixture.audio(codec: 'eac3', channels: 6, default: true)])
       stereo = ProbeFixture.source('out.mkv', audio: [ProbeFixture.audio(codec: 'eac3', channels: 2, default: true)])
 
-      expect(described_class.output_mismatch(surround, stereo, expected_audio_streams: 1)).to match(/2 channels.*source has 6/)
+      expect(described_class.output_mismatch(surround, stereo, layout: layout_of(surround))).to match(/2 channels.*source has 6/)
     end
 
     it 'follows the primary track when it is not the first stream' do
@@ -274,7 +277,7 @@ RSpec.describe Neutraliser::FileManager do
       output = ProbeFixture.source('out.mkv', audio: [ProbeFixture.audio(language: 'spa'),
                                                       ProbeFixture.audio(channels: 2, language: 'eng', default: true)])
 
-      expect(described_class.output_mismatch(source, output, expected_audio_streams: 2)).to match(/2 channels.*source has 6/)
+      expect(described_class.output_mismatch(source, output, layout: layout_of(source))).to match(/2 channels.*source has 6/)
     end
   end
 

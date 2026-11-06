@@ -967,7 +967,7 @@ RSpec.describe Neutraliser::Processor do
         render(processor, nil)
 
         expect(Neutraliser::FileManager).to have_received(:output_mismatch)
-          .with(working, an_instance_of(Neutraliser::Source), hash_including(expected_audio_streams: 2))
+          .with(working, an_instance_of(Neutraliser::Source), hash_including(layout: an_object_having_attributes(size: 2)))
       end
     end
   end
