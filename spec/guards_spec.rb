@@ -25,7 +25,7 @@ RSpec.describe Neutraliser::Guards do
       expect(Dir.children(temp_dir)).to eq(['film.mkv'])
     end
 
-    it 'fails a file in a folder it cannot write to, saying which and why' do
+    it 'fails a file in a folder it cannot write to, saying which and why', :needs_permissions do
       FileUtils.chmod(0o555, temp_dir)
 
       verdict = guards.writable(video)
@@ -43,7 +43,7 @@ RSpec.describe Neutraliser::Guards do
       expect(described_class.new(**guards_options(dry_run: true)).writable(video)).to be_proceed
     end
 
-    it 'checks beside the real file when --replace goes through a symlink' do
+    it 'checks beside the real file when --replace goes through a symlink', :needs_permissions do
       real_dir = File.join(temp_dir, 'real')
       link_dir = File.join(temp_dir, 'links')
       FileUtils.mkdir_p([real_dir, link_dir])
@@ -204,7 +204,7 @@ RSpec.describe Neutraliser::Guards do
   end
 
   describe 'the sequences' do
-    it 'before staging: the first guard to stop the file decides, and later ones are not asked' do
+    it 'before staging: the first guard to stop the file decides, and later ones are not asked', :needs_permissions do
       FileUtils.chmod(0o555, temp_dir)
 
       verdict = guards.before_staging(video, source(audio: []))

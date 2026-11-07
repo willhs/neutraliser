@@ -316,7 +316,7 @@ RSpec.describe Neutraliser::Processor do
 
     after { FileUtils.chmod(0o755, show_dir) }
 
-    it 'fails every file in a folder it cannot write to as :not_writable, before any analysis' do
+    it 'fails every file in a folder it cannot write to as :not_writable, before any analysis', :needs_permissions do
       FileUtils.chmod(0o555, show_dir)
       processor = described_class.new(replace: true)
       expect(processor).not_to receive(:analyze_loudness_for_path)

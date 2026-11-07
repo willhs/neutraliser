@@ -31,4 +31,10 @@ RSpec.configure do |config|
   config.before do |example|
     allow(Neutraliser::FFmpegWrapper).to receive(:version).and_return([7, 1]) unless example.metadata[:real_ffmpeg]
   end
+
+  # Examples that make a folder unwritable with chmod (:needs_permissions) can't run as root,
+  # which writes through any mode bits; CI containers often run as root.
+  config.before(:example, :needs_permissions) do
+    skip 'running as root, which ignores folder permissions' if Process.uid.zero?
+  end
 end
