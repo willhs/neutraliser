@@ -7,7 +7,7 @@ updated: 2026-11-08
 review_cycle: 90d
 agent_write: false
 links: ["docs/research/prod-parity-audit-2026-10.md"]
-summary: "Why four The Office (US) S03 episodes play 3-4 LU quieter than the rest: unprocessed DTS-HD releases that constant gain cannot lift; measured on the real library, with the fix and its expected result"
+summary: "Why four The Office (US) S03 episodes play 3-4 LU quieter than the rest: unprocessed DTS-HD releases that constant gain cannot lift; measured on the real library, with the fix tested on NAS copies (all four land within 0.2 LU of -20) and the command to run"
 tags: [research, production, loudness, dts]
 ---
 
@@ -28,7 +28,7 @@ Will heard "noticeably different volume between some episodes in season 3". This
 Cause (confidence: **verified**, measurements below; the reason the old run skipped them is **inferred** from the run manifest and today's guards):
 
 1. DTS can't be re-encoded to itself, so the codec-change guard leaves it alone (`Guards#codec_change`, `lib/neutraliser/guards.rb`). The August run reached them and did nothing (E06 `skipped`, E17 `failed`: file renamed under it).
-2. E01 and E04 were levelled in that run as the Netflix WEB-DL files, then Sonarr swapped them for the DTS-HD releases a few hours later (the new files are dated after the run's processing time). E17 was swapped before the run, which is why it `failed` with "No such file". Nothing has run on the TV library since: the TV sweep is paused until the driver runs this CLI.
+2. E01 and E04 were levelled in that run as the Netflix WEB-DL files, then Sonarr swapped them for the DTS-HD releases a few hours later (the new files are dated after the run's processing time). E17 was swapped before the run, which is why it `failed` with "No such file". Nothing has run on the TV library since: the `/volume1` TV sweep is gated off (`SWEEP_TV`, see "Fix, tested on copies"), and the driver itself has been stopped since 2026-11-01.
 3. Even with `--allow-codec-change`, plain constant gain still skips all four, because these files are quiet **and** peaky (see "Why the obvious fix does nothing").
 
 It is **not** a code bug, stale dialnorm or DRC, a stereo/5.1 mix, or a dynamic-vs-linear mix. Each suspect was checked (below).
@@ -46,7 +46,7 @@ Evidence (outside git): measurement script, raw JSON lines (`measure.jsonl`), ff
 
 ## State on the NAS
 
-- **No file carries a `NEUTRALISER_*` stamp.** 0 of 58 (the format tag set has no `NEUTRALISER_*` key; the stream tags are only mkvmerge/Lavc defaults). So Mode, Recipe and LeftRecord reasons do not exist for this library: production does not run this CLI yet (see the check-prod skill), and the August run predates stamps.
+- **No file carries a `NEUTRALISER_*` stamp.** 0 of 58 (the format tag set has no `NEUTRALISER_*` key; the stream tags are only mkvmerge/Lavc defaults). So Mode, Recipe and LeftRecord reasons do not exist for this library: the August run predates stamps and the TV sweep has not reached this show since the driver moved to this CLI. (An earlier version of this note said production does not run the CLI; it does, as a docker image, since 2026-10-28.)
 - State comes from the August run instead. Its manifest says every processed S03 episode was `done` with `normalization_type: Dynamic` (two-pass loudnorm, may compress), i.e. the recipe is effectively **unversioned**. The sidecar `.neutraliser` and a `*.loudnorm_livingroom.json` cache sit beside each processed file.
 - Dolby tracks: dialnorm is **-31 in every one** (S02, S03, S04). Unversioned encodes wrote -31 (the thing recipe 2 fixed for new runs), but since it is -31 everywhere a decoder that honours dialnorm applies 0 dB to all of them, so it cannot create a spread between these files. The DRC decode matches the DRC-off decode to 0.1 LU on every Dolby file (`drc1` = `drc0` in the data), so no DRC is baked in either.
 - The TV sweep is paused (check-prod; `driver.status` last said `stopped (signal)` on 2026-11-01), so nothing has levelled new or swapped files since the August run.
@@ -110,30 +110,73 @@ Trials with the same four copies (outputs are FLAC 5.1; measured again with ebur
 | `--limit-db 6` (Limited) | -20.2 | -20.3 | -20.1 | -20.1 | TP -0.4, -1.3, -1.1, **-0.1** | none to 0.2 LU |
 | `--allow-dynamic` (Dynamic) | -19.9 | -20.1 | -20.0 | -20.0 | TP -1.5, -1.3, -1.4, -1.5 | 0.9 to 2.2 LU narrower |
 
-## Proposed fix (not run)
+## Fix, tested on copies
 
-Re-level the four episodes only. Three details are easy to get wrong:
+Question kind: a recommendation to act on, checked by running it. Premise check first: two things in the earlier version of this note were wrong.
 
-- The CLI is not deployed on the NAS yet, so this runs wherever the CLI runs with the TV library mounted. Do it per file, not on the whole season: a season-wide run would also redo the 19 episodes that are already at -20.
-- E06 has an old sidecar entry that says "processed" and matches the file's size and mtime exactly, so a plain run skips it as done. `--redo-recipe unversioned` makes the sidecar entry (which predates recipes) and any unstamped record count as not done (`spec/skip_decider_spec.rb`, "does unversioned files over when asked"). It touches no other file here since only the files named on the command line are visited.
-- The Dolby/NF files in the same folder have no `NEUTRALISER_*` stamp either, so never run `--redo-recipe unversioned` against the folder.
+- **The CLI is on the NAS.** The driver has run it as a docker image since 2026-10-28 (confidence: **verified**, `docker images` on the NAS and the driver script). The check-prod skill's "production does not run this CLI yet" was stale (fixed in this commit).
+- **The image is older than main.** It is v0.1.0, built 2026-10-23 from `2cfd854`, 36 commits behind: no recipes, no `--redo-recipe`, no Dolby fix. I tested **that image**, since it is what runs. Its `process` has `--allow-codec-change`, `--allow-dynamic` and `--limit-db`.
 
-Recommended: dynamic, because it matches how the other 19 were processed in August, keeps every true peak at or under -1.3 dBTP, and lands all four within 0.1 LU of -20:
+### The command for Will
+
+One show, four files, not the sweep. It is the driver's own `docker run` (`run_one()` in media-server's `neutralise-driver.sh`: `--replace --tolerance 2 --min-gain 1 --no-fast-verify --no-cache`, the driver's lock file and disk floors) plus `--allow-codec-change --allow-dynamic`. The script (`docs/research/office-s03-fix.sh`) copies each original to a backup folder first, then runs the image on that one file. It takes the stage dir and media root from the environment, so no NAS path is in the repo. Paths come from `local.env` (see the check-prod skill); run from the neutraliser checkout:
 
 ```
-neutraliser process "<tv root>/The Office (US)/Season 3/<file>" \
-  --profile livingroom --allow-codec-change --allow-dynamic --redo-recipe unversioned --replace
+set -a; . .claude/skills/check-prod/local.env; set +a
+ssh "$NAS_SSH" "cat > $NAS_STAGE_DIR/office-s03-fix.sh" < docs/research/office-s03-fix.sh
+# optional first: add --dry-run after the backup dir (measures only, about 30 min, copies nothing)
+ssh "$NAS_SSH" "cd $NAS_STAGE_DIR && STAGE=$NAS_STAGE_DIR MEDIA_ROOT=$NAS_MEDIA_ROOT nohup setsid sh office-s03-fix.sh '$NAS_MEDIA_ROOT/tv/The Office (US)' $NAS_STAGE_DIR/office-s03-backup </dev/null >office-s03-fix.log 2>&1 & sleep 2; cat office-s03-fix.log"
 ```
 
-once for each of `S03E01`, `S03E04`, `S03E06`, `S03E17` (the `.mkv` named `The.Office.US.S03E0n...HEVC.x265-MeGusta.mkv`). Add `--dry-run` first to see it queue four.
+It runs detached on the NAS (an ssh drop does not kill it); follow it with `ssh "$NAS_SSH" "tail -f $NAS_STAGE_DIR/office-s03-fix.log"`. It stops at the first failure (`set -e`). Do not `docker pull` the image first (see Risks).
 
-Expected result: each file's primary audio track becomes FLAC 5.1 (the DTS-HD MA track is the primary and default; per the multi-track rule in AGENTS.md the second DTS core track is copied unchanged, not exercised in the trial, which had only the primary track), stamped `dynamic`, recipe 2, integrated loudness -20.0 +/- 0.1 LUFS, LRA about 10 to 13. S03 then spans -20.1 to -19.9 LUFS.
+Before running: `driver.status` should not say `running` (it has said `stopped (signal)` since 2026-11-01). The run uses the driver's lock file, so a driver that starts meanwhile yields with exit 3 instead of colliding.
 
-Alternative: `--limit-db 6` instead of `--allow-dynamic` keeps the dynamics (LRA unchanged) and stamps `limited`, at the cost of true peaks up to -0.1 dBTP (E17), over the -1.5 target, so it can clip on some decoders. Use it only if the dynamic range matters more than the headroom.
+Verified on copies: the script ran as written apart from two constants (the stage dir and media root became environment variables after the test; an argument-construction check with a stubbed `sudo` printed the identical `docker run` line).
 
-`--allow-codec-change` is the product decision for Will: DTS-HD MA lossless becomes FLAC (lossless to lossless, 5.1 kept), but anything that bitstreams DTS to a receiver will no longer see DTS on the primary track. The extra DTS core track stays as the second track.
+### Before and after (copies on the NAS stage area, full-length)
 
-Separately, S04E13 (AAC 5.1, -22.8) needs a plain `process` on that file: AAC is re-encodable, so no codec flag. It is a new file the paused sweep has not seen. It is a normal run, no redo flag.
+Method: `ebur128=peak=true` over the whole default audio track, using the image's own ffmpeg (the NAS host ffmpeg has no DTS decoder). "Centre" is the same measure on the centre channel only (`pan=mono|c0=c2`), a stand-in for dialogue, not a speech-gated figure. E15 is the good episode, left untouched as the reference.
+
+| Ep | Before: LUFS / LRA / TP | After: LUFS / LRA / TP | Centre LUFS before → after |
+|---|---|---|---|
+| E01 | -23.8 / 15.5 / -0.2 | **-19.9** / 13.3 / -1.5 | -23.8 → -19.9 |
+| E04 | -24.4 / 14.3 / -1.5 | **-20.1** / 11.0 / -1.3 | -24.6 → -20.2 |
+| E06 | -22.9 / 13.1 / -1.1 | **-20.0** / 11.2 / -1.4 | -23.3 → -20.3 |
+| E17 | -23.4 / 12.0 / -0.9 | **-20.0** / 10.2 / -1.5 | -23.4 → -20.0 |
+| E15 (good, untouched) | -19.9 / 10.9 / -1.4 | same | -20.1 |
+
+Against the targets (confidence: **verified**, raw lines in the evidence):
+
+- **Within 1 LU of the good episodes:** yes. All four land -19.9 to -20.1, within 0.2 LU of E15 and of the other 19. The "before" numbers reproduce the earlier measurements to 0.1.
+- **True peak <= -1.5 dBTP:** E01 and E17 meet it; **E04 (-1.3) and E06 (-1.4) miss by 0.1 to 0.2 dB.** That is the same peak range as the already-processed episodes (-0.9 to -1.5, and E15 sits at -1.4), so it is not worse than the rest of the season, and nothing is above -1.3.
+- **No dialogue loss:** the centre channel rose by +3.9, +4.4, +3.0, +3.4 LU against +3.9, +4.3, +2.9, +3.4 for the programme, so dialogue stayed in step with the whole mix, and ends -19.9 to -20.3 against E15's -20.1. Loudnorm did narrow the range (LRA 1.8 to 3.3 LU lower), as the earlier trial said.
+- **Short because of the peak limit:** none. Dynamic mode reached -20 on all four, which constant gain could not (it skipped all four as `peak_limited`). `--limit-db` was not re-run on the NAS; the earlier local trial stands (`--limit-db 6` reaches -20.1 to -20.3 with unchanged LRA but a true peak of -0.1 dBTP on E17, and -0.4 on E01).
+- **Everything else in the file kept:** the video, the second (DTS core) audio track and the PGS subtitle are unchanged in the output (checked with `ffprobe` on E01 and E06). The new primary track is FLAC 5.1, default, tagged `NEUTRALISER_MODE=dynamic`. The show-level `.neutraliser` sidecar was not touched by this build.
+- **E06's stale sidecar entry did not block it** in this image: it was processed like the others, so `--redo-recipe` is not needed (the flag does not exist in this build). Why it was not skipped was not investigated.
+
+### Files touched, time, undo
+
+- **Touched (real run):** four files in `Season 3` are replaced in place: E01, E04, E06, E17 (`The.Office.US.S03E0n...HEVC.x265-MeGusta.mkv`). Each shrinks by about 50 to 70 MB (DTS-HD 3 Mbps to FLAC). Nothing else in the library: not the other 19 episodes, not the sidecar or run manifest (their size and mtime were identical before and after the copy test, and the originals' size and mtime were identical after).
+- **Also written:** four backups, about 4.1 GB, in the backup folder on the stage volume (720 GB free there); a log in the stage dir. The tool's own temp file sits beside each episode during its encode and is renamed over it.
+- **Time:** the test took 63 minutes for the four (about 7.5 minutes measuring plus about 8 minutes encoding per file, 15 to 16 minutes each; the NAS has 4 cores). Plan on about 65 to 75 minutes on the library volume, longer if Sonarr or Plex are busy. A `--dry-run` takes about 30 minutes.
+- **Undo:** `--replace` keeps no original, which is why the script backs the four files up first (`cp -p`, mtimes kept). Restore one with `cp -p <backup>/<file> "<show>/Season 3/"`, then delete the backups when happy. Sonarr and Plex need no action beyond their normal rescan. `--keep-original-audio` would keep the DTS-HD inside the file as an extra track (about 3 Mbps each) but was not tested, so the script uses the backup copy.
+- The copies and the test folder were deleted afterwards (nothing left in the stage dir).
+
+### Risks
+
+- **Do not update the image before running.** The recipe above was proven on the Oct 23 image. A newer build (main) behaves differently here: the earlier note's read of main is that E06's stale sidecar entry would make a plain run skip it as done, needing `--redo-recipe unversioned` (never against the folder), and main stamps recipes and fixes Dolby dialnorm. The driver itself never pulls, so only a manual `docker pull` would change it. Re-test if the image is replaced.
+- **Product decision:** the primary track becomes FLAC 5.1 and a DTS-HD MA bitstream to a receiver is gone from the default track. The extra DTS core track stays as track 2.
+- **Dynamic mode compresses** the four (LRA lower by 1.8 to 3.3 LU), the same as the other 19 episodes got in August.
+- **Peaks:** E04 and E06 end at -1.3 and -1.4 dBTP, 0.1 to 0.2 dB over the -1.5 target, in line with the rest of the season.
+- **The TV sweep:** do not un-pause it for this. `SWEEP_TV` gates the whole `/volume1` TV backlog (7,000+ episodes), so it cannot be limited to one show, and it would not fix these anyway: the sweep passes neither `--allow-codec-change` nor `--allow-dynamic`, so it would leave the four DTS files alone as it would any DTS file. To make *future* Office downloads get this treatment, a line in the driver's `neutralise-overrides.txt` (`<tv root>/The Office (US)/|--allow-codec-change --allow-dynamic`) would do it through the import queue. That is a media-server config change, which this job did not make; it is Will's call, and it would also make every later Office episode dynamic rather than constant gain.
+- **Not tested:** S04E13 (AAC 5.1, -22.8) needs the driver's plain flags on that one file (no codec or dynamic flag, AAC re-encodes); run it the same way with the script's `docker run` minus those two flags. Not tried here.
+
+### Side finding: the driver is stopped
+
+`driver.status` has said `stopped (signal)` since 2026-11-01 02:42 (mid-sweep, Star Trek TNG), and the Mac-side kicker's last log line is 2026-11-01 15:14 with no launchd entry for it now. The import queue holds six files queued on 2026-11-06 that have not drained (movies and a TV show, none of them The Office). Not touched.
+
+Evidence (outside git): before/after and centre-channel measurements, the test run's log (`run.log`, with per-file timings and the CLI's own output), the `ffprobe` of the output tracks and the dry-run log.
 
 ## Code bugs
 

@@ -5,16 +5,17 @@ description: Check how production audio normalisation is doing on the NAS (the m
 
 # Check Production Status
 
-Production does **not** run this CLI yet. New media is normalised on the NAS by
-media-server's shell fork: Sonarr/Radarr "Neutralise audio on import" ->
-`scripts/neutralise-enqueue.sh` -> `neutralise-driver.sh` -> `neutralise.sh`, plus a
+Production runs this CLI since 2026-10-28, as a docker image
+(`ghcr.io/willhs/neutraliser:latest`, run per file by the driver; the image is only as new as the
+last pull, so it can lag main: check its `version` and flags before relying on a new option).
+New media is normalised on the NAS: Sonarr/Radarr "Neutralise audio on import" ->
+`scripts/neutralise-enqueue.sh` -> `neutralise-driver.sh` -> `neutraliser process`, plus a
 weekly sweep kicked hourly from the Mac by a launchd job.
 Source of truth for that pipeline: the `media-server` project's
 `scripts/neutralise-*.sh` and its `docs/work/notes/neutraliser-audio-normalisation.md`.
-Switching it to this CLI is goal 9c9e4d8c (see `docs/research/prod-parity-audit-2026-10.md`).
-
-There is no neutraliser container on the NAS (`neutraliser-movies` was removed
-2026-07-14). Don't look for one.
+The retired shell fork's history was imported (`neutraliser import-manifest`); see
+`docs/research/prod-parity-audit-2026-10.md`. The NAS host ffmpeg has no DTS decoder: measure
+with the image's (`docker run --entrypoint ffmpeg`).
 
 ## Setup: where the NAS is
 
