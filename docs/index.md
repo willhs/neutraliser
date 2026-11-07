@@ -3,7 +3,7 @@ type: note
 status: active
 owner: will
 contributors: []
-updated: 2026-04-12
+updated: 2026-11-08
 review_cycle: 90d
 agent_write: false
 links: []
@@ -41,6 +41,7 @@ Entry point and navigation map for the neutraliser documentation set. Neutralise
 - [`research/pre-release-review-2026-11.md`](research/pre-release-review-2026-11.md) — Pre-release code and security review: findings ranked by severity, what was fixed, what needs Will's call
 - [`research/architecture-review-2026-11.md`](research/architecture-review-2026-11.md) — Architecture review after the October burst: four shallow modules to deepen in FFmpegWrapper and Processor (Remux plan, Source, Codec choice, Guards), each a Steady task; 15 ffprobe calls per file measured
 
+- [`research/office-s03-volume-spread-2026-11.md`](research/office-s03-volume-spread-2026-11.md) — Why four Office S03 episodes play 3-4 LU quieter (unprocessed DTS-HD, peak-capped), measured on the real library, with the fix tested on NAS copies and the one command to run ([`office-s03-fix.sh`](research/office-s03-fix.sh))
 - [`research/compression-ladder-fixtures-2026-11.md`](research/compression-ladder-fixtures-2026-11.md) — What the opt-in `--lra-target` compression ladder does on a synthetic 5.1 fixture (rung, LRA, level, peak) and where the two LRA readings differ; no perceptual claims
 - [`research/plex-sampling-error-2026-10.md`](research/plex-sampling-error-2026-10.md) — How far a sampled loudness estimate sits from a film's true loudness (10 real Plex films); why analyze-plex gives "Unclear" instead of guessing, and `--full`
 - [`research/0003-sceptical-review-dolby-dialogue-compression/research.md`](research/0003-sceptical-review-dolby-dialogue-compression/research.md) — Sceptical review, on real-ffmpeg fixtures, of the Dolby fix, dialogue estimate, opt-in compression and recipes before a library sweep restarts: findings by severity, what was fixed, what only real files or ears can settle, and the restart verdict
@@ -57,11 +58,14 @@ Entry point and navigation map for the neutraliser documentation set. Neutralise
 - [`tasks/0005-local-staging-and-fast-mode/task.md`](tasks/0005-local-staging-and-fast-mode/task.md) — Local NVMe staging and single-pass fast mode (complete)
 - [`tasks/0005-local-staging-and-fast-mode/plan.md`](tasks/0005-local-staging-and-fast-mode/plan.md) — Implementation plan for staging and fast mode
 - [`tasks/0006-prod-parity-with-neutralise-sh/task.md`](tasks/0006-prod-parity-with-neutralise-sh/task.md) — Port what prod's neutralise.sh does that the CLI didn't (complete)
+- [`tasks/0007-pre-release-code-security-review-october/task.md`](tasks/0007-pre-release-code-security-review-october/task.md) — Pre-release code and security review; fix clear bugs with tests
+- [`tasks/0007-pre-release-code-security-review-october/plan.md`](tasks/0007-pre-release-code-security-review-october/plan.md) — Plan for the review
 
 ## Doc Schema
 - [`front-matter-schema.json`](front-matter-schema.json) — JSON Schema for validating doc frontmatter
 
 ### Change Log
+- 2026-11-08 (agent:sleep-cycle): Indexed the Office S03 note and task 0007
 - 2026-11-02 (agent:sceptical-review): Added research/0003-sceptical-review-dolby-dialogue-compression
 - 2026-11-01 (agent:dialogue-estimate): Added design/adr/0003-optional-voice-gate-for-dialogue
 - 2026-11-01 (agent:lra-target): Added compression-ladder-fixtures-2026-11.md research note

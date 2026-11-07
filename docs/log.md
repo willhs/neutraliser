@@ -134,3 +134,12 @@ New `Source` value (lib/neutraliser/source.rb) holds every fact one `ffprobe -sh
 
 ## [2026-11-07] update | The per-file outcome: Guards, FileResult, Mode
 `Guards` (lib/neutraliser/guards.rb) holds the six pre-encode checks (writable, disk space, has audio, subtitles; object audio, codec change) and returns a `Verdict` without logging, recording or raising; `Processor` logs it and builds the result. `FileResult` replaces the result hash: a closed list of reasons per status (a typo raises), the rescue ladder is its `from_error` table, and `--resume`'s final reasons live there as symbols. `Mode` is the one spelling of linear/limited/compressed/dynamic (`to_s` for the stamp, `label` for the manifest and log); `capitalize`/`downcase` bridges are gone. The run manifest is unchanged. New `spec/guards_spec.rb`, `spec/mode_spec.rb`, `spec/file_result_spec.rb`. Architecture notes and the architecture review updated.
+
+## [2026-11-07] update | AudioLayout and RemuxPlan own the output's audio layout
+The output's audio order and dispositions were worked out in three places (command builder, expected-stream count, output check). `AudioLayout.for(source, keep_original:)` now decides them once and `RemuxPlan` builds the ffmpeg argv from it; `FileManager.output_mismatch` takes `layout:`. The argv was diffed before and after over 288 scenarios and is identical. See docs/research/architecture-review-2026-11.md item 1.
+
+## [2026-11-07] update | CodecChoice: one decision for what encoder replaces a track
+`CodecChoice.decide(track, container, sample:)` replaces `select_output_codec` and the separate `codec_change` re-derivation, so the codec-change guard and the encode read the same answer. The codec tables moved to `codec_tables.rb`; the specs call the public interface instead of `send`. ADR-0001's decision is unchanged, only moved.
+
+## [2026-11-08] create | Why four Office S03 episodes play 3-4 LU quieter
+Research note docs/research/office-s03-volume-spread-2026-11.md, read-only over the real TV library. E01, E04, E06 and E17 are unprocessed DTS-HD releases (the codec-change guard leaves DTS alone, and plain constant gain skips them as quiet and peaky); the other 19 sit within 0.2 LU. The fix was tested on NAS copies (all four land within 0.2 LU of -20) and is one command, `office-s03-fix.sh`, with its undo and risks in the note. Not run on the library.

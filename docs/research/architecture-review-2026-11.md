@@ -113,7 +113,9 @@ Ranked. Dependency category per `improve-architecture`'s DEEPENING guide.
 - **Order**: after candidate 1 is cleaner but not blocked by it; the track hash is the seam.
 - **Done** (task `fb62003d`): `Source` (`lib/neutraliser/source.rb`) built as described. Same shim run (`benchmark/probe_count.sh`): **15 ffprobe calls before, 2 after** (source, output), 2 ffmpeg runs plus the dialnorm read unchanged. The gem's own probe went with the `streamio-ffmpeg` dependency; the BPS-tag probe is read from the stream tags already in the track. What remains per file: one `-version` pair per `FFmpegWrapper.version` call.
 
-### 3. Codec choice: one public interface. **Strong (small).** Task `4f0038b5` (S)
+### 3. Codec choice: one public interface. **Strong (small).** Task `4f0038b5` (S). **Done 2026-11-07**
+
+Done (commit `b4be9c2`): `CodecChoice.decide(track, container, sample:)` (`lib/neutraliser/codec_choice.rb`, tables in `codec_tables.rb`) is the one decision; `Guards` and `FFmpegWrapper.decide_codec` both read it, and `spec/codec_choice_spec.rb` asserts it without `send`. The problem below is as found.
 
 - **Files**: `ffmpeg_wrapper.rb` (the six codec tables, `select_output_codec`, `resolve_encoder`,
   `resolve_bitrate`, `estimate_source_bitrate`, `codec_change`).

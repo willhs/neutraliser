@@ -52,7 +52,7 @@ Output File
 When re-encoding normalised audio, the codec and bitrate are selected to match the source as closely as possible:
 
 1. **Probe** — `Source` (`lib/neutraliser/source.rb`) reads codec, profile, bitrate, sample rate, channel count and track title, with every other fact about the file, from one ffprobe run. It happens once per file, before measuring, and the answer is passed on (see [One probe per file](#one-probe-per-file)).
-2. **Match** — `select_output_codec` tries to re-encode to the same codec at `max(source_bitrate, quality_floor)`, capped at a per-codec maximum.
+2. **Match** — `CodecChoice.decide` (`lib/neutraliser/codec_choice.rb`, tables in `codec_tables.rb`) tries to re-encode to the same codec at `max(source_bitrate, quality_floor)`, capped at a per-codec maximum.
 3. **Fallback** — non-encodable codecs (DTS, TrueHD) fall back to FLAC in MKV or EAC3/AC3 in MP4. Lossless sources stay lossless when the container supports it.
 4. **Log** — every normalisation logs the decision (e.g., `Audio: ac3 448k -> ac3 448k`).
 
@@ -106,6 +106,10 @@ Both flags are independent and can be combined.
 | GainPlan | `lib/neutraliser/gain_plan.rb` | The constant-gain decision for a measurement: applied gain capped by the true-peak headroom (plus `--limit-db`), limiter filter, shortfall, direction-aware `worthwhile?` |
 | DiskGuard / RunLock | `lib/neutraliser/disk_guard.rb`, `run_lock.rb` | Free-space floors (skip a file / abort the run) and the flock run lock, for unattended NAS sweeps |
 | ManifestImport | `lib/neutraliser/manifest_import.rb` | Carries the retired `neutralise.sh` manifest into `.neutraliser` sidecars |
+| Source | `lib/neutraliser/source.rb` | What one ffprobe run says about a file; the only place that picks the primary track (see [One probe per file](#one-probe-per-file)) |
+| Guards / FileResult / Mode | `lib/neutraliser/guards.rb`, `file_result.rb`, `mode.rb` | The six pre-encode checks answer with a `Guards::Verdict` and never log or raise; `Processor` logs it and builds a `FileResult` (closed reasons per status); `Mode` is the one spelling of linear/limited/compressed/dynamic |
+| AudioLayout / RemuxPlan | `lib/neutraliser/audio_layout.rb`, `remux_plan.rb` | The output's audio order and dispositions, and the ffmpeg argv built from it; the output check compares the written file with the same layout |
+| CodecChoice | `lib/neutraliser/codec_choice.rb` | The one answer to "what encoder replaces this track", read by the codec-change guard and the encode |
 | Report | `lib/neutraliser/report.rb` | `neutraliser report`: reads stamps and left-alone records across a directory, counts, per-file rows and the remote-free rate |
 | Recipe | `lib/neutraliser/recipe.rb` | The leveling method's version number; what `--redo-recipe` accepts |
 | LeftRecord | `lib/neutraliser/left_record.rb` | Why a file was left as it is, with measured levels; stored in the sidecar |
@@ -134,6 +138,7 @@ Both flags are independent and can be combined.
 - docs/ops/runbook.md
 
 ### Change Log
+- 2026-11-08 (agent:sleep-cycle): Components table gains Source, Guards/FileResult/Mode, AudioLayout/RemuxPlan, CodecChoice; codec step names CodecChoice
 - 2026-10-20 (agent:prod-parity): Added GainPlan, DiskGuard/RunLock and ManifestImport components
 
 - 2026-10-15 (agent:record-what-was-done): Added the Stamp section (in-file NEUTRALISER_* tags), Stamp and Report components, tag-first skip decision
