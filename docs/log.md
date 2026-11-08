@@ -143,3 +143,6 @@ The output's audio order and dispositions were worked out in three places (comma
 
 ## [2026-11-08] create | Why four Office S03 episodes play 3-4 LU quieter
 Research note docs/research/office-s03-volume-spread-2026-11.md, read-only over the real TV library. E01, E04, E06 and E17 are unprocessed DTS-HD releases (the codec-change guard leaves DTS alone, and plain constant gain skips them as quiet and peaky); the other 19 sit within 0.2 LU. The fix was tested on NAS copies (all four land within 0.2 LU of -20) and is one command, `office-s03-fix.sh`, with its undo and risks in the note. Not run on the library.
+
+## [2026-11-08] create | Baseline of the NAS library
+Research note docs/research/library-baseline-2026-10.md, read-only (report run with `:ro` mounts, manifests copied off). The library is 98% unstamped; no stamped file is dynamic. 1,935 Aug-run dynamic files are on disk and invisible to `report`; 12 Atmos episodes were flattened; about 130 shell-fork files lost stream tags (estimated against a control); the 797 Aug failures are 323 files, 318 of them permission. The driver has been stopped since 2026-11-01.
