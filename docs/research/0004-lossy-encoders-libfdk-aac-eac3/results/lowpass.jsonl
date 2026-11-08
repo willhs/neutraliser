@@ -1,0 +1,100 @@
+{"kind": "aac_20_128", "window": "w60", "cand": "native_128_no-pns-is", "visqol_lp16_mean": 4.505495577807627, "bandwidth_khz": 16.5, "ref_bandwidth_khz": 17.0}
+{"kind": "aac_20_128", "window": "w60", "cand": "native_192", "visqol_lp16_mean": 4.656500894238503, "bandwidth_khz": 17.0, "ref_bandwidth_khz": 17.0}
+{"kind": "aac_20_128", "window": "w60", "cand": "native_160 (+25%)", "visqol_lp16_mean": 4.583782055255546, "bandwidth_khz": 17.0, "ref_bandwidth_khz": 17.0}
+{"kind": "aac_20_128", "window": "w60", "cand": "native_128 (today)", "visqol_lp16_mean": 4.496513811037982, "bandwidth_khz": 17.0, "ref_bandwidth_khz": 17.0}
+{"kind": "aac_20_128", "window": "w60", "cand": "fdk_128", "visqol_lp16_mean": 4.5810977103827595, "bandwidth_khz": 15.5, "ref_bandwidth_khz": 17.0}
+{"kind": "aac_20_128", "window": "w60", "cand": "fdk_192", "visqol_lp16_mean": 4.702426082701987, "bandwidth_khz": 17.0, "ref_bandwidth_khz": 17.0}
+{"kind": "aac_20_128", "window": "w60", "cand": "fdk_160 (+25%)", "visqol_lp16_mean": 4.6807764764639535, "bandwidth_khz": 16.0, "ref_bandwidth_khz": 17.0}
+{"kind": "aac_20_128", "window": "w60", "cand": "native_96 (anchor)", "visqol_lp16_mean": 4.472726323836013, "bandwidth_khz": 16.0, "ref_bandwidth_khz": 17.0}
+{"kind": "aac_20_128", "window": "w60", "cand": "fdk_vbr3", "visqol_lp16_mean": 4.520178027240512, "bandwidth_khz": 16.0, "ref_bandwidth_khz": 17.0}
+{"kind": "aac_20_128", "window": "w60", "cand": "fdk_96 (anchor)", "visqol_lp16_mean": 3.987321438110934, "bandwidth_khz": 14.5, "ref_bandwidth_khz": 17.0}
+{"kind": "aac_20_128", "window": "w200", "cand": "native_160 (+25%)", "visqol_lp16_mean": 4.60054263797401, "bandwidth_khz": 18.5, "ref_bandwidth_khz": 18.5}
+{"kind": "aac_20_128", "window": "w200", "cand": "native_128 (today)", "visqol_lp16_mean": 4.581518491238313, "bandwidth_khz": 17.5, "ref_bandwidth_khz": 18.5}
+{"kind": "aac_20_128", "window": "w200", "cand": "native_192", "visqol_lp16_mean": 4.663105387129442, "bandwidth_khz": 18.5, "ref_bandwidth_khz": 18.5}
+{"kind": "aac_20_128", "window": "w200", "cand": "native_128_no-pns-is", "visqol_lp16_mean": 4.584789741805845, "bandwidth_khz": 17.5, "ref_bandwidth_khz": 18.5}
+{"kind": "aac_20_128", "window": "w200", "cand": "native_96 (anchor)", "visqol_lp16_mean": 4.520389717419672, "bandwidth_khz": 17.5, "ref_bandwidth_khz": 18.5}
+{"kind": "aac_20_128", "window": "w200", "cand": "fdk_128", "visqol_lp16_mean": 4.610828150886812, "bandwidth_khz": 16.0, "ref_bandwidth_khz": 18.5}
+{"kind": "aac_20_128", "window": "w200", "cand": "fdk_160 (+25%)", "visqol_lp16_mean": 4.690325209410275, "bandwidth_khz": 16.5, "ref_bandwidth_khz": 18.5}
+{"kind": "aac_20_128", "window": "w200", "cand": "fdk_192", "visqol_lp16_mean": 4.716641054680398, "bandwidth_khz": 17.5, "ref_bandwidth_khz": 18.5}
+{"kind": "aac_20_128", "window": "w200", "cand": "fdk_vbr3", "visqol_lp16_mean": 4.524769369744014, "bandwidth_khz": 16.0, "ref_bandwidth_khz": 18.5}
+{"kind": "aac_20_128", "window": "w200", "cand": "fdk_96 (anchor)", "visqol_lp16_mean": 4.224302589289659, "bandwidth_khz": 14.5, "ref_bandwidth_khz": 18.5}
+{"kind": "aac_20_128", "window": "w380", "cand": "native_128 (today)", "visqol_lp16_mean": 4.5763994181873215, "bandwidth_khz": 18.5, "ref_bandwidth_khz": 18.5}
+{"kind": "aac_20_128", "window": "w380", "cand": "native_160 (+25%)", "visqol_lp16_mean": 4.61038712246755, "bandwidth_khz": 18.5, "ref_bandwidth_khz": 18.5}
+{"kind": "aac_20_128", "window": "w380", "cand": "native_192", "visqol_lp16_mean": 4.666799812218718, "bandwidth_khz": 18.5, "ref_bandwidth_khz": 18.5}
+{"kind": "aac_20_128", "window": "w380", "cand": "native_128_no-pns-is", "visqol_lp16_mean": 4.5900809495184625, "bandwidth_khz": 18.0, "ref_bandwidth_khz": 18.5}
+{"kind": "aac_20_128", "window": "w380", "cand": "fdk_128", "visqol_lp16_mean": 4.57842691433801, "bandwidth_khz": 16.0, "ref_bandwidth_khz": 18.5}
+{"kind": "aac_20_128", "window": "w380", "cand": "native_96 (anchor)", "visqol_lp16_mean": 4.51531394556298, "bandwidth_khz": 18.0, "ref_bandwidth_khz": 18.5}
+{"kind": "aac_20_128", "window": "w380", "cand": "fdk_160 (+25%)", "visqol_lp16_mean": 4.685539795378868, "bandwidth_khz": 16.5, "ref_bandwidth_khz": 18.5}
+{"kind": "aac_20_128", "window": "w380", "cand": "fdk_192", "visqol_lp16_mean": 4.714434652747886, "bandwidth_khz": 17.5, "ref_bandwidth_khz": 18.5}
+{"kind": "aac_20_128", "window": "w380", "cand": "fdk_96 (anchor)", "visqol_lp16_mean": 4.151304928771841, "bandwidth_khz": 15.0, "ref_bandwidth_khz": 18.5}
+{"kind": "aac_20_128", "window": "w380", "cand": "fdk_vbr3", "visqol_lp16_mean": 4.517409183713751, "bandwidth_khz": 16.5, "ref_bandwidth_khz": 18.5}
+{"kind": "aac_20_128", "window": "w520", "cand": "native_128 (today)", "visqol_lp16_mean": 4.503686002674419, "bandwidth_khz": 18.0, "ref_bandwidth_khz": 18.5}
+{"kind": "aac_20_128", "window": "w520", "cand": "native_160 (+25%)", "visqol_lp16_mean": 4.547879432506337, "bandwidth_khz": 18.0, "ref_bandwidth_khz": 18.5}
+{"kind": "aac_20_128", "window": "w520", "cand": "native_192", "visqol_lp16_mean": 4.645210201853655, "bandwidth_khz": 18.5, "ref_bandwidth_khz": 18.5}
+{"kind": "aac_20_128", "window": "w520", "cand": "native_128_no-pns-is", "visqol_lp16_mean": 4.510894550086884, "bandwidth_khz": 17.5, "ref_bandwidth_khz": 18.5}
+{"kind": "aac_20_128", "window": "w520", "cand": "native_96 (anchor)", "visqol_lp16_mean": 4.404115104025289, "bandwidth_khz": 18.0, "ref_bandwidth_khz": 18.5}
+{"kind": "aac_20_128", "window": "w520", "cand": "fdk_128", "visqol_lp16_mean": 4.477799221706324, "bandwidth_khz": 16.0, "ref_bandwidth_khz": 18.5}
+{"kind": "aac_20_128", "window": "w520", "cand": "fdk_160 (+25%)", "visqol_lp16_mean": 4.6259166433849535, "bandwidth_khz": 16.5, "ref_bandwidth_khz": 18.5}
+{"kind": "aac_20_128", "window": "w520", "cand": "fdk_192", "visqol_lp16_mean": 4.70809576448305, "bandwidth_khz": 17.5, "ref_bandwidth_khz": 18.5}
+{"kind": "aac_20_128", "window": "w520", "cand": "fdk_vbr3", "visqol_lp16_mean": 4.437963408085766, "bandwidth_khz": 16.0, "ref_bandwidth_khz": 18.5}
+{"kind": "aac_20_128", "window": "w520", "cand": "fdk_96 (anchor)", "visqol_lp16_mean": 4.084530158212999, "bandwidth_khz": 15.0, "ref_bandwidth_khz": 18.5}
+{"kind": "aac_51_384", "window": "w60", "cand": "native_384 (today: floor 256k, source 384k)", "visqol_lp16_mean": 4.641143372654055, "bandwidth_khz": 17.0, "ref_bandwidth_khz": 17.5}
+{"kind": "aac_51_384", "window": "w60", "cand": "fdk_384", "visqol_lp16_mean": 4.7043608916618025, "bandwidth_khz": 16.0, "ref_bandwidth_khz": 17.5}
+{"kind": "aac_51_384", "window": "w60", "cand": "fdk_480 (+25%)", "visqol_lp16_mean": 4.720373123810304, "bandwidth_khz": 17.0, "ref_bandwidth_khz": 17.5}
+{"kind": "aac_51_384", "window": "w60", "cand": "native_480 (+25%)", "visqol_lp16_mean": 4.653122689149035, "bandwidth_khz": 17.5, "ref_bandwidth_khz": 17.5}
+{"kind": "aac_51_384", "window": "w60", "cand": "native_256 (anchor)", "visqol_lp16_mean": 4.574234519351928, "bandwidth_khz": 16.0, "ref_bandwidth_khz": 17.5}
+{"kind": "aac_51_384", "window": "w200", "cand": "native_384 (today: floor 256k, source 384k)", "visqol_lp16_mean": 4.5708411588915805, "bandwidth_khz": 17.5, "ref_bandwidth_khz": 18.0}
+{"kind": "aac_51_384", "window": "w200", "cand": "fdk_384", "visqol_lp16_mean": 4.614374604451147, "bandwidth_khz": 16.5, "ref_bandwidth_khz": 18.0}
+{"kind": "aac_51_384", "window": "w200", "cand": "native_480 (+25%)", "visqol_lp16_mean": 4.62113516133857, "bandwidth_khz": 18.0, "ref_bandwidth_khz": 18.0}
+{"kind": "aac_51_384", "window": "w200", "cand": "fdk_480 (+25%)", "visqol_lp16_mean": 4.686164639001942, "bandwidth_khz": 17.5, "ref_bandwidth_khz": 18.0}
+{"kind": "aac_51_384", "window": "w380", "cand": "native_384 (today: floor 256k, source 384k)", "visqol_lp16_mean": 4.598063411955215, "bandwidth_khz": 18.5, "ref_bandwidth_khz": 18.0}
+{"kind": "aac_51_384", "window": "w200", "cand": "native_256 (anchor)", "visqol_lp16_mean": 4.465812985058987, "bandwidth_khz": 16.0, "ref_bandwidth_khz": 18.0}
+{"kind": "aac_51_384", "window": "w380", "cand": "fdk_384", "visqol_lp16_mean": 4.58801927387754, "bandwidth_khz": 16.5, "ref_bandwidth_khz": 18.0}
+{"kind": "aac_51_384", "window": "w380", "cand": "native_480 (+25%)", "visqol_lp16_mean": 4.641215329052656, "bandwidth_khz": 18.0, "ref_bandwidth_khz": 18.0}
+{"kind": "aac_51_384", "window": "w380", "cand": "fdk_480 (+25%)", "visqol_lp16_mean": 4.699693485893738, "bandwidth_khz": 17.5, "ref_bandwidth_khz": 18.0}
+{"kind": "aac_51_384", "window": "w380", "cand": "native_256 (anchor)", "visqol_lp16_mean": 4.4733835497732874, "bandwidth_khz": 16.0, "ref_bandwidth_khz": 18.0}
+{"kind": "aac_51_384", "window": "w520", "cand": "native_384 (today: floor 256k, source 384k)", "visqol_lp16_mean": 4.600979535423669, "bandwidth_khz": 18.5, "ref_bandwidth_khz": 18.0}
+{"kind": "aac_51_384", "window": "w520", "cand": "fdk_384", "visqol_lp16_mean": 4.652167236644843, "bandwidth_khz": 16.5, "ref_bandwidth_khz": 18.0}
+{"kind": "aac_51_384", "window": "w520", "cand": "native_480 (+25%)", "visqol_lp16_mean": 4.633875327052332, "bandwidth_khz": 18.5, "ref_bandwidth_khz": 18.0}
+{"kind": "aac_51_384", "window": "w520", "cand": "fdk_480 (+25%)", "visqol_lp16_mean": 4.7094923288438055, "bandwidth_khz": 17.5, "ref_bandwidth_khz": 18.0}
+{"kind": "aac_51_384", "window": "w520", "cand": "native_256 (anchor)", "visqol_lp16_mean": 4.540390473837279, "bandwidth_khz": 16.0, "ref_bandwidth_khz": 18.0}
+{"kind": "ac3_51_448", "window": "w60", "cand": "ac3_448 (today)", "visqol_lp16_mean": 4.6897740021306165, "bandwidth_khz": 18.5, "ref_bandwidth_khz": 19.5}
+{"kind": "ac3_51_448", "window": "w60", "cand": "ac3_576 (+25%)", "visqol_lp16_mean": 4.708670616968538, "bandwidth_khz": 18.5, "ref_bandwidth_khz": 19.5}
+{"kind": "ac3_51_448", "window": "w60", "cand": "ac3_640 (cap)", "visqol_lp16_mean": 4.720134085567905, "bandwidth_khz": 19.0, "ref_bandwidth_khz": 19.5}
+{"kind": "ac3_51_448", "window": "w60", "cand": "eac3_448 (not today)", "visqol_lp16_mean": 4.671892019361389, "bandwidth_khz": 18.5, "ref_bandwidth_khz": 19.5}
+{"kind": "ac3_51_448", "window": "w60", "cand": "eac3_640", "visqol_lp16_mean": 4.711358882921772, "bandwidth_khz": 18.5, "ref_bandwidth_khz": 19.5}
+{"kind": "ac3_51_448", "window": "w200", "cand": "ac3_576 (+25%)", "visqol_lp16_mean": 4.597495120207446, "bandwidth_khz": 20.5, "ref_bandwidth_khz": 20.5}
+{"kind": "ac3_51_448", "window": "w200", "cand": "eac3_448 (not today)", "visqol_lp16_mean": 4.542414690913974, "bandwidth_khz": 20.5, "ref_bandwidth_khz": 20.5}
+{"kind": "ac3_51_448", "window": "w200", "cand": "eac3_640", "visqol_lp16_mean": 4.610452307250574, "bandwidth_khz": 20.5, "ref_bandwidth_khz": 20.5}
+{"kind": "ac3_51_448", "window": "w200", "cand": "ac3_448 (today)", "visqol_lp16_mean": 4.552502122940446, "bandwidth_khz": 20.5, "ref_bandwidth_khz": 20.5}
+{"kind": "ac3_51_448", "window": "w200", "cand": "ac3_640 (cap)", "visqol_lp16_mean": 4.632143507704751, "bandwidth_khz": 20.5, "ref_bandwidth_khz": 20.5}
+{"kind": "ac3_51_448", "window": "w380", "cand": "ac3_576 (+25%)", "visqol_lp16_mean": 4.68570966048979, "bandwidth_khz": 20.5, "ref_bandwidth_khz": 20.5}
+{"kind": "ac3_51_448", "window": "w380", "cand": "eac3_640", "visqol_lp16_mean": 4.693017897328064, "bandwidth_khz": 20.5, "ref_bandwidth_khz": 20.5}
+{"kind": "ac3_51_448", "window": "w380", "cand": "ac3_640 (cap)", "visqol_lp16_mean": 4.706617434312764, "bandwidth_khz": 20.5, "ref_bandwidth_khz": 20.5}
+{"kind": "ac3_51_448", "window": "w380", "cand": "ac3_448 (today)", "visqol_lp16_mean": 4.638361046538553, "bandwidth_khz": 20.5, "ref_bandwidth_khz": 20.5}
+{"kind": "ac3_51_448", "window": "w380", "cand": "eac3_448 (not today)", "visqol_lp16_mean": 4.626727989231723, "bandwidth_khz": 20.5, "ref_bandwidth_khz": 20.5}
+{"kind": "ac3_51_448", "window": "w520", "cand": "ac3_576 (+25%)", "visqol_lp16_mean": 4.680971374450081, "bandwidth_khz": 20.5, "ref_bandwidth_khz": 20.0}
+{"kind": "ac3_51_448", "window": "w520", "cand": "eac3_640", "visqol_lp16_mean": 4.691580101795158, "bandwidth_khz": 20.5, "ref_bandwidth_khz": 20.0}
+{"kind": "ac3_51_448", "window": "w520", "cand": "ac3_448 (today)", "visqol_lp16_mean": 4.626842866923683, "bandwidth_khz": 20.5, "ref_bandwidth_khz": 20.0}
+{"kind": "ac3_51_448", "window": "w520", "cand": "ac3_640 (cap)", "visqol_lp16_mean": 4.702521618078622, "bandwidth_khz": 20.5, "ref_bandwidth_khz": 20.0}
+{"kind": "ac3_51_448", "window": "w520", "cand": "eac3_448 (not today)", "visqol_lp16_mean": 4.605831664675728, "bandwidth_khz": 20.5, "ref_bandwidth_khz": 20.0}
+{"kind": "eac3_51_640", "window": "w60", "cand": "eac3_640 (today)", "visqol_lp16_mean": 4.669133890070991, "bandwidth_khz": 19.5, "ref_bandwidth_khz": 19.5}
+{"kind": "eac3_51_640", "window": "w60", "cand": "ac3_640 (not today)", "visqol_lp16_mean": 4.704706431641998, "bandwidth_khz": 19.5, "ref_bandwidth_khz": 19.5}
+{"kind": "eac3_51_640", "window": "w60", "cand": "eac3_800 (+25%)", "visqol_lp16_mean": 4.722283008114978, "bandwidth_khz": 19.5, "ref_bandwidth_khz": 19.5}
+{"kind": "eac3_51_640", "window": "w60", "cand": "eac3_448 (anchor)", "visqol_lp16_mean": 4.646132534430502, "bandwidth_khz": 19.5, "ref_bandwidth_khz": 19.5}
+{"kind": "eac3_51_640", "window": "w60", "cand": "eac3_640_no-coupling", "visqol_lp16_mean": 4.669133890070983, "bandwidth_khz": 19.5, "ref_bandwidth_khz": 19.5}
+{"kind": "eac3_51_640", "window": "w200", "cand": "eac3_800 (+25%)", "visqol_lp16_mean": 4.7129996287003415, "bandwidth_khz": 20.5, "ref_bandwidth_khz": 20.5}
+{"kind": "eac3_51_640", "window": "w200", "cand": "ac3_640 (not today)", "visqol_lp16_mean": 4.686204319005109, "bandwidth_khz": 20.5, "ref_bandwidth_khz": 20.5}
+{"kind": "eac3_51_640", "window": "w200", "cand": "eac3_640 (today)", "visqol_lp16_mean": 4.660957367543591, "bandwidth_khz": 20.5, "ref_bandwidth_khz": 20.5}
+{"kind": "eac3_51_640", "window": "w200", "cand": "eac3_640_no-coupling", "visqol_lp16_mean": 4.660957367543593, "bandwidth_khz": 20.5, "ref_bandwidth_khz": 20.5}
+{"kind": "eac3_51_640", "window": "w200", "cand": "eac3_448 (anchor)", "visqol_lp16_mean": 4.624995210117083, "bandwidth_khz": 20.5, "ref_bandwidth_khz": 20.5}
+{"kind": "eac3_51_640", "window": "w380", "cand": "eac3_640 (today)", "visqol_lp16_mean": 4.678560309238597, "bandwidth_khz": 20.5, "ref_bandwidth_khz": 20.5}
+{"kind": "eac3_51_640", "window": "w380", "cand": "ac3_640 (not today)", "visqol_lp16_mean": 4.694029734581316, "bandwidth_khz": 20.5, "ref_bandwidth_khz": 20.5}
+{"kind": "eac3_51_640", "window": "w380", "cand": "eac3_640_no-coupling", "visqol_lp16_mean": 4.6785603092386046, "bandwidth_khz": 20.5, "ref_bandwidth_khz": 20.5}
+{"kind": "eac3_51_640", "window": "w380", "cand": "eac3_448 (anchor)", "visqol_lp16_mean": 4.641711448631221, "bandwidth_khz": 20.5, "ref_bandwidth_khz": 20.5}
+{"kind": "eac3_51_640", "window": "w380", "cand": "eac3_800 (+25%)", "visqol_lp16_mean": 4.718156208602446, "bandwidth_khz": 20.5, "ref_bandwidth_khz": 20.5}
+{"kind": "eac3_51_640", "window": "w520", "cand": "eac3_640 (today)", "visqol_lp16_mean": 4.672886196122009, "bandwidth_khz": 20.5, "ref_bandwidth_khz": 20.5}
+{"kind": "eac3_51_640", "window": "w520", "cand": "ac3_640 (not today)", "visqol_lp16_mean": 4.687709176278399, "bandwidth_khz": 20.5, "ref_bandwidth_khz": 20.5}
+{"kind": "eac3_51_640", "window": "w520", "cand": "eac3_800 (+25%)", "visqol_lp16_mean": 4.708305169532018, "bandwidth_khz": 20.5, "ref_bandwidth_khz": 20.5}
+{"kind": "eac3_51_640", "window": "w520", "cand": "eac3_448 (anchor)", "visqol_lp16_mean": 4.603458625652481, "bandwidth_khz": 20.5, "ref_bandwidth_khz": 20.5}
+{"kind": "eac3_51_640", "window": "w520", "cand": "eac3_640_no-coupling", "visqol_lp16_mean": 4.672886196122023, "bandwidth_khz": 20.5, "ref_bandwidth_khz": 20.5}

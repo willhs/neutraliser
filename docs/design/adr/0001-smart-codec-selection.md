@@ -3,7 +3,7 @@ type: adr
 status: accepted
 owner: will
 contributors: []
-updated: 2026-03-07
+updated: 2026-11-08
 review_cycle: 90d
 agent_write: true
 links: ["docs/tasks/0004-preserve-audio-quality/task.md"]
@@ -49,7 +49,7 @@ Quality floors and caps are defined per encoder and channel count to prevent enc
 - **Always use the highest quality lossy codec** (e.g., AAC 320k / AC3 640k for everything) — simpler but still loses quality for lossless or high-bitrate sources.
 - **Always output lossless** (FLAC everywhere) — maximizes quality but FLAC isn't compatible with MP4 containers, and file sizes increase significantly.
 - **VBR encoding** — could be more efficient, but CBR matching the source bitrate is simpler and more predictable with the loudnorm filter.
-- **Runtime detection of libfdk_aac** — better AAC encoder, but adds complexity; deferred for future work.
+- **Runtime detection of libfdk_aac** — better AAC encoder, but adds complexity. Rejected 2026-11-08: it is not in the Debian ffmpeg the published image uses, the gain at equal bitrate is small and mixed (it cuts the top octave), and output would vary by host. Measurements: [research 0004](../../research/0004-lossy-encoders-libfdk-aac-eac3/research.md). Bitrate headroom on the native encoders helped in every case measured and is filed as a separate change to this ADR's bitrate rule.
 
 # Links
 
@@ -59,3 +59,4 @@ Quality floors and caps are defined per encoder and channel count to prevent enc
 ### Change Log
 - 2026-03-07 (agent:implement-plan): created
 - 2026-10-20 (agent:prod-parity): Steps 2-3 (lossless preservation, surround fallback) now run only under `--allow-codec-change`; by default a primary track whose codec can't be re-encoded to itself is skipped (`codec_change`), matching production's `skip_codec` and the vision's "keeps the source codec". See docs/research/prod-parity-audit-2026-10.md.
+- 2026-11-08 (agent:research): libfdk_aac alternative marked rejected, with the measurements in research 0004. Decision unchanged.

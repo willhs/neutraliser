@@ -1,0 +1,23 @@
+## production base: debian:trixie apt ffmpeg (what the Dockerfile installs)
+ffmpeg version 7.1.5-0+deb13u1 Copyright (c) 2000-2026 the FFmpeg developers
+encoders matching aac/fdk/eac3/ac3:
+ A....D aac                  AAC (Advanced Audio Coding)
+ A....D ac3                  ATSC A/52A (AC-3)
+ A....D ac3_fixed            ATSC A/52A (AC-3) (codec ac3)
+ A....D eac3                 ATSC A/52 E-AC-3
+configure mentions fdk: 0
+done
+
+## lab image (fdk-lab): ffmpeg 7.1.1 + fdk-aac 2.0.3
+ffmpeg version 7.1.1 Copyright (c) 2000-2025 the FFmpeg developers
+built with gcc 14 (Debian 14.2.0-19)
+configuration: --enable-nonfree --enable-libfdk-aac --disable-doc --disable-ffplay --disable-debug --extra-libs=-lm
+ A....D aac                  AAC (Advanced Audio Coding)
+ A....D libfdk_aac           Fraunhofer FDK AAC (codec aac)
+ A....D ac3                  ATSC A/52A (AC-3)
+ A....D eac3                 ATSC A/52 E-AC-3
+
+## developer Mac (homebrew ffmpeg)
+ffmpeg version 7.1.1 Copyright (c) 2000-2025 the FFmpeg developers
+ A....D aac                  AAC (Advanced Audio Coding)
+ A..... aac_at               aac (AudioToolbox) (codec aac)
