@@ -4,7 +4,7 @@
 
 **Stop reaching for the remote between every film.** Neutraliser levels the audio across your whole video library — one CLI, no server, no database, no plugin marketplace.
 
-It measures each file with FFmpeg's EBU R128 `loudnorm` filter and moves it to the same perceived loudness with one constant gain. Video is stream-copied, and only the track being levelled is re-encoded, at the source's own codec and bitrate. Re-encoding lossy audio still costs a generation, so files already close to target are left alone.
+It measures each file with FFmpeg's EBU R128 `loudnorm` filter and moves it to the same perceived loudness with one constant gain. Video is stream-copied, and only the track being levelled is re-encoded, in the source's own codec with 25% more bitrate than it had (AAC, AC-3, E-AC-3). Re-encoding lossy audio still costs a generation, so files already close to target are left alone.
 
 ```bash
 neutraliser process /media/movies --profile livingroom
@@ -85,7 +85,7 @@ Neutraliser does the one job: make the library level, leave everything else alon
 
 - **Whole-library levelling** — point it at a directory; it walks it, analyses, and normalises
 - **Home-theatre profiles** — `reference`, `livingroom`, `night`, tuned for how you're actually listening
-- **Source-matched codec & bitrate** — AAC stays AAC at its own bitrate and FLAC stays lossless, with no fixed 256k target. Very low and very high bitrates move to a sensible floor or cap (128k MP3 becomes 192k, stereo AAC tops out at 320k). A lossy re-encode is still one generation of loss ([ADR-0001](docs/design/adr/0001-smart-codec-selection.md))
+- **Source-matched codec, with bitrate headroom** — AAC stays AAC and FLAC stays lossless, with no fixed 256k target. AAC, AC-3 and E-AC-3 are written at 1.25x the source's bitrate (128k stereo AAC becomes 160k, 448k AC-3 becomes 576k; about 14 MB an hour for stereo, 60 MB for AC-3) because that scored higher in every case we measured; a second pass does not grow it again. Very low and very high bitrates move to a sensible floor or cap (128k MP3 becomes 192k, stereo AAC tops out at 320k). A lossy re-encode is still one generation of loss ([ADR-0001](docs/design/adr/0001-smart-codec-selection.md))
 - **Full stream preservation** — every audio and subtitle track, attachments (subtitle fonts), per-stream metadata (titles, languages), chapters and dispositions survive the round trip, and the original isn't replaced if any go missing. Data streams other than a MOV timecode aren't carried over
 - **Won't silently strip Atmos / DTS:X** — ffmpeg can't re-encode object audio, so files whose primary track is Dolby Atmos (E-AC3 JOC, TrueHD) or DTS:X are skipped and logged; `--allow-object-audio-loss` processes them anyway. Detecting them needs **FFmpeg 7.1+**. On anything older you get a warning at the start of each run and files *named* as Atmos are skipped, but an unnamed E-AC3 Atmos track can't be told apart from plain E-AC3 and would be flattened ([detection notes](docs/research/object-audio-detection.md))
 - **Safe by default** — writes `*_normalized` copies; originals untouched unless you pass `--replace`. Output is written under a hidden temporary name, checked against the source, then renamed into place, and a file that changes during the run is left alone

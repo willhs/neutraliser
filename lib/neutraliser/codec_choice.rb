@@ -12,20 +12,27 @@ module Neutraliser
     # `changes_codec` is true when the encoder is not the track's own codec: DTS/TrueHD
     # to FLAC or E-AC3 drops what the original was (a bitstream an AVR can decode, or
     # lossless turned lossy).
-    def self.decide(track, container, sample: nil)
+    #
+    # `stamp` is the track's earlier NEUTRALISER_* record, if any. A lossy re-encode gets headroom
+    # (HEADROOM) over the *first-generation* bitrate: the stamp's source_bitrate when it was a pass
+    # over this same codec, else the file's own. A redo thus lands on the same rate instead of
+    # growing 25% a pass. `first_generation_bitrate` is what the new stamp records.
+    def self.decide(track, container, sample: nil, stamp: nil)
       source_codec = track[:codec]&.downcase || 'unknown'
       channels = track[:channels].to_i
       channels = 2 if channels.zero?
       allowed = CONTAINER_CODECS.fetch(container, CONTAINER_CODECS['.mkv'])
       encoder = resolve_encoder(source_codec, allowed, container, channels)
       source_bitrate = known_bitrate(track, sample)
+      first_generation = first_generation_bitrate(source_bitrate, source_codec, stamp)
 
       {
         encoder: encoder,
-        bitrate: resolve_bitrate(encoder, source_bitrate, channels),
+        bitrate: resolve_bitrate(encoder, first_generation, channels, headroom: ENCODABLE_CODECS[source_codec] == encoder),
         source_codec: source_codec,
         source_profile: track[:profile],
         source_bitrate: source_bitrate,
+        first_generation_bitrate: first_generation,
         lossless_output: lossless_encoder?(encoder),
         changes_codec: ENCODABLE_CODECS[source_codec] != encoder
       }
@@ -79,15 +86,33 @@ module Neutraliser
       allowed.first || 'aac'
     end
 
-    def self.resolve_bitrate(encoder, source_bitrate, channels)
+    # The stamp's source_bitrate only when it describes this track's codec: after a codec change
+    # (DTS -> E-AC-3) the stamp's codec and bitrate belong to the old stream.
+    def self.first_generation_bitrate(source_bitrate, source_codec, stamp)
+      stamped = stamp&.source_bitrate.to_i
+      return source_bitrate unless stamped.positive? && stamp.source_codec.to_s.downcase == source_codec
+
+      stamped
+    end
+
+    # `headroom` is false for a codec change (DTS to E-AC-3): that bitrate is not a re-encode of
+    # the same codec, so it keeps the old rule.
+    def self.resolve_bitrate(encoder, first_generation, channels, headroom:)
       return nil if lossless_encoder?(encoder)
 
       channel_key = channels >= 6 ? 6 : 2
       floor = QUALITY_FLOORS.dig(encoder, channel_key) || QUALITY_FLOORS.dig(encoder, 2) || 128_000
       cap = QUALITY_CAPS.dig(encoder, channel_key) || QUALITY_CAPS.dig(encoder, 2) || 640_000
 
-      source_bitrate.positive? ? source_bitrate.clamp(floor, cap) : floor
+      return floor unless first_generation.positive?
+
+      (headroom ? with_headroom(encoder, first_generation) : first_generation).clamp(floor, cap)
     end
-    private_class_method :known_bitrate, :resolve_encoder, :resolve_bitrate
+
+    def self.with_headroom(encoder, bitrate)
+      wanted = (bitrate * HEADROOM.fetch(encoder, 1)).ceil
+      encoder == 'ac3' ? AC3_BITRATES.find { |step| step >= wanted } || AC3_BITRATES.last : wanted
+    end
+    private_class_method :known_bitrate, :resolve_encoder, :resolve_bitrate, :first_generation_bitrate, :with_headroom
   end
 end

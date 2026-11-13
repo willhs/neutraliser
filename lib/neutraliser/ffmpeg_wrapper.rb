@@ -206,8 +206,8 @@ module Neutraliser
     # What the primary track is re-encoded to, with the source's dialnorm carried across.
     def self.decide_codec(source, output_path)
       track = source.primary_track
-      choice = CodecChoice.decide(track, output_container(source, output_path),
-                                  sample: ->(t) { estimate_bitrate_from_packets(source.path, "a:#{t[:index]}") })
+      sample = ->(t) { estimate_bitrate_from_packets(source.path, "a:#{t[:index]}") }
+      choice = CodecChoice.decide(track, output_container(source, output_path), stamp: source.stamp, sample: sample)
       carry_dialnorm(choice, source.path, track)
     end
 
@@ -477,7 +477,7 @@ module Neutraliser
         profile: profile[:name], mode: mode.to_s, gain_db: gain, prior: prior,
         source_codec: codec_decision[:source_codec], source_dialnorm: codec_decision[:dialnorm],
         source_profile: codec_decision[:source_profile],
-        source_bitrate: codec_decision[:source_bitrate].to_i.positive? ? codec_decision[:source_bitrate] : nil,
+        source_bitrate: codec_decision[:first_generation_bitrate].to_i.positive? ? codec_decision[:first_generation_bitrate] : nil,
         measured_i: measured&.input_i, measured_tp: measured&.input_tp, measured_lra: measured&.input_lra,
         **(compression ? compression.stamp_fields : {})
       )

@@ -45,6 +45,16 @@ module Neutraliser
       'libvorbis' => { 2 => 256_000, 6 => 500_000 }
     }.freeze
 
+    # Bitrate headroom (research 0004): the re-encode is one more lossy generation, and +25% bits on the
+    # native encoders scored higher in all 16 source-window pairs measured. Only the encoders measured.
+    # Applied to the first-generation bitrate, then held by the floors and caps above.
+    HEADROOM = { 'aac' => Rational(5, 4), 'ac3' => Rational(5, 4), 'eac3' => Rational(5, 4) }.freeze
+
+    # The only rates the AC-3 encoder takes (bps). ffmpeg 7.1 rounds 560k up to 576k itself; we do it
+    # so older ffmpeg doesn't have to.
+    AC3_BITRATES = [32, 40, 48, 56, 64, 80, 96, 112, 128, 160, 192, 224, 256, 320, 384, 448, 512, 576, 640]
+                   .map { |kbps| kbps * 1000 }.freeze
+
     # Container compatibility — which encoders work in which containers
     CONTAINER_CODECS = {
       '.mp4' => %w[aac ac3 eac3 libmp3lame libopus],

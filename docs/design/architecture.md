@@ -52,7 +52,7 @@ Output File
 When re-encoding normalised audio, the codec and bitrate are selected to match the source as closely as possible:
 
 1. **Probe** — `Source` (`lib/neutraliser/source.rb`) reads codec, profile, bitrate, sample rate, channel count and track title, with every other fact about the file, from one ffprobe run. It happens once per file, before measuring, and the answer is passed on (see [One probe per file](#one-probe-per-file)).
-2. **Match** — `CodecChoice.decide` (`lib/neutraliser/codec_choice.rb`, tables in `codec_tables.rb`) tries to re-encode to the same codec at `max(source_bitrate, quality_floor)`, capped at a per-codec maximum.
+2. **Match** — `CodecChoice.decide` (`lib/neutraliser/codec_choice.rb`, tables in `codec_tables.rb`) tries to re-encode to the same codec at 1.25x the first-generation bitrate (AAC, AC-3, E-AC-3; an earlier stamp's `NEUTRALISER_SOURCE_BITRATE` stands in for the file's own so a second pass does not grow it again; AC-3 rounds up to a valid step), held between the per-codec floor and cap.
 3. **Fallback** — non-encodable codecs (DTS, TrueHD) fall back to FLAC in MKV or EAC3/AC3 in MP4. Lossless sources stay lossless when the container supports it.
 4. **Log** — every normalisation logs the decision (e.g., `Audio: ac3 448k -> ac3 448k`).
 
@@ -121,7 +121,7 @@ Both flags are independent and can be combined.
 ## Decisions / Rationale
 
 - **Two-pass loudnorm** — first pass measures, second pass applies with measured values for accurate normalisation.
-- **Smart codec selection** — match source codec and bitrate to avoid quality loss. See [ADR-0001](adr/0001-smart-codec-selection.md).
+- **Smart codec selection** — match the source codec and write it at 1.25x the first-generation bitrate to offset the lossy generation. See [ADR-0001](adr/0001-smart-codec-selection.md).
 - **Sidecar caching** — `.loudnorm_{profile}.json` files next to videos avoid re-analysis on repeated runs.
 - **The file is the record** — the `.neutraliser` sidecar lives in whichever root a run started from, so moving a file or running from another root lost the record and could cause another lossy re-encode. The Stamp travels with the file. The sidecar stays as a cache in front of the one-ffprobe tag check and is refreshed on a tag hit.
 - **One skip decider** — SkipDecider is the single place that answers "is this file already normalised?", backed by one sidecar (`.neutraliser`) and one staleness rule (size+mtime+profile, never expires). Quick LUFS sampling lives inside it as an internal fallback strategy and never writes its own marker file; a verified quick sample is recorded through the same sidecar. The legacy `.{basename}.neutralised_{profile}` marker format is retired; `neutraliser cache clean` removes any left over from older runs.

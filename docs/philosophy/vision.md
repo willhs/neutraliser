@@ -21,7 +21,7 @@ Never reach for the remote. Dialogue sits at a steady level across the whole lib
 - **One flag gives the original dynamics back.** Constant gain, with nothing compressed, stays available as a single flag.
 - **It can't fix everything.** A mumbled, badly mixed or masked line is quiet in the mix itself. Levelling the library can't make it intelligible.
 - **Nothing else is touched.** Video, subtitles, chapters and extra audio tracks are copied as-is. `--keep-original-audio` keeps the untouched track alongside.
-- **The re-encoded track keeps its quality.** It keeps the source codec and bitrate, and lossless stays lossless ([ADR-0001](../design/adr/0001-smart-codec-selection.md)).
+- **The re-encoded track keeps its quality.** It keeps the source codec with 25% more bits than the source had (AAC, AC-3 and E-AC-3, to buy back some of the one lossy generation), and lossless stays lossless ([ADR-0001](../design/adr/0001-smart-codec-selection.md)).
 - **Every change is visible.** Each file reports its gain, codec and whether compression was applied.
 - **Others' defaults stay cautious.** For anyone else's library, Atmos, DTS and TrueHD stay left alone unless asked.
 

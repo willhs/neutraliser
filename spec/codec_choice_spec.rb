@@ -21,7 +21,7 @@ RSpec.describe Neutraliser::CodecChoice do
   it 'matches source AC3 for MKV' do
     result = described_class.decide(make_track(codec: 'ac3', channels: 6, bit_rate: 448_000), '.mkv')
     expect(result[:encoder]).to eq('ac3')
-    expect(result[:bitrate]).to eq(448_000)
+    expect(result[:bitrate]).to eq(576_000)
   end
 
   it 'enforces quality floor when source bitrate is low' do
@@ -98,12 +98,12 @@ RSpec.describe Neutraliser::CodecChoice do
       sample = ->(_) { raise 'should not sample' }
       result = described_class.decide(track.merge(tags: { 'BPS' => '192000' }), '.mkv', sample: sample)
 
-      expect(result).to include(encoder: 'aac', bitrate: 192_000, source_bitrate: 192_000)
+      expect(result).to include(encoder: 'aac', bitrate: 240_000, source_bitrate: 192_000)
     end
 
     it 'samples when there is no tag, and uses a sample above the floor' do
       result = described_class.decide(track, '.mkv', sample: ->(_) { 192_000 })
-      expect(result).to include(bitrate: 192_000, source_bitrate: 192_000)
+      expect(result).to include(bitrate: 240_000, source_bitrate: 192_000)
     end
 
     it 'floors a sample below the minimum' do
@@ -117,7 +117,68 @@ RSpec.describe Neutraliser::CodecChoice do
 
     it 'does not sample a track that reports its bitrate' do
       sample = ->(_) { raise 'should not sample' }
-      expect(described_class.decide(make_track(codec: 'aac', bit_rate: 200_000), '.mkv', sample: sample)[:bitrate]).to eq(200_000)
+      expect(described_class.decide(make_track(codec: 'aac', bit_rate: 200_000), '.mkv', sample: sample)[:bitrate]).to eq(250_000)
+    end
+  end
+
+  describe 'bitrate headroom (research 0004)' do
+    def rate(codec, bit_rate, channels: 2, container: '.mkv', stamp: nil)
+      described_class.decide(make_track(codec: codec, channels: channels, bit_rate: bit_rate), container, stamp: stamp)[:bitrate]
+    end
+
+    it 'adds 25% to the measured rates: stereo AAC, 5.1 AAC, AC-3 and E-AC-3' do
+      expect(rate('aac', 128_000)).to eq(160_000)
+      expect(rate('aac', 384_000, channels: 6)).to eq(480_000)
+      expect(rate('ac3', 448_000, channels: 6)).to eq(576_000)
+      expect(rate('eac3', 640_000, channels: 6)).to eq(800_000)
+    end
+
+    it 'lands on a rate the AC-3 encoder takes, rounding up to the next step' do
+      expect(rate('ac3', 384_000, channels: 6)).to eq(512_000) # 480k is not a step
+      expect(rate('ac3', 192_000)).to eq(256_000) # 240k is not a step
+      expect(rate('ac3', 640_000, channels: 6)).to eq(640_000) # the cap, also a step
+      expect(described_class::AC3_BITRATES).to include(448_000, 512_000, 576_000, 640_000)
+    end
+
+    it 'stays inside the floors and caps' do
+      expect(rate('aac', 320_000)).to eq(320_000)
+      expect(rate('aac', 64_000)).to eq(128_000)
+      expect(rate('aac', 0)).to eq(128_000) # unknown stays at the floor, nothing to add to
+    end
+
+    it 'leaves encoders it was not measured on alone' do
+      expect(rate('mp3', 192_000)).to eq(192_000)
+      expect(rate('opus', 128_000, container: '.webm')).to eq(128_000)
+    end
+
+    it 'does not apply to a codec change, which keeps the old rule' do
+      expect(rate('dts', 1_509_000, channels: 6, container: '.mp4')).to eq(1_509_000)
+    end
+
+    describe 'with an earlier stamp' do
+      def stamp(codec:, bitrate:)
+        Neutraliser::Stamp.now(profile: 'livingroom', mode: 'linear', gain_db: 1.0, source_codec: codec, source_bitrate: bitrate,
+                               measured_i: -24.0, measured_tp: -3.0, measured_lra: 8.0)
+      end
+
+      it 'works from the first-generation bitrate, so a redo of a 160k output lands on 160k again' do
+        result = described_class.decide(make_track(codec: 'aac', bit_rate: 160_000), '.mkv', stamp: stamp(codec: 'aac', bitrate: 128_000))
+
+        expect(result).to include(bitrate: 160_000, source_bitrate: 160_000, first_generation_bitrate: 128_000)
+      end
+
+      it 'treats a stamp from before headroom the same: its output sits at the first-generation rate' do
+        result = described_class.decide(make_track(codec: 'ac3', channels: 6, bit_rate: 448_000), '.mkv', stamp: stamp(codec: 'ac3', bitrate: 448_000))
+
+        expect(result).to include(bitrate: 576_000, first_generation_bitrate: 448_000)
+      end
+
+      it 'ignores a stamp for another codec or with no bitrate' do
+        track = make_track(codec: 'eac3', channels: 6, bit_rate: 640_000)
+
+        expect(described_class.decide(track, '.mkv', stamp: stamp(codec: 'dts', bitrate: 1_509_000))[:first_generation_bitrate]).to eq(640_000)
+        expect(described_class.decide(track, '.mkv', stamp: stamp(codec: 'eac3', bitrate: nil))[:first_generation_bitrate]).to eq(640_000)
+      end
     end
   end
 

@@ -134,8 +134,8 @@ RSpec.describe Neutraliser::FFmpegWrapper do
     end
 
     it 'samples packet sizes when ffprobe gave no bitrate and there is no BPS tag' do
-      # 5 packets * 48000 bytes over the 10s window => 192000 bps, above the 128000 floor
-      expect(sampled_bitrate(["48000\n" * 5, '', ok_status])).to eq(192_000)
+      # 5 packets * 48000 bytes over the 10s window => 192000 bps, above the 128000 floor, plus 25% headroom
+      expect(sampled_bitrate(["48000\n" * 5, '', ok_status])).to eq(240_000)
     end
 
     it 'falls to the floor when sampling fails' do
@@ -194,13 +194,13 @@ RSpec.describe Neutraliser::FFmpegWrapper do
       result = described_class.apply_normalization(source_of(tracks, 'in.mkv'), 'out.mkv', measured_data, profile)
 
       expect(described_class).to have_received(:execute_with_timeout) do |cmd, *_rest|
-        expect(cmd).to include('-c:a:0', 'ac3', '-b:a:0', '448k')
+        expect(cmd).to include('-c:a:0', 'ac3', '-b:a:0', '576k')
         expect(cmd).to include('-map', '0:a:1', '-c:a:1', 'copy')
         filter_arg = cmd[cmd.index('-filter_complex') + 1]
         expect(filter_arg).to include('aresample=48000')
       end
       expect(result[:encoder]).to eq('ac3')
-      expect(result[:bitrate]).to eq(448_000)
+      expect(result[:bitrate]).to eq(576_000) # 448k + 25% = 560k, up to the next AC-3 step
       expect(result[:mode]).to eq(Neutraliser::Mode::LINEAR)
     end
 
@@ -278,7 +278,7 @@ RSpec.describe Neutraliser::FFmpegWrapper do
         expect(cmd[cmd.index('-filter_complex') + 1]).to start_with('[0:a:1]')
         maps = cmd.each_cons(2).select { |a, _| a == '-map' }.map(&:last)
         expect(maps).to eq(['0:v?', '0:a:0', '[norm]', '0:a:2', '0:s?', '0:t?'])
-        expect(pairs).to include(['-c:a:0', 'copy'], ['-c:a:1', 'ac3'], ['-b:a:1', '448k'], ['-c:a:2', 'copy'])
+        expect(pairs).to include(['-c:a:0', 'copy'], ['-c:a:1', 'ac3'], ['-b:a:1', '576k'], ['-c:a:2', 'copy'])
         expect(pairs).to include(['-map_metadata:s:a:0', '0:s:a:0'], ['-map_metadata:s:a:1', '0:s:a:1'],
                                  ['-map_metadata:s:a:2', '0:s:a:2'])
         expect(pairs).to include(['-metadata:s:a:1', a_string_starting_with('NEUTRALISER_')])
