@@ -30,9 +30,34 @@ RSpec.describe Neutraliser::Report do
 
   it 'counts linear, dynamic and untouched files and the profile mix' do
     expect(described_class.new(dir).counts).to eq(
-      total: 4, linear: 2, limited: 0, compressed: 0, dynamic: 1, untouched: 1, reencoded: 0,
-      profiles: { 'livingroom' => 2, 'night' => 1 }, recipes: { Neutraliser::Recipe::CURRENT.to_s => 3 }, dialnorms: {}, left: {}
+      total: 4, linear: 2, limited: 0, compressed: 0, dynamic: 1, imported: 0, untouched: 1, imported_from: {},
+      reencoded: 0, profiles: { 'livingroom' => 2, 'night' => 1 }, recipes: { Neutraliser::Recipe::CURRENT.to_s => 3 },
+      dialnorms: {}, left: {}
     )
+  end
+
+  it 'counts a file the shell script levelled as imported, not untouched' do
+    profile = Neutraliser::Profiles.default_profile
+    Neutraliser::SkipDecider.new(dir).mark_processed(File.join(dir, 'c.mkv'), profile,
+                                                     imported: Neutraliser::ImportedRecord.from_shell('skip_tol'))
+    report = described_class.new(dir)
+    row = report.rows.find { |r| r.file.end_with?('c.mkv') }
+
+    expect(report.counts).to include(imported: 1, untouched: 0, imported_from: { 'neutralise.sh' => 1 })
+    expect(row.state).to eq('imported')
+    expect(report.summary).to include('imported:           1 (levelled by neutralise.sh')
+    expect(report.to_tsv.lines.find { |l| l.include?('c.mkv') }.split("\t")[1]).to eq('imported')
+    expect(JSON.parse(report.to_json)['files'].find { |f| f['file'].end_with?('c.mkv') })
+      .to include('state' => 'imported', 'imported' => { 'source' => 'neutralise.sh', 'status' => 'skip_tol' })
+  end
+
+  it 'stops calling a file imported once it changed since the import' do
+    profile = Neutraliser::Profiles.default_profile
+    Neutraliser::SkipDecider.new(dir).mark_processed(File.join(dir, 'c.mkv'), profile,
+                                                     imported: Neutraliser::ImportedRecord.from_shell('done'))
+    File.write(File.join(dir, 'c.mkv'), 'changed contents')
+
+    expect(described_class.new(dir).counts).to include(imported: 0, untouched: 1)
   end
 
   it 'shows the dialnorm carried over, when any file has one' do

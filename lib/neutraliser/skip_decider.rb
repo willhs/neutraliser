@@ -89,7 +89,10 @@ module Neutraliser
     # file's own, so the sidecar never claims a newer recipe than the file has.
     # left: a LeftRecord of the levels it was judged close enough on (reason
     # within_tolerance), kept so `report` can place the untouched file.
-    def mark_processed(file_path, profile, tolerance: nil, recipe: Recipe::CURRENT, left: nil)
+    #
+    # imported: an ImportedRecord when another engine (neutralise.sh) did the work, so
+    # `report` can tell these files from ones nobody touched.
+    def mark_processed(file_path, profile, tolerance: nil, recipe: Recipe::CURRENT, left: nil, imported: nil)
       entry = {
         'size' => File.size(file_path),
         'mtime' => File.mtime(file_path).to_i,
@@ -99,6 +102,8 @@ module Neutraliser
       entry['recipe'] = recipe if recipe
       entry['tolerance'] = tolerance if tolerance
       entry['left'] = left.to_h_for_entry if left
+      entry['source'] = imported.source if imported
+      entry['source_status'] = imported.status if imported&.status
       entry['lra_target'] = @lra_target if @lra_target
       @entries[tracker_key(file_path)] = entry
       save
@@ -118,20 +123,36 @@ module Neutraliser
 
     # The record this sidecar holds for the file as it is now, or nil.
     def left_record(file_path)
+      entry = current_entry(file_path)
+      LeftRecord.from_entry(entry) if entry
+    end
+
+    # The entry for the file, if its size and mtime still match.
+    def current_entry(file_path)
       entry = @entries[tracker_key(file_path)]
       return nil unless entry && File.exist?(file_path)
       return nil if File.size(file_path) != entry['size'] || File.mtime(file_path).to_i != entry['mtime']
 
-      LeftRecord.from_entry(entry)
+      entry
     end
+
+    # The ImportedRecord this sidecar holds for the file as it is now, or nil.
+    def imported_record(file_path)
+      entry = current_entry(file_path)
+      ImportedRecord.from_entry(entry) if entry
+    end
+
+    def self.left_record_for(file_path, deciders = {}) = nearest(file_path, deciders, :left_record)
+
+    def self.imported_record_for(file_path, deciders = {}) = nearest(file_path, deciders, :imported_record)
 
     # The nearest record for the file in any `.neutraliser` from its own folder
     # up: the run that wrote it may have started anywhere above. deciders memoises
     # the sidecar read per folder across a batch of lookups.
-    def self.left_record_for(file_path, deciders = {})
+    def self.nearest(file_path, deciders, lookup)
       dir = File.dirname(File.expand_path(file_path))
       loop do
-        record = (deciders[dir] ||= new(dir, fast_verification: false)).left_record(file_path)
+        record = (deciders[dir] ||= new(dir, fast_verification: false)).public_send(lookup, file_path)
         return record if record
 
         parent = File.dirname(dir)

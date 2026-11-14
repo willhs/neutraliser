@@ -38,6 +38,16 @@ RSpec.describe Neutraliser::ManifestImport do
     expect(%w[tv/A/s1/a.mkv tv/A/s1/b.mkv movies/M/m.mkv].map { |rel| processed?(rel) }).to all(be(true))
   end
 
+  it 'records the source and the manifest status in the sidecar entry' do
+    media('m.mkv')
+    write_manifest(entry('m.mkv', 'skip_tol'))
+
+    import
+
+    expect(JSON.parse(File.read(File.join(root, '.neutraliser'))).fetch('m.mkv'))
+      .to include('source' => 'neutralise.sh', 'source_status' => 'skip_tol')
+  end
+
   # neutralise.sh decoded with DRC on and reset dialnorm: recording its files as the current recipe would hide them from a redo.
   it 'records what the retired script made as unversioned, so --redo-recipe unversioned finds it' do
     path = media('m.mkv')

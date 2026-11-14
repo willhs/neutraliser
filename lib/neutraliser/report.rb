@@ -4,8 +4,10 @@ module Neutraliser
   # `neutraliser report PATH`: what the files under PATH say was done to them,
   # read from their own NEUTRALISER_* tags (see Stamp). A file with no tags is
   # untouched; if a run looked at it and left it alone on purpose, the
-  # `.neutraliser` sidecar says why (see LeftRecord), and that is the one thing
-  # read from a sidecar. Run manifests aren't consulted.
+  # `.neutraliser` sidecar says why (see LeftRecord). A file `import-manifest`
+  # carried over from the retired shell script has no tags but a sidecar `source`
+  # (see ImportedRecord): it is `imported`, not untouched. Those two are all that
+  # is read from a sidecar. Run manifests aren't consulted.
   #
   # It also judges the library: the remote-free rate (see RemoteFreeRate), from
   # what the records say happened, or from reading each file when `measure:`.
@@ -22,8 +24,13 @@ module Neutraliser
 
     # state is the stamp's mode ('linear' / 'limited' / 'compressed' / 'dynamic'), or 'untouched' when
     # the file carries no record. left says why an untouched file was left alone, if known.
-    Row = Data.define(:file, :stamp, :left) do
-      def state = stamp ? (stamp.mode || 'unknown') : 'untouched'
+    Row = Data.define(:file, :stamp, :left, :imported) do
+      def state
+        return stamp.mode || 'unknown' if stamp
+
+        imported ? 'imported' : 'untouched'
+      end
+
       def record = stamp || left
       def recipe_label = stamp ? Recipe.label(stamp.recipe) : nil
 
@@ -45,7 +52,8 @@ module Neutraliser
       @rows = video_files(path).map do |file|
         source = sources[file] = Source.new(file)
         stamp = source.stamp
-        Row.new(file: file, stamp: stamp, left: stamp ? nil : SkipDecider.left_record_for(file, deciders))
+        Row.new(file: file, stamp: stamp, left: stamp ? nil : SkipDecider.left_record_for(file, deciders),
+                imported: stamp ? nil : SkipDecider.imported_record_for(file, deciders))
       end
       # Judged now, not on first use: a caller may delete the files (the rate harness does) once built.
       @final_levels = {}
@@ -63,7 +71,9 @@ module Neutraliser
         limited: states.fetch(Mode::LIMITED.to_s, 0),
         compressed: states.fetch(Mode::COMPRESSED.to_s, 0),
         dynamic: states.fetch(Mode::DYNAMIC.to_s, 0),
+        imported: states.fetch('imported', 0),
         untouched: states.fetch('untouched', 0),
+        imported_from: rows.filter_map { |row| row.imported&.source }.tally.sort.to_h,
         reencoded: rows.count { |row| row.stamp&.prior },
         profiles: rows.filter_map { |row| row.stamp&.profile }.tally.sort.to_h,
         recipes: rows.filter_map(&:recipe_label).tally.sort_by { |label, _| label }.to_h,
@@ -88,6 +98,7 @@ module Neutraliser
                "  normalised limited: #{c[:limited]}",
                "  normalised dynamic: #{c[:dynamic]}",
                "  untouched:          #{c[:untouched]}"]
+      lines.insert(4, "  imported:           #{c[:imported]} (levelled by #{c[:imported_from].keys.join(', ')}, no tags)") if c[:imported].positive?
       lines.insert(3, "  normalised compressed: #{c[:compressed]}") if c[:compressed].positive?
       lines << "    left alone: #{c[:left].map { |reason, n| "#{reason}=#{n}" }.join(', ')}" if c[:left].any?
       lines << "Re-encoded over an earlier pass: #{c[:reencoded]} (mode and recipe say what the last pass did; prior holds the rest)" if c[:reencoded].positive?
@@ -112,7 +123,7 @@ module Neutraliser
 
     def to_json(*)
       files = rows.map do |row|
-        { file: row.file.scrub, state: row.state, stamp: row.stamp&.to_h, left: row.left&.to_h, output: output_h(row),
+        { file: row.file.scrub, state: row.state, stamp: row.stamp&.to_h, left: row.left&.to_h, imported: row.imported&.to_h_compact, output: output_h(row),
           dialogue: dialogue_h(row) }.compact
       end
       summary = counts.merge(remote_free_rate: rate.to_h)
