@@ -32,6 +32,8 @@ Entry point and navigation map for the neutraliser documentation set. Neutralise
 - [`ops/runbook.md`](ops/runbook.md) — Operational procedures and recovery steps
 - [`ops/quality.md`](ops/quality.md) — Quality strategy, SLOs, and testing approach
 - [`ops/data_contracts.md`](ops/data_contracts.md) — Schemas, SLAs, and backward-compatibility expectations
+- [`log.d/README.md`](log.d/README.md) — Per-job log fragment format, ISO dates and land-step stitching rules (`log.md` is written by the land step)
+- [`index.d/README.md`](index.d/README.md) — Per-job index fragment format and land-step stitching rules
 
 ## Research
 - [`research/landscape.md`](research/landscape.md) — Market and prior-art survey
