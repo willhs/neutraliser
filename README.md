@@ -94,7 +94,7 @@ Neutraliser does the one job: make the library level, leave everything else alon
 - **Skips what's already fine** — a file tagged for the same profile is never re-encoded and a `.neutraliser` sidecar caches that check, so a re-run over a processed library costs seconds, not hours
 - **Resumable** — interrupted a 500-file run? `--resume` picks up from the manifest, which is written as each file finishes
 - **Plex-aware** — `analyze-plex` gives a quick loudness triage across your Plex libraries before you change a single file
-- **Big-batch friendly** — `--fast` (single-pass, ~30% quicker) and `--local-stage` for slow network mounts
+- **Big-batch friendly** — `--resume` after interruptions and `--local-stage` for slow network mounts
 
 ## Requirements
 
@@ -183,16 +183,16 @@ Treat the output as a rough triage tool, not a verdict — it judges each title 
 neutraliser process --dry-run /media/tv/some-series
 ```
 
-**Level a large library overnight**, in place, at the faster single-pass setting (always compresses, so it needs `--allow-dynamic`):
+**Level a large library overnight**, in place, with the default constant-gain pass (resumable, and it skips files already at target):
 
 ```bash
-neutraliser process --replace --fast --allow-dynamic /media/movies
+neutraliser process --replace /media/movies
 ```
 
 **Resume after an interruption** — a dropped SMB mount, a reboot, a Ctrl-C:
 
 ```bash
-neutraliser process --replace --fast --allow-dynamic --resume /media/movies
+neutraliser process --replace --resume /media/movies
 ```
 
 **Night listening** — a tighter dynamic range so quiet dialogue stays audible without explosions waking the house:
@@ -258,7 +258,7 @@ Any numeric `--target-level` overrides the profile's LUFS while keeping the rest
 4. **Normalise** — applies a constant gain (an ffmpeg `volume` filter) computed from the measured values, capped so true peak stays within the profile ceiling. With `--allow-dynamic` (or the `night` profile) a second `loudnorm` pass is used instead, which may fall back to dynamic compression. Video is stream-copied — it is never re-encoded. Chapters, subtitles, and per-stream metadata are mapped across explicitly.
 5. **Write** — to a hidden temporary file beside the target. Duration, every stream, chapters and the track's channel count are checked against the source, then one rename puts it at `*_normalized.<ext>`, or over the original with `--replace`. Through a symlink, `--replace` updates the real file and keeps the link. It does break hard links: the old copy stays under its other names, so a library hard-linked to a torrent client's folder takes up the space twice. The same ffmpeg pass writes the `NEUTRALISER_*` tags ([tag schema](docs/ops/data_contracts.md)), and the sidecar is updated.
 
-Use `--fast` (requires `--allow-dynamic` or the `night` profile) to collapse steps 2 and 4 into a single dynamic-mode pass: roughly 30% quicker, marginally less precise ([ADR-0002](docs/design/adr/0002-performance-flags.md) has the benchmarks).
+`--fast` (requires `--allow-dynamic` or the `night` profile) collapses steps 2 and 4 into a single dynamic-mode pass: roughly 30% quicker, but it never measures first, so it **compresses every file, including ones already at target**. Not recommended for a whole library; use it for files you already know need dynamic compression ([ADR-0002](docs/design/adr/0002-performance-flags.md) has the benchmarks).
 
 ## Commands
 

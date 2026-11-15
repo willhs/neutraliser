@@ -2,8 +2,7 @@ require 'open3'
 
 module Neutraliser
   # Free-space floors for the volume a run writes to, so a long sweep over a
-  # NAS never fills it (the 2026-07 disk crisis took Plex and the *arrs down
-  # with it). Two floors, both off by default:
+  # NAS never fills it and takes the media server down with it. Two floors, both off by default:
   #   min_free   - below this (or below the file's own size) a file is skipped
   #                and the run carries on;
   #   abort_free - below this the whole run stops.

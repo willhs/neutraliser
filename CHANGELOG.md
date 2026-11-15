@@ -4,45 +4,21 @@ All notable changes to this project are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and this project adheres to
 [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [Unreleased]
+## [0.1.0] — draft (undated, untagged)
+
+First public release. Run from source (`git clone` + `bundle install`) or with the
+Docker image; a RubyGems release is deferred until v0.1 has had real-world mileage.
+
+### Security
+
+- A `.env` in the working directory no longer runs commands or reaches ffmpeg. `dotenv` is
+  gone: `analyze-plex` reads `PLEX_TOKEN` and `PLEX_SERVER_URL` from it literally, and nothing
+  else does. Unused `plex-ruby` and `nokogiri` are removed too.
 
 ### Added
 
 - `NEUTRALISER_SOURCE_PROFILE` names what a codec change or `--allow-object-audio-loss` converted from, the only record of it once the track is gone. `NEUTRALISER_PRIOR` lists every earlier pass a re-encode went over, so a `linear` on compressed audio, or a recipe 2 over a recipe 1's baked-in DRC, doesn't read as all that happened; `report` counts them. Nothing re-levels because of either.
 - **Read-only dialogue estimate** in `report --measure` and `rate-sample`; no audio and no default changes. Per file: the dialnorm it carries, an estimated dialogue level with **the method that produced it**, and the loudness above dialogue (programme minus dialogue, EBU R 128 s4's LDR). Beside the usual remote-free rate, a second one anchored on dialogue (within 2 LU of -27 LUFS, programme at most 5 LU above it; `--dialogue-target`, `--ldr-limit`). The only method is the centre channel of 5.1 / 7.1 mixes through the EBU R 128 measurement (medium confidence); stereo and mono get no figure and are counted as not judged. `--no-dialogue` skips the extra read. A voice-activity gate is left as an optional extra ([ADR 0003](docs/design/adr/0003-optional-voice-gate-for-dialogue.md)).
-
-### Changed
-
-- **Bitrate headroom on re-encoded AAC, AC-3 and E-AC-3.** The re-encoded track is written at 1.25x the first-generation bitrate (floors and caps still hold; AC-3 rounds up to a valid rate, so 448k becomes 576k) instead of the source's own: +25% bits scored higher in all 16 source-window pairs measured in [research 0004](docs/research/0004-lossy-encoders-libfdk-aac-eac3/research.md), at about +14 MB/hour for stereo AAC and +58 MB/hour for AC-3 5.1. The first generation is read from the file's earlier `NEUTRALISER_SOURCE_BITRATE`, so a second pass (another profile, a redo) writes the same rate rather than adding 25% each time. Not applied to mp3/Opus/Vorbis, to codec changes or to lossless. `Recipe` is not bumped, so existing files are not offered for a redo. [ADR-0001](docs/design/adr/0001-smart-codec-selection.md) amended.
-- **One ffprobe run per file.** A `process --replace` of a 2-audio-track mkv used to run ffprobe 15 times (audio tracks, stamp, container, stream counts, duration, subtitles, and the `streamio-ffmpeg` gem's own probe, each asked separately and repeated); it now runs it twice, once for the source and once for the output it verifies. On a NAS each one opened the file over SMB. The facts live in a new `Source` value passed to the guards, the skip decision, the loudness measurement and the command builder; the primary track and the "no audio" rule are decided in one place. A file the sidecar marks done still costs no probe. The `streamio-ffmpeg` dependency is gone. The one visible difference: a file is judged by its primary track's stamp, where the old stamp read took the first default-flagged audio track.
-- **One owner for the output's audio layout.** Which output audio stream is which (the normalised primary in place, the kept original after it, later tracks moved up) was worked out three times: in the ffmpeg command builder, in the expected-stream count, and in the output check, which assumed the primary kept its index. It now lives in `AudioLayout`; `RemuxPlan` builds the command from it and the output check compares the written file with the same layout. The two normalise paths share one prelude. No behaviour change: the ffmpeg command is identical for every combination of track layout, container and `--keep-original-audio` tried before and after.
-- Docs only: the vision now says dialogue steady across the library with loud moments limited, and the README no longer claims the tool never compresses. No behaviour change. The 0.1 criteria are in `docs/work/roadmap.md`; 0.1 is undated until they pass.
-
-### Fixed
-
-- **A failed dialnorm read no longer resets dialnorm for good.** A read that failed for a reason unrelated to the file (a full temp disk, a timeout) was logged and the run went on, so the encoder wrote -31 over the source's value and the file was replaced, exit 0. The file now fails, is left alone and is tried again next run. A track whose frames really hold no dialnorm still gets the encoder's default.
-- **`--lra-target` picks the gentlest setting that works.** Its bisection assumed the loudness range falls steadily with stronger compression. It doesn't: compressing the loud parts lets quiet ones back over the LRA gate, so one test clip read 9.5, 20.9, 17.2, 13.1, 9.2, 5.6 LU down the ladder and got `severe` where `gentle` reached the target. It now walks up from the gentle end (one to six reads of the file). A target nothing reaches gets the setting that narrows most, not the strongest, which had widened another clip from 7.8 to 12.7 LU; when none narrows the range by `--tolerance`, the file is levelled without compression.
-- **`report`'s computed rate no longer flatters.** It assumed a `dynamic` file landed on target at the profile's range (a test clip called remote-free was really -26 LUFS, LRA 15.4), and added a `compressed` file's pre-compression level to its post-compression gain (14 LU out). Only `linear` stamps and left records are computed now; the rest wait for `--measure`. When files can't be judged, the rate also prints what it would be if they all failed.
-- **`rate-sample` rates only the recipe it was asked about.** A file an earlier run had normalised was skipped and then measured anyway, crediting the recipe with that run's work. Those are now left out and counted apart.
-- **`--resume` with `--redo-recipe` or `--lra-target`** skipped a file a manifest said was normalised, without looking at what the run asked for.
-- **`import-manifest` recorded files the retired script made as the current recipe**, hiding them from `--redo-recipe unversioned`. They are now unversioned.
-- **The dialogue estimate read the wrong channel on `6.0(front)` and `6.1(front)`** (a side-front centre and the LFE). They get no figure now, with the reason.
-- The CI fixture for the dialogue specs used an `amix` option ffmpeg 4.2 doesn't have.
-- **Constant gain is now constant gain on Dolby tracks.** FFmpeg's AC-3 / E-AC-3 decoder applies
-  the stream's dynamic-range (DRC) words by default and its encoders write none back, so a
-  `--replace` run baked the compression into the file for good while the stamp said `linear`
-  (a 20 LU test clip came out at 12 LU). Every decode (measurement, sampling, the normalise pass)
-  now uses `-drc_scale 0`. And the encoders write dialnorm -31 unless told otherwise, so a
-  re-encoded track lost its source's attenuation while a left-alone file kept it (two files
-  6 LU apart ended 7 LU apart the other way on a decoder that honours dialnorm). The source's
-  dialnorm is now read and passed to the encoder, recorded as `NEUTRALISER_SOURCE_DIALNORM` and
-  shown by `report`. **Recipe is now 2**, and the analysis cache is invalidated (version 1.2):
-  measured levels change for these tracks. Files already processed keep recipe 1 and any DRC
-  already baked in; `--redo-recipe 1` can level them again but cannot undo it. Only a kept
-  original (`--keep-original-audio`) can.
-
-### Added
-
 - Stamps record a **recipe version** (`NEUTRALISER_RECIPE`, also in the sidecar). Files stamped
   before this stay valid and show as `unversioned` in `report`. A run never re-levels a file
   because its recipe is older; `process --redo-recipe 1,unversioned` is the deliberate re-run.
@@ -62,20 +38,6 @@ All notable changes to this project are documented here. The format follows
   channel first. Refuses `--allow-dynamic`, `--fast`, `--fast-verify` and the `night` profile.
   The default and the profiles are unchanged. Measured on a synthetic fixture only:
   `docs/research/compression-ladder-fixtures-2026-11.md`.
-
-## [0.1.0] — 2026-10-31
-
-First public release. Run from source (`git clone` + `bundle install`) or with the
-Docker image; a RubyGems release is deferred until v0.1 has had real-world mileage.
-
-### Security
-
-- A `.env` in the working directory no longer runs commands or reaches ffmpeg. `dotenv` is
-  gone: `analyze-plex` reads `PLEX_TOKEN` and `PLEX_SERVER_URL` from it literally, and nothing
-  else does. Unused `plex-ruby` and `nokogiri` are removed too.
-
-### Added
-
 - `process` — EBU R128 loudness normalisation for a single file or a whole directory
   tree, writing `*_normalized` copies by default or replacing originals with `--replace`.
 - Three home-theatre profiles — `reference` (−23 LUFS), `livingroom` (−20 LUFS, default),
@@ -132,6 +94,10 @@ Docker image; a RubyGems release is deferred until v0.1 has had real-world milea
 
 ### Changed
 
+- **Bitrate headroom on re-encoded AAC, AC-3 and E-AC-3.** The re-encoded track is written at 1.25x the first-generation bitrate (floors and caps still hold; AC-3 rounds up to a valid rate, so 448k becomes 576k) instead of the source's own: +25% bits scored higher in all 16 source-window pairs measured in [research 0004](docs/research/0004-lossy-encoders-libfdk-aac-eac3/research.md), at about +14 MB/hour for stereo AAC and +58 MB/hour for AC-3 5.1. The first generation is read from the file's earlier `NEUTRALISER_SOURCE_BITRATE`, so a second pass (another profile, a redo) writes the same rate rather than adding 25% each time. Not applied to mp3/Opus/Vorbis, to codec changes or to lossless. `Recipe` is not bumped, so existing files are not offered for a redo. [ADR-0001](docs/design/adr/0001-smart-codec-selection.md) amended.
+- **One ffprobe run per file.** A `process --replace` of a 2-audio-track mkv used to run ffprobe 15 times (audio tracks, stamp, container, stream counts, duration, subtitles, and the `streamio-ffmpeg` gem's own probe, each asked separately and repeated); it now runs it twice, once for the source and once for the output it verifies. On a NAS each one opened the file over SMB. The facts live in a new `Source` value passed to the guards, the skip decision, the loudness measurement and the command builder; the primary track and the "no audio" rule are decided in one place. A file the sidecar marks done still costs no probe. The `streamio-ffmpeg` dependency is gone. The one visible difference: a file is judged by its primary track's stamp, where the old stamp read took the first default-flagged audio track.
+- **One owner for the output's audio layout.** Which output audio stream is which (the normalised primary in place, the kept original after it, later tracks moved up) was worked out three times: in the ffmpeg command builder, in the expected-stream count, and in the output check, which assumed the primary kept its index. It now lives in `AudioLayout`; `RemuxPlan` builds the command from it and the output check compares the written file with the same layout. The two normalise paths share one prelude. No behaviour change: the ffmpeg command is identical for every combination of track layout, container and `--keep-original-audio` tried before and after.
+- Docs only: the vision now says dialogue steady across the library with loud moments limited, and the README no longer claims the tool never compresses. No behaviour change. The 0.1 criteria are in `docs/work/roadmap.md`; 0.1 is undated until they pass.
 - `analyze-plex` no longer gives a confident per-file verdict from a sample. Titles are
   estimated from five 60-second windows spread across the runtime (combined on energy,
   not by averaging LUFS), and a title is flagged Too Loud / Too Quiet only when the whole
@@ -160,6 +126,26 @@ Docker image; a RubyGems release is deferred until v0.1 has had real-world milea
 
 ### Fixed
 
+- **A failed dialnorm read no longer resets dialnorm for good.** A read that failed for a reason unrelated to the file (a full temp disk, a timeout) was logged and the run went on, so the encoder wrote -31 over the source's value and the file was replaced, exit 0. The file now fails, is left alone and is tried again next run. A track whose frames really hold no dialnorm still gets the encoder's default.
+- **`--lra-target` picks the gentlest setting that works.** Its bisection assumed the loudness range falls steadily with stronger compression. It doesn't: compressing the loud parts lets quiet ones back over the LRA gate, so one test clip read 9.5, 20.9, 17.2, 13.1, 9.2, 5.6 LU down the ladder and got `severe` where `gentle` reached the target. It now walks up from the gentle end (one to six reads of the file). A target nothing reaches gets the setting that narrows most, not the strongest, which had widened another clip from 7.8 to 12.7 LU; when none narrows the range by `--tolerance`, the file is levelled without compression.
+- **`report`'s computed rate no longer flatters.** It assumed a `dynamic` file landed on target at the profile's range (a test clip called remote-free was really -26 LUFS, LRA 15.4), and added a `compressed` file's pre-compression level to its post-compression gain (14 LU out). Only `linear` stamps and left records are computed now; the rest wait for `--measure`. When files can't be judged, the rate also prints what it would be if they all failed.
+- **`rate-sample` rates only the recipe it was asked about.** A file an earlier run had normalised was skipped and then measured anyway, crediting the recipe with that run's work. Those are now left out and counted apart.
+- **`--resume` with `--redo-recipe` or `--lra-target`** skipped a file a manifest said was normalised, without looking at what the run asked for.
+- **`import-manifest` recorded files the retired script made as the current recipe**, hiding them from `--redo-recipe unversioned`. They are now unversioned.
+- **The dialogue estimate read the wrong channel on `6.0(front)` and `6.1(front)`** (a side-front centre and the LFE). They get no figure now, with the reason.
+- The CI fixture for the dialogue specs used an `amix` option ffmpeg 4.2 doesn't have.
+- **Constant gain is now constant gain on Dolby tracks.** FFmpeg's AC-3 / E-AC-3 decoder applies
+  the stream's dynamic-range (DRC) words by default and its encoders write none back, so a
+  `--replace` run baked the compression into the file for good while the stamp said `linear`
+  (a 20 LU test clip came out at 12 LU). Every decode (measurement, sampling, the normalise pass)
+  now uses `-drc_scale 0`. And the encoders write dialnorm -31 unless told otherwise, so a
+  re-encoded track lost its source's attenuation while a left-alone file kept it (two files
+  6 LU apart ended 7 LU apart the other way on a decoder that honours dialnorm). The source's
+  dialnorm is now read and passed to the encoder, recorded as `NEUTRALISER_SOURCE_DIALNORM` and
+  shown by `report`. **Recipe is now 2**, and the analysis cache is invalidated (version 1.2):
+  measured levels change for these tracks. Files already processed keep recipe 1 and any DRC
+  already baked in; `--redo-recipe 1` can level them again but cannot undo it. Only a kept
+  original (`--keep-original-audio`) can.
 - On ffmpeg older than 5.1 (4.2 was checked), every file failed under the `reference`
   profile: `loudnorm` rejects the profile's loudness range of 50. It now gets 20 there, which
   changes nothing for constant gain. `--limit-db` needs 5.1 or newer, so older builds now
