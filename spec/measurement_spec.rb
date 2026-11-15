@@ -87,11 +87,16 @@ RSpec.describe Neutraliser::Measurement do
                                          'input_thresh' => '-37.1', 'target_offset' => '0.01')
     end
 
-    it 'takes the integrated loudness, gate and offset from ebur128 and keeps loudnorm\'s range' do
-      measurement = loudnorm.with_all_channels(integrated: -25.3, threshold: -35.3, true_peak: -21.9, target_i: -20.0)
+    it 'takes the integrated loudness, gate, offset and range from ebur128' do
+      measurement = loudnorm.with_all_channels(integrated: -25.3, threshold: -35.3, true_peak: -21.9, target_i: -20.0, range: 15.2)
 
-      expect(measurement).to have_attributes(input_i: -25.3, input_thresh: -35.3, input_lra: 3.0)
+      expect(measurement).to have_attributes(input_i: -25.3, input_thresh: -35.3, input_lra: 15.2)
       expect(measurement.target_offset).to be_within(0.001).of(5.3)
+    end
+
+    it 'keeps loudnorm\'s range when ebur128 printed none' do
+      expect(loudnorm.with_all_channels(integrated: -25.3, threshold: -35.3, true_peak: -21.9, target_i: -20.0).input_lra).to eq(3.0)
+      expect(loudnorm.with_all_channels(integrated: -25.3, threshold: -35.3, true_peak: -21.9, target_i: -20.0, range: Float::INFINITY).input_lra).to eq(3.0)
     end
 
     it 'keeps the higher of the two peaks' do

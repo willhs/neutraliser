@@ -91,15 +91,20 @@ module Neutraliser
     end
 
     # This measurement with the figures ebur128 read over every channel put in place of loudnorm's, which
-    # only counts six (finding 14 of research 0003). Integrated loudness and its gate come from ebur128;
-    # the peak is the higher of the two; target_offset follows the new loudness. The range stays
-    # loudnorm's: both meters agree on it closely enough, and the compression ladder compares like with like.
+    # only counts six (finding 14 of research 0003; the range, finding 5 of the 15 Nov review). Integrated
+    # loudness, its gate and the range come from ebur128; the peak is the higher of the two; target_offset
+    # follows the new loudness. The range matters as much as the level: loud or quiet passages that live
+    # only in the side surrounds widen it, and rung 3 of the ladder decides on it. Every read of a track
+    # above six channels goes through here, candidate compressions included, so ebur128's range is
+    # compared with ebur128's and the tolerance means the same before and after. Both meters follow the
+    # EBU Tech 3342 definition, so on six channels or under they agree within about half a LU; a nil
+    # range (the summary did not print one) keeps loudnorm's.
     # A silent measurement stays silent (ebur128 reads it as -inf too).
-    def with_all_channels(integrated:, threshold:, true_peak:, target_i:)
+    def with_all_channels(integrated:, threshold:, true_peak:, target_i:, range: nil)
       return self if silent? || integrated.nil? || !integrated.finite?
 
       self.class.new(
-        input_i: integrated, input_tp: [input_tp, true_peak || input_tp].max, input_lra: input_lra,
+        input_i: integrated, input_tp: [input_tp, true_peak || input_tp].max, input_lra: range&.finite? ? range : input_lra,
         input_thresh: threshold || input_thresh, target_offset: target_i - integrated
       )
     end

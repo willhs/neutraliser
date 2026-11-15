@@ -12,7 +12,7 @@ RSpec.describe 'Levelling ladder (--ladder) on real files', :real_ffmpeg do
     next if @skip_real
 
     @fixtures = Dir.mktmpdir
-    @source = %i[narrow peaky wide dts dialogue].to_h { |kind| [kind, LadderFixture.build(kind, File.join(@fixtures, "#{kind}.mkv"))] }
+    @source = %i[narrow peaky wide dts dialogue sides71].to_h { |kind| [kind, LadderFixture.build(kind, File.join(@fixtures, "#{kind}.mkv"))] }
   end
   after(:all) { FileUtils.remove_entry(@fixtures) if @fixtures }
 
@@ -84,6 +84,16 @@ RSpec.describe 'Levelling ladder (--ladder) on real files', :real_ffmpeg do
     stamp = stamp_of(path)
     expect(stamp).to have_attributes(mode: 'compressed', recipe: 3)
     expect(levels(path)[:lra]).to be < levels(@source.fetch(:wide))[:lra] - 1.0
+    expect(rung_of(path)).to eq('3-compress')
+  end
+
+  it 'rung 3: compresses a 7.1 file whose range lives in the side channels, which loudnorm does not count' do
+    path = copy(:sides71)
+    expect(levels(path)[:lra]).to be > 13.5
+    run_cli('--ladder', path)
+
+    expect(stamp_of(path)).to have_attributes(mode: 'compressed', recipe: 3)
+    expect(levels(path)[:lra]).to be < 13.0
     expect(rung_of(path)).to eq('3-compress')
   end
 

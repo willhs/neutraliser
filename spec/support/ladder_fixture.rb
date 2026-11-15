@@ -21,12 +21,28 @@ module LadderFixture
   def build(kind, path)
     dir = File.dirname(path)
     return LraFixture.build(path, dir) if kind == :wide
+    return build_side_dynamics(path) if kind == :sides71
 
     audio, codec = AUDIO.fetch(kind)
     LraFixture.run!('ffmpeg', '-hide_banner', '-loglevel', 'error', '-y',
                     '-f', 'lavfi', '-i', "color=c=blue:size=64x64:duration=#{SECONDS}:rate=10",
                     *audio, '-map', '0:v', '-map', '[a]', '-c:v', 'libx264', '-preset', 'ultrafast', *codec,
                     '-metadata:s:a:0', 'language=eng', path)
+    path
+  end
+
+  # 7.1 PCM whose range lives only in the side surrounds (channels 7 and 8, which loudnorm does not count):
+  # the other six carry steady quiet noise, the sides alternate 4 s loud and 4 s quiet. Seeded, so the
+  # ranges are repeatable: loudnorm reads LRA 0.1, ebur128 about 14.9.
+  def build_side_dynamics(path)
+    graph = "[2:a]volume='if(lt(mod(t,8),4),1,0.03)':eval=frame,asplit=2[s0][s1];[1:a]asplit=6[a0][a1][a2][a3][a4][a5];" \
+            '[a0][a1][a2][a3][a4][a5][s0][s1]join=inputs=8:channel_layout=7.1[a]'
+    LraFixture.run!('ffmpeg', '-hide_banner', '-loglevel', 'error', '-y',
+                    '-f', 'lavfi', '-i', "color=c=blue:size=64x64:duration=#{SECONDS * 2}:rate=10",
+                    '-f', 'lavfi', '-i', pink(0.05, 1, SECONDS * 2),
+                    '-f', 'lavfi', '-i', pink(0.4, 2, SECONDS * 2),
+                    '-filter_complex', graph, '-map', '0:v', '-map', '[a]', '-c:v', 'libx264', '-preset', 'ultrafast',
+                    '-c:a', 'pcm_s24le', '-metadata:s:a:0', 'language=eng', path)
     path
   end
 
@@ -38,7 +54,7 @@ module LadderFixture
      '-filter_complex', '[1:a]anull[a]']
   end
 
-  def pink(amplitude, seed) = "anoisesrc=color=pink:duration=#{SECONDS}:sample_rate=#{RATE}:amplitude=#{amplitude}:seed=#{seed}"
+  def pink(amplitude, seed, seconds = SECONDS) = "anoisesrc=color=pink:duration=#{seconds}:sample_rate=#{RATE}:amplitude=#{amplitude}:seed=#{seed}"
 
   AUDIO = {
     narrow: [stereo_noise(0.05), ['-c:a', 'aac', '-b:a', '128k']],

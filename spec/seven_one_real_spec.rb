@@ -2,6 +2,7 @@ require 'spec_helper'
 require 'fileutils'
 require 'stringio'
 require_relative 'support/lra_fixture'
+require_relative 'support/ladder_fixture'
 
 # Research 0003 finding 14: loudnorm ignores channels 7 and 8, so a 7.1 file's level was read low (the
 # same noise on all eight read -27.0 by loudnorm and -25.3 by ebur128) and the file landed about 1.7 LU
@@ -34,6 +35,16 @@ RSpec.describe 'Loudness of 7.1 files (finding 14)', :real_ffmpeg do
     measured = Neutraliser::FFmpegWrapper.measure_loudness(@pcm71, audio_index: 0, channels: track[:channels])
 
     expect(measured.input_i).to be_within(0.2).of(ebur128(@pcm71))
+  end
+
+  it 'reads the loudness range over every channel, as ebur128 does (loudnorm reads 0.1 for range in the sides)' do
+    Dir.mktmpdir do |dir|
+      path = LadderFixture.build(:sides71, File.join(dir, 'sides71.mkv'))
+      measured = Neutraliser::FFmpegWrapper.measure_loudness(path, audio_index: 0, channels: 8)
+
+      expect(measured.input_lra).to be_within(0.5).of(LraFixture.measure(path)[:lra])
+      expect(measured.input_lra).to be > 13.0
+    end
   end
 
   it 'leaves a 5.1 clip on the plain loudnorm read (no change below 7 channels)' do

@@ -94,8 +94,8 @@ module Neutraliser
       measurement.with_all_channels(**parse_ebur128_summary(stderr), target_i: target_i)
     end
 
-    # The integrated loudness, its gate and the true peak out of ebur128's closing summary. Missing or
-    # non-numeric ("-inf" for silence) comes back nil / non-finite and leaves the loudnorm figure in use.
+    # The integrated loudness, its gate, the loudness range and the true peak out of ebur128's closing
+    # summary. Missing or non-numeric ("-inf" for silence) comes back nil / non-finite and leaves the loudnorm figure in use.
     def self.parse_ebur128_summary(stderr)
       # FFmpeg 4.2 can print an empty summary while replacing the initial filter graph.
       offset = stderr.rindex('Summary:') or raise FFmpegError, 'ebur128 summary not found in output'
@@ -104,6 +104,7 @@ module Neutraliser
       {
         integrated: number.call(summary[/Integrated loudness:\s+I:\s+(-?[\d.]+|-inf) LUFS/m, 1]),
         threshold: number.call(summary[/Integrated loudness:.*?Threshold:\s+(-?[\d.]+|-inf) LUFS/m, 1]),
+        range: number.call(summary[/Loudness range:\s+LRA:\s+(-?[\d.]+|-inf) LU/m, 1]),
         true_peak: number.call(summary[/True peak:\s+Peak:\s+(-?[\d.]+|-inf) dBFS/m, 1])
       }
     end

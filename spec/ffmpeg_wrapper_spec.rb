@@ -70,6 +70,8 @@ RSpec.describe Neutraliser::FFmpegWrapper do
           Integrated loudness:
             I: -21.0 LUFS
             Threshold: -31.0 LUFS
+          Loudness range:
+            LRA: 15.2 LU
           True peak:
             Peak: -15.2 dBFS
         {"input_i":"-24.05","input_tp":"-15.22","input_lra":"0.10","input_thresh":"-34.05","target_offset":"0.0"}
@@ -78,7 +80,7 @@ RSpec.describe Neutraliser::FFmpegWrapper do
 
       result = described_class.measure_loudness('sides.mkv', channels: 8)
 
-      expect(result).to have_attributes(input_i: -21.0, input_tp: -15.2, input_thresh: -31.0, target_offset: 1.0)
+      expect(result).to have_attributes(input_i: -21.0, input_tp: -15.2, input_thresh: -31.0, input_lra: 15.2, target_offset: 1.0)
     end
 
     it 'raises FFmpegError including stderr when command fails' do

@@ -267,7 +267,7 @@ seeded side-heavy clip aims -8.13 and lands -8.2 LUFS, confirming the mechanism.
 *Task filed (attended):* `e871fffd-2cce-4c68-aea2-f8daefa3b2a5`, a cap
 or a refusal above some aim, and what that number is, is a default and Will's call.
 
-**5. [Low-medium] 7.1 range is read from six channels, so rung 3 can miss a 7.1 file that is over the limit.**
+**5. [Low-medium] 7.1 range is read from six channels, so rung 3 can miss a 7.1 file that is over the limit. Fixed.**
 `with_all_channels` keeps loudnorm's range ("close enough"). On a synthetic 7.1 (the wide 5.1 mix
 with its back channels copied to the sides) loudnorm reads LRA 13.5 and ebur128 reads 15.2
 **[verified]**; under `--ladder` (limit 13 + 1 tolerance) the file gets no compression and is
@@ -277,6 +277,11 @@ The kit generates a new wide mix each run (the existing helper does not seed its
 the precise range and boundary crossing vary. Its fresh run read 14.6 versus 16.0 LU and did
 compress at the default limit; the retained fixture proves the missed trigger.
 *Task filed:* `2ec806f2-e773-43f2-ad16-7499e4e778c5`.
+*Fixed:* `with_all_channels` now takes ebur128's LRA with its loudness and gate, so a 7.1 read (the file and every
+compression candidate) is one meter's range against the limit. Regression: a seeded 7.1 clip whose range lives
+only in the sides (loudnorm LRA 0.1, ebur128 14.9) was levelled linear, now rung 3 compresses it
+(`spec/ladder_real_spec.rb`, `spec/seven_one_real_spec.rb`). Caches written before this hold loudnorm's range for
+7.1 files: the same stale-cache question as finding 3, not bumped here.
 
 **6. [Low] `report --measure` and `rate-sample` judged dialogue-anchored files against the wrong target. Fixed.**
 `Report#measured_levels` used the profile's fallback programme level (-24) and ignored the stamp's
