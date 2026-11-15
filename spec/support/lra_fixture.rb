@@ -7,7 +7,7 @@ require 'json'
 # demo/compression_ladder.rb: quiet dialogue that lives only in the centre
 # channel, between loud effects on all six channels, over a quiet bed. Pink noise
 # at fixed levels per scene stands in for the sound, so the loudness range is
-# known and repeatable (about -22 LUFS and LRA 15, near the clip the first tests used). It says nothing about how real dialogue or music is
+# known and repeatable (each scene and the bed have a fixed seed; about -22 LUFS and LRA 15, near the clip the first tests used). It says nothing about how real dialogue or music is
 # affected: it is a way to check the arithmetic (LRA, level, tags), not the ear.
 module LraFixture
   # [seconds, noise amplitude, where it plays]
@@ -15,6 +15,11 @@ module LraFixture
     [4, 0.15, :centre], [4, 0.25, :all], [4, 0.20, :centre], [4, 0.06, :all],
     [4, 0.40, :all], [4, 0.17, :centre], [4, 0.12, :all], [4, 0.22, :centre]
   ].freeze
+
+  # Fixed seeds, one per scene and one for the bed: without them ffmpeg picks a
+  # random seed per run and the loudness range drifts near the LRA gate.
+  SEED_BASE = 1000
+  BED_SEED = 2000
 
   LAYOUT_PAN = {
     centre: 'pan=5.1|c2=c0',
@@ -26,8 +31,8 @@ module LraFixture
   # Writes a Matroska file with the 5.1 mix as its default audio track (AC-3),
   # a stereo commentary track that must be left alone, and a video stream.
   def build(path, dir)
-    inputs = SCENES.flat_map do |seconds, amplitude, _where|
-      ['-f', 'lavfi', '-i', "anoisesrc=color=pink:duration=#{seconds}:sample_rate=48000:amplitude=#{amplitude}"]
+    inputs = SCENES.each_with_index.flat_map do |(seconds, amplitude, _where), i|
+      ['-f', 'lavfi', '-i', "anoisesrc=color=pink:duration=#{seconds}:sample_rate=48000:amplitude=#{amplitude}:seed=#{SEED_BASE + i}"]
     end
     chains = SCENES.each_with_index.map { |(_, _, where), i| "[#{i}:a]#{LAYOUT_PAN.fetch(where)}[s#{i}]" }
     labels = SCENES.each_index.map { |i| "[s#{i}]" }.join
@@ -36,7 +41,7 @@ module LraFixture
     run!('ffmpeg', '-hide_banner', '-loglevel', 'error', '-y',
          *inputs,
          '-f', 'lavfi', '-i', "color=c=blue:size=64x64:duration=#{total}:rate=10",
-         '-f', 'lavfi', '-i', "anoisesrc=color=pink:duration=#{total}:sample_rate=48000:amplitude=0.1",
+         '-f', 'lavfi', '-i', "anoisesrc=color=pink:duration=#{total}:sample_rate=48000:amplitude=0.1:seed=#{BED_SEED}",
          '-filter_complex', graph,
          '-map', "#{SCENES.length}:v", '-map', '[mix]', '-map', "#{SCENES.length + 1}:a",
          '-c:v', 'libx264', '-preset', 'ultrafast', '-c:a:0', 'ac3', '-b:a:0', '448k', '-c:a:1', 'aac', '-ac:a:1', '2',

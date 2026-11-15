@@ -279,7 +279,7 @@ with its back channels copied to the sides) loudnorm reads LRA 13.5 and ebur128 
 **[verified]**; under `--ladder` (limit 13 + 1 tolerance) the file gets no compression and is
 levelled linear, while the 5.1 original compresses (LRA 9.8 afterwards). *Reproduce:*
 `process --replace --ladder wide71.mkv` on the retained fixture under `evidence/fx/`.
-The kit generates a new wide mix each run (the existing helper does not seed its noise), so
+The kit generated a new wide mix each run (the helper did not seed its noise until 16 Nov), so
 the precise range and boundary crossing vary. Its fresh run read 14.6 versus 16.0 LU and did
 compress at the default limit; the retained fixture proves the missed trigger.
 *Task filed:* `2ec806f2-e773-43f2-ad16-7499e4e778c5`.
@@ -433,7 +433,7 @@ From the repo root, run
 `bundle exec ruby docs/research/after-landings/lab/review.rb /absolute/path/to/new/scratch-directory`.
 It refuses an existing directory, builds only synthetic clips using the repo's generators, writes
 per-run logs and measured reports, and prints JSON rows with both meter readings.
-The wide mix's noise is not seeded in the existing helper: expect slight numerical variation.
+The wide mix's noise was not seeded in the old helper; `LraFixture` now seeds every scene and the bed (16 Nov), so repeat builds read the same ebur128 I and LRA.
 The original fixtures and raw argv logs are retained under this job's `evidence/`, not only `/tmp/`.
 `default-path-comparison.txt` captures the eight-fixture comparison;
 `default-narrow-recheck.txt` re-ran one case after the report fix.

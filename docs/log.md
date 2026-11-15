@@ -1,3 +1,7 @@
+## [2026-11-16] fix | Seed the LraFixture noise
+
+`spec/support/lra_fixture.rb` now gives each scene and the bed a fixed `seed=` on `anoisesrc`. Two builds measure identically (I -21.8, LRA 15.2). No spec thresholds needed changing.
+
 ## [2026-11-16] update | Second --ladder sweep after sidecar loss: verified, no re-encode
 
 Added a `:real_ffmpeg` spec (`spec/ladder_real_spec.rb`) that runs `process --replace --ladder --lra-target 3` on a bursts clip no rung narrows, deletes the `.neutraliser` sidecar and sweeps again: the second sweep re-measures, reports "Already at target level" and leaves the file's bytes and stamp unchanged. No generation-loss bug, so `SkipDecider` and `Processor` are untouched. `steps_clip` moved from `sceptical_review_spec.rb` to `DolbyFixture` to share it. The "not verified" line in `docs/research/pre-release-review-2026-11.md` now records the run.
