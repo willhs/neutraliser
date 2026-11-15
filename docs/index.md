@@ -51,6 +51,7 @@ Entry point and navigation map for the neutraliser documentation set. Neutralise
 - [`research/0003-sceptical-review-dolby-dialogue-compression/research.md`](research/0003-sceptical-review-dolby-dialogue-compression/research.md) — Sceptical review, on real-ffmpeg fixtures, of the Dolby fix, dialogue estimate, opt-in compression and recipes before a library sweep restarts: findings by severity, what was fixed, what only real files or ears can settle, and the restart verdict
 - [`research/0002-streaming-loudness-and-dialogue/research.md`](research/0002-streaming-loudness-and-dialogue/research.md) — What streamers do about volume jumps and quiet dialogue, and whether it works. Recommends anchoring on dialogue, and found two bugs: stream DRC baked in and dialnorm reset on Dolby tracks
 - [`research/landscape.md`](research/landscape.md) — Updated 2026-11-15: side-by-side of how others handle dialogue and levelling, and the honest one-line claim
+- [`research/0004-lossy-encoders-libfdk-aac-eac3/research.md`](research/0004-lossy-encoders-libfdk-aac-eac3/research.md) — Update 2026-11-15: three `--redo-recipe` passes with the shipped +25% headroom land on the same bitrate every pass (ADR-0001 holds), but each pass costs ViSQOL 0.04 to 0.18, stereo AAC most
 
 ## Tasks
 - [`tasks/0001-plex-library-analysis/task.md`](tasks/0001-plex-library-analysis/task.md) — Plex library audio analysis command (complete)

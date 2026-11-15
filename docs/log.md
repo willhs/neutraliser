@@ -1,3 +1,6 @@
+## [2026-11-15] research | Generation loss across three --redo-recipe passes with the +25% headroom (research 0004 gap)
+Re-ran research 0004's lab for three consecutive passes of the shipped path on the same four Tears of Steel windows (stereo AAC, AAC 5.1, AC-3, E-AC-3), each pass's encoder, bitrate and stamp coming from the real `decide_codec` / `build_stamp`. Passes 2 and 3 land on exactly the same bitrate as pass 1 in 16 of 16 cases, as ADR-0001's amendment says, so the ADR is unchanged. Quality is not held: ViSQOL falls 0.04 to 0.18 a pass (stereo AAC -0.32 over passes 1 to 3, AAC 5.1 -0.18, AC-3 -0.08, E-AC-3 -0.10), so a redo on stereo AAC already scores under a single un-headroomed generation. Added `lab/generations.py`, `decide.rb`, `analyze_generations.py` and `results/generations.*`; no `lib/` change.
+
 ## [2026-11-15] update | 7.1 measured with its side channels (research 0003 finding 14 closed)
 Tracks with more than six channels are read with `ebur128` alongside `loudnorm` (one decode, split), and ebur128's integrated loudness and peak replace loudnorm's, which ignores channels 7 and 8. A synthetic PCM 7.1 clip now lands within 0.5 LU of target (was -18.2 for -20). Stereo and 5.1 are unchanged. Recipe not bumped (reason in `lib/neutraliser/recipe.rb`). `analyze-plex` still reads 7.1 titles loudnorm-only.
 
