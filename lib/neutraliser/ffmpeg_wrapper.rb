@@ -60,13 +60,15 @@ module Neutraliser
     # (7.1) the same read also runs ebur128 over every channel and its integrated loudness and peak replace
     # loudnorm's (Measurement#with_all_channels). Left nil, or at six and under, the read is loudnorm alone.
     def self.measure_loudness(input_path, target_i: -20.0, target_tp: -1.5, target_lra: 12.0, input_args: [],
-                              duration: nil, start_offset: nil, audio_index: 0, pre_filter: nil, channels: nil)
+                              duration: nil, start_offset: nil, audio_index: 0, pre_filter: nil, channels: nil,
+                              track_read: false)
       loudnorm = "loudnorm=I=#{target_i}:TP=#{target_tp}:LRA=#{loudnorm_lra(target_lra)}:print_format=json"
       cmd = ['ffmpeg', '-hide_banner', '-nostats', *DolbyStream::DRC_OFF, *input_args]
       cmd += ['-ss', start_offset.round.to_s] if start_offset&.positive?
       cmd += ['-i', input_path]
       cmd += ['-t', duration.to_s] if duration
       cmd += loudness_graph_args(audio_index, pre_filter, loudnorm, channels)
+      cmd += ['-progress', 'pipe:2'] if track_read
       cmd += ['-f', 'null', '-']
 
       _, stderr, status = execute_with_timeout(cmd, ANALYSIS_TIMEOUT, 'Loudness measurement')
@@ -89,9 +91,16 @@ module Neutraliser
     # The Measurement out of a loudness read's stderr, with ebur128's figures in when the read ran both.
     def self.read_loudness(stderr, channels, target_i)
       measurement = Measurement.from_loudnorm_json(parse_loudnorm_json(stderr))
-      return measurement unless channels.to_i > Measurement::LOUDNORM_CHANNELS
+      measurement = measurement.with_all_channels(**parse_ebur128_summary(stderr), target_i: target_i) if channels.to_i > Measurement::LOUDNORM_CHANNELS
+      measurement.with_read_seconds(parse_read_seconds(stderr))
+    end
 
-      measurement.with_all_channels(**parse_ebur128_summary(stderr), target_i: target_i)
+    # Seconds of audio ffmpeg got through, from the last `-progress` report (microseconds), or nil when
+    # the read did not ask for progress. ffmpeg exits 0 on a stream that ended early, so this is the only
+    # sign that the figure came from part of the title.
+    def self.parse_read_seconds(stderr)
+      microseconds = stderr.scan(/^out_time_us=(\d+)/).last&.first
+      microseconds && (microseconds.to_i / 1_000_000.0)
     end
 
     # The integrated loudness, its gate, the loudness range and the true peak out of ebur128's closing
@@ -587,6 +596,7 @@ module Neutraliser
                          :parse_loudnorm_json,
                          :loudness_graph_args,
                          :read_loudness,
+                         :parse_read_seconds,
                          :parse_ebur128_summary,
                          :estimate_bitrate_from_packets,
                          :loudnorm_lra,

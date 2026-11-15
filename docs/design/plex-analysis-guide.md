@@ -283,6 +283,11 @@ neutraliser analyze-plex --sample-percent 20
   `analyze-plex` skip that item and log the error — it never fabricates a
   placeholder LUFS value, so a skipped item never shows up disguised as a
   real (and wrong) measurement in the report
+- A read that ends early counts as unreadable too: if Plex stops sending
+  partway (`Plex sent only 8s of 7200s before the stream ended`), the title
+  is skipped, not reported from the part that arrived. A sampled window
+  under 97% of its length is dropped the same way. Run it again; if it
+  keeps happening, check the Plex server's load and the network
 - Consider updating FFmpeg to latest version
 
 ### Performance Issues

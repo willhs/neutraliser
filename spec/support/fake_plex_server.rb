@@ -15,7 +15,10 @@ require 'uri'
 # a real server. `requests` records what was asked, so a spec can see the path.
 class FakePlexServer
   # channels is what Plex lists as the media's audioChannels (left out when nil, as a thin listing would).
-  Title = Struct.new(:title, :path, :duration_s, :channels, keyword_init: true)
+  # sends_share is how much of the file the server really sends before it closes the connection (nil: all of
+  # it). The headers still promise the whole file, as Plex's do when a read is cut short, and Plex's
+  # `duration` still says the full runtime.
+  Title = Struct.new(:title, :path, :duration_s, :channels, :sends_share, keyword_init: true)
 
   Library = Struct.new(:key, :title, :type, :items, keyword_init: true)
 
@@ -107,33 +110,35 @@ class FakePlexServer
   end
 
   def media_for(title)
-    part_id = @lock.synchronize { @parts.key(title.path) || (@parts.size + 1).tap { |id| @parts[id] = title.path } }
+    part_id = @lock.synchronize { @parts.key(title) || (@parts.size + 1).tap { |id| @parts[id] = title } }
     media = { 'Part' => [{ 'key' => "/library/parts/#{part_id}/file" }] }
     media['audioChannels'] = title.channels if title.channels
     { 'duration' => (title.duration_s * 1000).to_i, 'Media' => [media] }
   end
 
   def media(client, part_id, range)
-    path = @lock.synchronize { @parts[part_id] } or return respond(client, 404, 'text/plain', 'Not found')
+    title = @lock.synchronize { @parts[part_id] } or return respond(client, 404, 'text/plain', 'Not found')
 
-    data = File.binread(path)
+    data = File.binread(title.path)
+    # Bytes at or past this offset are promised but never sent.
+    sent_to = title.sends_share ? (data.bytesize * title.sends_share).to_i : data.bytesize
     if range && (match = range.match(/bytes=(\d+)-(\d*)/))
       first = match[1].to_i
       last = match[2].empty? ? data.bytesize - 1 : [match[2].to_i, data.bytesize - 1].min
-      respond(client, 206, 'video/x-matroska', data.byteslice(first..last),
-              'Content-Range' => "bytes #{first}-#{last}/#{data.bytesize}")
+      respond(client, 206, 'video/x-matroska', data.byteslice(first..last), { 'Content-Range' => "bytes #{first}-#{last}/#{data.bytesize}" },
+              sent_to: sent_to - first)
     else
-      respond(client, 200, 'video/x-matroska', data)
+      respond(client, 200, 'video/x-matroska', data, sent_to: sent_to)
     end
   end
 
   def json(client, body) = respond(client, 200, 'application/json', JSON.generate(body))
 
-  def respond(client, status, type, body, extra = {})
+  def respond(client, status, type, body, extra = {}, sent_to: body.bytesize)
     head = ["HTTP/1.1 #{status} X", "Content-Type: #{type}", "Content-Length: #{body.bytesize}",
             'Accept-Ranges: bytes', 'Connection: close']
     extra.each { |name, value| head << "#{name}: #{value}" }
     client.write("#{head.join("\r\n")}\r\n\r\n")
-    client.write(body)
+    client.write(body.byteslice(0, [sent_to, 0].max))
   end
 end

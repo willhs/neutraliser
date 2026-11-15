@@ -18,6 +18,9 @@ module Neutraliser
     }.freeze
     EPISODE_TYPE = 4 # Plex's metadata type number for an episode
     READ_IN_FULL_BELOW_S = SAMPLE_POSITIONS.size * STREAM_SAMPLE_DURATION_S
+    # A read that got through less than this share of what it asked for was cut short: Plex or the network
+    # closed the stream early and ffmpeg still exited 0, so the figure describes part of the title.
+    MIN_READ_SHARE = 0.97
 
     attr_reader :server_url, :token, :library_name, :output_format, :sample_percent, :profile, :tolerance, :full
 
@@ -268,14 +271,14 @@ module Neutraliser
 
       if full || total_s <= READ_IN_FULL_BELOW_S
         # A failed read here raises and is handled by analyze_media_item.
-        measurement = analyze_streaming_audio(streaming_url, channels: channels)
+        measurement = analyze_streaming_audio(streaming_url, channels: channels, expected_s: total_s)
         return LoudnessEstimate.exact(measurement.input_i) unless measurement.silent?
 
         log "   ⚠️  #{display_title(item)}: no audio signal measured, skipping"
         return nil
       end
 
-      levels = window_offsets(total_s).map { |offset| measure_window(streaming_url, offset, channels) }
+      levels = window_offsets(total_s).map { |offset| measure_window(streaming_url, offset, channels, total_s) }
       estimate = LoudnessEstimate.sampled(levels)
       log "   ⚠️  #{display_title(item)}: too few readable audio windows (#{levels.compact.size}), skipping" unless estimate
       estimate
@@ -293,9 +296,11 @@ module Neutraliser
     # Dropping a bad window (rather than failing the title) keeps one flaky
     # seek over HTTP from costing the other four; LoudnessEstimate.sampled
     # refuses to report from too few.
-    def measure_window(streaming_url, offset, channels)
+    def measure_window(streaming_url, offset, channels, total_s)
+      start = [offset, 0].max
       measurement = analyze_streaming_audio(
-        streaming_url, start_offset: offset, duration: STREAM_SAMPLE_DURATION_S, channels: channels
+        streaming_url, start_offset: offset, duration: STREAM_SAMPLE_DURATION_S, channels: channels,
+                       expected_s: [STREAM_SAMPLE_DURATION_S, total_s - start].min
       )
       measurement.silent? ? nil : measurement.input_i
     rescue FFmpegError => e
@@ -313,19 +318,29 @@ module Neutraliser
 
     # Measures loudness straight off the Plex stream via FFmpegWrapper's
     # timeboxed, argv-form executor — no shell string, no temp file, no
-    # sentinel-float fallback. A failed/timed-out measurement raises.
+    # sentinel-float fallback. A failed/timed-out measurement raises, and so does a read that came back
+    # shorter than expected_s (seconds the read should cover; 0 or nil when Plex did not say).
     # No duration/start_offset measures the whole stream.
-    def analyze_streaming_audio(streaming_url, channels: nil, start_offset: nil, duration: nil)
-      FFmpegWrapper.measure_loudness(
+    def analyze_streaming_audio(streaming_url, expected_s: nil, channels: nil, start_offset: nil, duration: nil)
+      measurement = FFmpegWrapper.measure_loudness(
         streaming_url,
         start_offset: start_offset,
         target_i: @profile[:lufs],
         target_tp: @profile[:tp],
         target_lra: @profile[:lra],
         input_args: ['-headers', "X-Plex-Token: #{@auth_token}\r\n"],
-        duration: duration,
+        duration: duration, track_read: true,
         **Measurement.side_channels(channels: channels)
       )
+      raise_if_cut_short(measurement, expected_s)
+      measurement
+    end
+
+    def raise_if_cut_short(measurement, expected_s)
+      read_s = measurement.read_seconds
+      return unless read_s && expected_s.to_f.positive? && read_s < expected_s * MIN_READ_SHARE
+
+      raise FFmpegError, "Plex sent only #{read_s.round}s of #{expected_s.round}s before the stream ended"
     end
 
     def determine_content_type(_item, library_type)

@@ -66,10 +66,10 @@ RSpec.describe 'analyze-plex against a fake Plex server', :real_ffmpeg do
     ]
   end
 
-  def analyse(library_name: nil)
+  def analyse(library_name: nil, full: false)
     Dir.chdir(dir) do
       Neutraliser::PlexAnalyzer.new(server_url: server.url, token: token, library_name: library_name,
-                                    output_format: 'json').analyze
+                                    output_format: 'json', full: full).analyze
     end
     report = Dir.glob(File.join(dir, 'plex_audio_analysis_*.json')).max
     report ? JSON.parse(File.read(report)).fetch('results') : []
@@ -120,6 +120,37 @@ RSpec.describe 'analyze-plex against a fake Plex server', :real_ffmpeg do
       surround.channels = nil
 
       expect(analyse.first['adjustment_type']).to eq('Too Quiet')
+    end
+  end
+
+  # Plex promises the whole file and closes the connection part-way. ffmpeg exits 0 on that and loudnorm
+  # prints the level of whatever it got, so only the length read can tell it from a whole title.
+  context 'when Plex closes the connection part-way through a title' do
+    let(:cut) { FakePlexServer::Title.new(title: 'Cut Film', path: clip('cut', -14), duration_s: 8, sends_share: 0.3) }
+    let(:libraries) { [FakePlexServer::Library.new(key: '1', title: 'Films', type: 'movie', items: [cut])] }
+
+    it 'leaves a whole-title read out rather than reporting it as an exact level' do
+      expect(analyse).to be_empty
+      expect(Neutraliser.logger).to have_received(:log).with(/Cut Film.*Plex sent only \d+s of 8s/)
+    end
+
+    it 'leaves it out of a --full run too' do
+      stub_const('Neutraliser::PlexAnalyzer::READ_IN_FULL_BELOW_S', 5) # only --full reads this title end to end
+
+      expect(analyse(full: true)).to be_empty
+    end
+
+    it 'does not count a cut-short window towards a sampled estimate' do
+      stub_const('Neutraliser::PlexAnalyzer::READ_IN_FULL_BELOW_S', 5)
+
+      expect(analyse).to be_empty
+      expect(Neutraliser.logger).to have_received(:log).with(/unreadable window.*Plex sent only/).at_least(:once)
+    end
+
+    it 'still reports a title that arrives whole' do
+      cut.sends_share = nil
+
+      expect(analyse.map { |r| r['measured'] }).to eq(['full'])
     end
   end
 

@@ -47,6 +47,24 @@ RSpec.describe Neutraliser::FFmpegWrapper do
       expect(result.input_i).to eq(-18.5)
     end
 
+    it 'reports how much audio it read when asked to track the read, from the last progress line' do
+      stderr = %({"input_i":"-18.5","input_tp":"-2.1","input_lra":"8.3","input_thresh":"-28.9","target_offset":"1.5"}\n) +
+               "out_time_us=500000\nprogress=continue\nout_time_us=2500000\nprogress=end\n"
+      allow(described_class).to receive(:execute_with_timeout).and_return(['', stderr, ok_status])
+
+      result = described_class.measure_loudness('test.mp4', track_read: true)
+
+      expect(described_class).to have_received(:execute_with_timeout).with(include('-progress', 'pipe:2'), anything, anything)
+      expect(result.read_seconds).to eq(2.5)
+    end
+
+    it 'leaves the read length unknown when it was not tracked' do
+      allow(described_class).to receive(:execute_with_timeout)
+        .and_return(['', %({"input_i":"-18.5","input_tp":"-2.1","input_lra":"8.3","input_thresh":"-28.9","target_offset":"1.5"}), ok_status])
+
+      expect(described_class.measure_loudness('test.mp4').read_seconds).to be_nil
+    end
+
     it 'asks loudnorm for no more than LRA 20 on an ffmpeg that rejects more' do
       allow(described_class).to receive(:version).and_return([4, 2])
       allow(described_class).to receive(:execute_with_timeout)

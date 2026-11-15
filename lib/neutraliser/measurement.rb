@@ -22,6 +22,15 @@ module Neutraliser
 
     attr_reader :input_i, :input_tp, :input_lra, :input_thresh, :target_offset
 
+    # Seconds of audio the read got through, when it was asked to track that (nil otherwise, and from a
+    # cache). Not cached and not part of ==: it describes this read, not the file.
+    attr_reader :read_seconds
+
+    # This measurement noting how many seconds of audio the read got through.
+    def with_read_seconds(seconds)
+      dup.tap { |copy| copy.read_seconds = seconds }
+    end
+
     # Builds a Measurement from ffmpeg's loudnorm print_format=json output.
     #
     # loudnorm prints "-inf" for input_i when it heard nothing (digital silence,
@@ -140,5 +149,9 @@ module Neutraliser
     def ==(other)
       other.is_a?(Measurement) && to_cache_h == other.to_cache_h && already_at_target? == other.already_at_target?
     end
+
+    protected
+
+    attr_writer :read_seconds
   end
 end
