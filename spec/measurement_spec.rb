@@ -81,6 +81,36 @@ RSpec.describe Neutraliser::Measurement do
     end
   end
 
+  describe '#with_all_channels' do
+    let(:loudnorm) do
+      described_class.from_loudnorm_json('input_i' => '-27.07', 'input_tp' => '-21.9', 'input_lra' => '3.0',
+                                         'input_thresh' => '-37.1', 'target_offset' => '0.01')
+    end
+
+    it 'takes the integrated loudness, gate and offset from ebur128 and keeps loudnorm\'s range' do
+      measurement = loudnorm.with_all_channels(integrated: -25.3, threshold: -35.3, true_peak: -21.9, target_i: -20.0)
+
+      expect(measurement).to have_attributes(input_i: -25.3, input_thresh: -35.3, input_lra: 3.0)
+      expect(measurement.target_offset).to be_within(0.001).of(5.3)
+    end
+
+    it 'keeps the higher of the two peaks' do
+      expect(loudnorm.with_all_channels(integrated: -25.3, threshold: nil, true_peak: -18.0, target_i: -20.0).input_tp).to eq(-18.0)
+      expect(loudnorm.with_all_channels(integrated: -25.3, threshold: nil, true_peak: -30.0, target_i: -20.0).input_tp).to eq(-21.9)
+    end
+
+    it 'leaves a silent measurement silent' do
+      silent = described_class.from_loudnorm_json('input_i' => '-inf', 'input_tp' => '-inf', 'input_lra' => '0',
+                                                  'input_thresh' => '-70', 'target_offset' => '0')
+
+      expect(silent.with_all_channels(integrated: -Float::INFINITY, threshold: -70.0, true_peak: -Float::INFINITY, target_i: -20.0)).to be_silent
+    end
+
+    it 'keeps loudnorm\'s figure when ebur128 gave no loudness' do
+      expect(loudnorm.with_all_channels(integrated: nil, threshold: nil, true_peak: nil, target_i: -20.0)).to eq(loudnorm)
+    end
+  end
+
   describe '#to_cache_h' do
     it 'round-trips through .from_cache_h' do
       original = described_class.from_loudnorm_json(

@@ -43,7 +43,8 @@ module Neutraliser
         target_i: profile[:lufs],
         target_tp: profile[:tp],
         target_lra: profile[:lra],
-        audio_index: source.primary_track[:index]
+        audio_index: source.primary_track[:index],
+        **Measurement.side_channels(source.primary_track)
       )
 
       @cache_manager.save_analysis(cached_as, profile, measurement) if @cache_enabled

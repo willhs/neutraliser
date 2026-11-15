@@ -10,6 +10,16 @@ module Neutraliser
   class Measurement
     CACHE_KEYS = %w[input_i input_tp input_lra input_thresh target_offset].freeze
 
+    # loudnorm (libebur128 behind it) weighs the first six channels only; the 7th and 8th of a 7.1 layout
+    # (the side surrounds) are dropped, so a track above this is also read with ebur128 (#with_all_channels).
+    LOUDNORM_CHANNELS = 6
+
+    # The `channels:` keyword for FFmpegWrapper.measure_loudness, only for a track with channels loudnorm
+    # doesn't count: splat it into the call, so every other track is measured by exactly the call it always was.
+    def self.side_channels(track)
+      track[:channels].to_i > LOUDNORM_CHANNELS ? { channels: track[:channels] } : {}
+    end
+
     attr_reader :input_i, :input_tp, :input_lra, :input_thresh, :target_offset
 
     # Builds a Measurement from ffmpeg's loudnorm print_format=json output.
@@ -78,6 +88,20 @@ module Neutraliser
       @target_offset = target_offset
       @already_at_target = already_at_target
       @silent = silent
+    end
+
+    # This measurement with the figures ebur128 read over every channel put in place of loudnorm's, which
+    # only counts six (finding 14 of research 0003). Integrated loudness and its gate come from ebur128;
+    # the peak is the higher of the two; target_offset follows the new loudness. The range stays
+    # loudnorm's: both meters agree on it closely enough, and the compression ladder compares like with like.
+    # A silent measurement stays silent (ebur128 reads it as -inf too).
+    def with_all_channels(integrated:, threshold:, true_peak:, target_i:)
+      return self if silent? || integrated.nil? || !integrated.finite?
+
+      self.class.new(
+        input_i: integrated, input_tp: [input_tp, true_peak || input_tp].max, input_lra: input_lra,
+        input_thresh: threshold || input_thresh, target_offset: target_i - integrated
+      )
     end
 
     def already_at_target?

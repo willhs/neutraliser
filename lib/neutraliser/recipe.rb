@@ -15,6 +15,11 @@ module Neutraliser
     # 2: AC-3 / E-AC-3 tracks are decoded with the stream's DRC off and keep their dialnorm
     # (DolbyStream), so their measured levels, and the gain from them, differ from recipe 1.
     # Constant gain, peak-capped (plus whatever --limit-db / --lra-target asked for).
+    # Not bumped for 7.1 (research 0003 finding 14): tracks with more than six channels are now measured
+    # with ebur128 alongside loudnorm, which only counts six, so they land on target instead of up to
+    # ~1.8 LU over. That corrects a measurement defect in the same method rather than adding a new one,
+    # nothing here has been released yet, and a number above LADDER would make the recipes
+    # non-monotonic (check_redoable! reads "newer" as "higher").
     CONSTANT_GAIN = 2
     # 3: the levelling ladder (Ladder, --ladder): the least of gain, limiter and compression that
     # works for each file, aimed at the programme or the dialogue.

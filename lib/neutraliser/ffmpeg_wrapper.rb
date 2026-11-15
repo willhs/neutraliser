@@ -55,22 +55,54 @@ module Neutraliser
     # only a slice of a long file should use it: a film's opening minute is
     # logos and titles and reads several LU quieter than the film itself, so a
     # slice taken from the start systematically under-reports loudness.
+    #
+    # channels is the track's channel count. loudnorm only counts the first six channels, so above that
+    # (7.1) the same read also runs ebur128 over every channel and its integrated loudness and peak replace
+    # loudnorm's (Measurement#with_all_channels). Left nil, or at six and under, the read is loudnorm alone.
     def self.measure_loudness(input_path, target_i: -20.0, target_tp: -1.5, target_lra: 12.0, input_args: [],
-                              duration: nil, start_offset: nil, audio_index: 0, pre_filter: nil)
+                              duration: nil, start_offset: nil, audio_index: 0, pre_filter: nil, channels: nil)
+      loudnorm = "loudnorm=I=#{target_i}:TP=#{target_tp}:LRA=#{loudnorm_lra(target_lra)}:print_format=json"
       cmd = ['ffmpeg', '-hide_banner', '-nostats', *DolbyStream::DRC_OFF, *input_args]
       cmd += ['-ss', start_offset.round.to_s] if start_offset&.positive?
       cmd += ['-i', input_path]
       cmd += ['-t', duration.to_s] if duration
-      cmd += [
-        '-map', "0:a:#{audio_index}",
-        '-af', [pre_filter, "loudnorm=I=#{target_i}:TP=#{target_tp}:LRA=#{loudnorm_lra(target_lra)}:print_format=json"].compact.join(','),
-        '-f', 'null', '-'
-      ]
+      cmd += loudness_graph_args(audio_index, pre_filter, loudnorm, channels)
+      cmd += ['-f', 'null', '-']
 
       _, stderr, status = execute_with_timeout(cmd, ANALYSIS_TIMEOUT, 'Loudness measurement')
       raise FFmpegError.from_run('Measurement', stderr, status) unless status.success?
 
-      Measurement.from_loudnorm_json(parse_loudnorm_json(stderr))
+      read_loudness(stderr, channels, target_i)
+    end
+
+    # The -map / filter arguments for a loudness read: loudnorm alone, or for a track with channels
+    # loudnorm doesn't count, one decode split into loudnorm and ebur128.
+    def self.loudness_graph_args(audio_index, pre_filter, loudnorm, channels)
+      return ['-map', "0:a:#{audio_index}", '-af', [pre_filter, loudnorm].compact.join(',')] unless channels.to_i > Measurement::LOUDNORM_CHANNELS
+
+      head = ["[0:a:#{audio_index}]", pre_filter && "#{pre_filter},", 'asplit[a][b]'].compact.join
+      ['-filter_complex', "#{head};[a]#{loudnorm}[loudnorm];[b]ebur128=peak=true:framelog=quiet[ebur]",
+       '-map', '[loudnorm]', '-map', '[ebur]']
+    end
+
+    # The Measurement out of a loudness read's stderr, with ebur128's figures in when the read ran both.
+    def self.read_loudness(stderr, channels, target_i)
+      measurement = Measurement.from_loudnorm_json(parse_loudnorm_json(stderr))
+      return measurement unless channels.to_i > Measurement::LOUDNORM_CHANNELS
+
+      measurement.with_all_channels(**parse_ebur128_summary(stderr), target_i: target_i)
+    end
+
+    # The integrated loudness, its gate and the true peak out of ebur128's closing summary. Missing or
+    # non-numeric ("-inf" for silence) comes back nil / non-finite and leaves the loudnorm figure in use.
+    def self.parse_ebur128_summary(stderr)
+      summary = stderr[/Summary:.*\z/m] or raise FFmpegError, 'ebur128 summary not found in output'
+      number = ->(text) { text && (text == '-inf' ? -Float::INFINITY : Float(text)) }
+      {
+        integrated: number.call(summary[/Integrated loudness:\s+I:\s+(-?[\d.]+|-inf) LUFS/m, 1]),
+        threshold: number.call(summary[/Integrated loudness:.*?Threshold:\s+(-?[\d.]+|-inf) LUFS/m, 1]),
+        true_peak: number.call(summary[/True peak:\s+Peak:\s+(-?[\d.]+|-inf) dBFS/m, 1])
+      }
     end
 
     # [major, minor] of the installed ffmpeg, or nil for a build with no release
@@ -162,6 +194,7 @@ module Neutraliser
 
       input_path = source.path
       audio_index = source.primary_track[:index]
+      channels = source.primary_track[:channels]
       total_duration = source.duration
       return nil unless total_duration
       return nil if total_duration < duration * 2 # File too short for meaningful sample
@@ -173,15 +206,14 @@ module Neutraliser
         'ffmpeg', '-hide_banner', '-nostats', *DolbyStream::DRC_OFF,
         '-ss', start_time.to_s, '-i', input_path,
         '-t', duration.to_s,
-        '-map', "0:a:#{audio_index}",
-        '-af', "loudnorm=I=#{target_i}:print_format=json",
+        *loudness_graph_args(audio_index, nil, "loudnorm=I=#{target_i}:print_format=json", channels),
         '-f', 'null', '-'
       ]
 
       _, stderr, status = execute_with_timeout(cmd, QUICK_TIMEOUT, 'Quick loudness sample')
       return nil unless status.success?
 
-      Measurement.from_loudnorm_json(parse_loudnorm_json(stderr))
+      read_loudness(stderr, channels, target_i)
     rescue StandardError
       # A quick sample is a best-effort optimisation, not a required step —
       # any failure here (parse error, unexpected ffmpeg behaviour, etc.)
@@ -549,6 +581,9 @@ module Neutraliser
                          :timeout_variable,
                          :pin_sample_rate,
                          :parse_loudnorm_json,
+                         :loudness_graph_args,
+                         :read_loudness,
+                         :parse_ebur128_summary,
                          :estimate_bitrate_from_packets,
                          :loudnorm_lra,
                          :build_loudnorm_filter,

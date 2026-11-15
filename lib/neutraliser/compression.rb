@@ -96,7 +96,7 @@ module Neutraliser
       measure = lambda do |index|
         measured[index] ||= FFmpegWrapper.measure_loudness(
           path, target_i: profile[:lufs], target_tp: profile[:tp], target_lra: profile[:lra],
-                audio_index: track[:index], pre_filter: chain_for.call(LADDER[index])
+                audio_index: track[:index], **Measurement.side_channels(track), pre_filter: chain_for.call(LADDER[index])
         )
       end
 
