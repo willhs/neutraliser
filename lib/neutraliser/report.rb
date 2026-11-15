@@ -229,7 +229,8 @@ module Neutraliser
     end
 
     def measured_levels(row, track)
-      target = (Profiles.find(row.record&.profile) || @profile)[:lufs]
+      # Dialogue anchoring records a per-file programme target, which also governs measured reports.
+      target = row.value(:target_i) || (Profiles.find(row.record&.profile) || @profile)[:lufs]
       measurement = FFmpegWrapper.measure_loudness(row.file, target_i: target, audio_index: track[:index],
                                                              **Measurement.side_channels(track))
       FinalLevels.measured(measurement, target: target)

@@ -58,6 +58,29 @@ RSpec.describe Neutraliser::FFmpegWrapper do
         .with(include('loudnorm=I=-20.0:TP=-1.5:LRA=20.0:print_format=json'), anything, anything)
     end
 
+    it 'uses the final ebur128 summary after FFmpeg 4.2 discards an initial filter graph' do
+      stderr = <<~OUT
+        [Parsed_ebur128_2 @ 0x1] Summary:
+          Integrated loudness:
+            I: -70.0 LUFS
+            Threshold: 0.0 LUFS
+          True peak:
+            Peak: -inf dBFS
+        [Parsed_ebur128_2 @ 0x2] Summary:
+          Integrated loudness:
+            I: -21.0 LUFS
+            Threshold: -31.0 LUFS
+          True peak:
+            Peak: -15.2 dBFS
+        {"input_i":"-24.05","input_tp":"-15.22","input_lra":"0.10","input_thresh":"-34.05","target_offset":"0.0"}
+      OUT
+      allow(described_class).to receive(:execute_with_timeout).and_return(['', stderr, ok_status])
+
+      result = described_class.measure_loudness('sides.mkv', channels: 8)
+
+      expect(result).to have_attributes(input_i: -21.0, input_tp: -15.2, input_thresh: -31.0, target_offset: 1.0)
+    end
+
     it 'raises FFmpegError including stderr when command fails' do
       allow(described_class).to receive(:execute_with_timeout).and_return(['', 'boom', fail_status])
 

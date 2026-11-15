@@ -158,6 +158,35 @@ RSpec.describe Neutraliser::Report do
         .with(c.file, hash_including(target_i: -20.0)).once
     end
 
+    it "judges a dialogue-anchored file by the programme level its stamp aimed at, not the profile's fallback" do
+      aimed = Neutraliser::Stamp.now(profile: 'dialogue-27', mode: 'linear', gain_db: 4.0, source_codec: 'ac3', source_bitrate: nil,
+                                     measured_i: -24.0, measured_tp: -3.0, measured_lra: 6.0, target_i: -20.0, dialogue_i: -27.0)
+      stamps['c.mkv'] = aimed
+      allow(Neutraliser::FFmpegWrapper).to receive(:measure_loudness) do |_path, **|
+        Neutraliser::Measurement.new(input_i: -20.0, input_tp: -3.0, input_lra: 5.0, input_thresh: -45.0, target_offset: 0.0)
+      end
+
+      report = described_class.new(dir, measure: true)
+      c = report.rows.find { |row| row.file.end_with?('c.mkv') }
+
+      expect(report.final_levels_for(c)).to have_attributes(target: -20.0, basis: :measured)
+      expect(report.rate.remote_free?(report.final_levels_for(c))).to be(true)
+    end
+
+    it 'uses the recorded dialogue aim for a measured file that was left alone' do
+      aimed = peaky.with(profile: 'dialogue-27', target_i: -20.0, measured_i: -20.0)
+      Neutraliser::SkipDecider.new(dir).mark_left(File.join(dir, 'c.mkv'), aimed)
+      allow(Neutraliser::FFmpegWrapper).to receive(:measure_loudness) do |_path, **|
+        Neutraliser::Measurement.new(input_i: -20.0, input_tp: -3.0, input_lra: 5.0, input_thresh: -45.0, target_offset: 0.0)
+      end
+
+      report = described_class.new(dir, measure: true)
+      c = report.rows.find { |row| row.file.end_with?('c.mkv') }
+
+      expect(report.final_levels_for(c)).to have_attributes(target: -20.0, basis: :measured)
+      expect(report.rate.remote_free?(report.final_levels_for(c))).to be(true)
+    end
+
     it 'skips a file it cannot measure and says how many it did not judge' do
       allow(Neutraliser::FFmpegWrapper).to receive(:measure_loudness).and_raise(Neutraliser::FFmpegError, 'boom')
 

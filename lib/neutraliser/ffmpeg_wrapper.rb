@@ -81,7 +81,8 @@ module Neutraliser
       return ['-map', "0:a:#{audio_index}", '-af', [pre_filter, loudnorm].compact.join(',')] unless channels.to_i > Measurement::LOUDNORM_CHANNELS
 
       head = ["[0:a:#{audio_index}]", pre_filter && "#{pre_filter},", 'asplit[a][b]'].compact.join
-      ['-filter_complex', "#{head};[a]#{loudnorm}[loudnorm];[b]ebur128=peak=true:framelog=quiet[ebur]",
+      # verbose suppresses frame logs at the default info level, including on FFmpeg 4.2.
+      ['-filter_complex', "#{head};[a]#{loudnorm}[loudnorm];[b]ebur128=peak=true:framelog=verbose[ebur]",
        '-map', '[loudnorm]', '-map', '[ebur]']
     end
 
@@ -96,7 +97,9 @@ module Neutraliser
     # The integrated loudness, its gate and the true peak out of ebur128's closing summary. Missing or
     # non-numeric ("-inf" for silence) comes back nil / non-finite and leaves the loudnorm figure in use.
     def self.parse_ebur128_summary(stderr)
-      summary = stderr[/Summary:.*\z/m] or raise FFmpegError, 'ebur128 summary not found in output'
+      # FFmpeg 4.2 can print an empty summary while replacing the initial filter graph.
+      offset = stderr.rindex('Summary:') or raise FFmpegError, 'ebur128 summary not found in output'
+      summary = stderr[offset..]
       number = ->(text) { text && (text == '-inf' ? -Float::INFINITY : Float(text)) }
       {
         integrated: number.call(summary[/Integrated loudness:\s+I:\s+(-?[\d.]+|-inf) LUFS/m, 1]),
