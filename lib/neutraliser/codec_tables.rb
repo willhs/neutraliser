@@ -55,6 +55,10 @@ module Neutraliser
     AC3_BITRATES = [32, 40, 48, 56, 64, 80, 96, 112, 128, 160, 192, 224, 256, 320, 384, 448, 512, 576, 640]
                    .map { |kbps| kbps * 1000 }.freeze
 
+    # Channels an encoder can write, where ffmpeg's is limited (FFmpeg's AC-3 and E-AC-3 stop at 5.1).
+    # Any other encoder here is taken to hold what the source has.
+    MAX_CHANNELS = { 'ac3' => 6, 'eac3' => 6 }.freeze
+
     # Container compatibility — which encoders work in which containers
     CONTAINER_CODECS = {
       '.mp4' => %w[aac ac3 eac3 libmp3lame libopus],

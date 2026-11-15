@@ -16,7 +16,7 @@ module Neutraliser
     REASONS = {
       done: %i[normalized dry_run],
       skipped: %i[already_processed unsupported_format no_audio_track low_disk silent peak_limited
-                  within_tolerance object_audio codec_change],
+                  within_tolerance object_audio codec_change too_many_channels],
       failed: %i[unreadable not_writable unsupported_subtitle timeout output_verification_failed
                  source_changed ffmpeg_error file_manager_error processing_error invalid_result]
     }.freeze

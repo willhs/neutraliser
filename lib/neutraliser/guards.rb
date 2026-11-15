@@ -11,7 +11,7 @@ module Neutraliser
   # Two sequences, because the second runs on the working copy (--local-stage
   # copies the file first, so these reads come off local disk):
   #   before_staging: folder takes a new file, disk space, has audio, subtitles copyable
-  #   after_staging:  object audio, codec change
+  #   after_staging:  object audio, channel count, codec change
   # Each returns the first verdict that stops the file, else proceed. The log
   # lines of checks that let the file through (a note, a warning) ride along.
   class Guards
@@ -61,7 +61,8 @@ module Neutraliser
     # --allow-object-audio-loss run (or an ffmpeg that can keep the objects) must
     # still see the file.
     def after_staging(file_path, working)
-      first_stop(-> { object_audio(file_path, working) }, -> { codec_change(file_path, working) })
+      first_stop(-> { object_audio(file_path, working) }, -> { channel_count(file_path, working) },
+                 -> { codec_change(file_path, working) })
     end
 
     # The output lands beside the original (temp + rename with --replace, a
@@ -140,6 +141,22 @@ module Neutraliser
       left_alone(:object_audio, verdict.profile,
                  "  Object audio (#{verdict.profile}): re-encoding would strip it, skipping " \
                  '(--allow-object-audio-loss to process anyway)')
+    end
+
+    # A track with more channels than any encoder this container takes can hold (7.1 in an MP4: E-AC-3
+    # stops at 5.1, FLAC isn't allowed). Writing it would fail the output check after a full measure, on
+    # every sweep, so skip it first, whatever --allow-codec-change says: no flag makes it possible.
+    # Recorded as left alone: a different container or ffmpeg could.
+    def channel_count(original_path, working)
+      return PROCEED unless working.audio?
+
+      track = working.primary_track
+      container = FFmpegWrapper.output_container(working, original_path)
+      return PROCEED if CodecChoice.decide(track, container)[:encodable]
+
+      message = "#{track[:codec]} with #{track[:channels]} channels can't be re-encoded in #{container}: " \
+                'no encoder there holds more than 5.1'
+      left_alone(:too_many_channels, message, "  Too many channels (#{message}), skipping")
     end
 
     # Re-encoding to a different codec isn't leveling the volume, it's converting

@@ -203,6 +203,35 @@ RSpec.describe Neutraliser::Guards do
     end
   end
 
+  describe '#channel_count' do
+    let(:mp4) { File.join(temp_dir, 'film.mp4') }
+    let(:flac71) { source(audio: [ProbeFixture.audio(codec: 'flac', channels: 8, bit_rate: '9000000')]) }
+    let(:allowing) { described_class.new(**guards_options(allow_codec_change: true)) }
+
+    it 'skips 7.1 in an MP4, saying why and recording it as left alone, with or without --allow-codec-change' do
+      [guards, allowing].each do |g|
+        verdict = g.channel_count(mp4, flac71)
+
+        expect(verdict).to have_attributes(status: :skipped, reason: :too_many_channels,
+                                           message: "flac with 8 channels can't be re-encoded in .mp4: no encoder there holds more than 5.1")
+        expect(verdict.left).to have_attributes(reason: 'too_many_channels')
+        expect(verdict.log.first).to match(/Too many channels/)
+      end
+    end
+
+    it 'lets 7.1 through where FLAC holds it (the codec-change guard then decides)' do
+      expect(guards.channel_count(video, source(audio: [ProbeFixture.audio(codec: 'eac3', channels: 8)]))).to be_proceed
+    end
+
+    it 'lets stereo and 5.1 through in an MP4' do
+      [2, 6].each { |n| expect(guards.channel_count(mp4, source(audio: [ProbeFixture.audio(channels: n)]))).to be_proceed }
+    end
+
+    it 'runs after staging, before the codec-change guard' do
+      expect(guards.after_staging(mp4, flac71)).to have_attributes(reason: :too_many_channels)
+    end
+  end
+
   describe 'the sequences' do
     it 'before staging: the first guard to stop the file decides, and later ones are not asked', :needs_permissions do
       FileUtils.chmod(0o555, temp_dir)

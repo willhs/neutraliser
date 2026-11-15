@@ -223,4 +223,38 @@ RSpec.describe 'Sceptical review regressions', :real_ffmpeg do
       expect(lra(film)).to be_within(1.0).of(before)
     end
   end
+
+  # Finding 13: ffmpeg's E-AC-3 encoder stops at 5.1, so a 7.1 track with nowhere to go failed the output check
+  # after a full measure, on every sweep. It is skipped before the measure now, with the reason on record.
+  describe 'a 7.1 track no encoder in its container can hold' do
+    # FLAC 7.1 in an MP4: the container takes neither FLAC (as far as this tool allows) nor 7.1 E-AC-3.
+    def flac71_mp4
+      path = File.join(tmp, 'flac71.mp4')
+      DolbyFixture.ffmpeg('-f', 'lavfi', '-i', 'color=c=blue:size=64x64:duration=4:rate=10',
+                          '-f', 'lavfi', '-i', 'anoisesrc=color=pink:duration=4:sample_rate=48000:amplitude=0.02',
+                          '-filter_complex', '[1:a]pan=7.1|c0=c0|c1=c0|c2=c0|c3=c0|c4=c0|c5=c0|c6=c0|c7=c0[a]',
+                          '-map', '0:v', '-map', '[a]', '-c:v', 'libx264', '-preset', 'ultrafast', '-c:a', 'flac',
+                          '-strict', '-2', path)
+      path
+    end
+
+    [false, true].each do |allow|
+      it "is skipped as too_many_channels before any measure, untouched, with allow_codec_change: #{allow}" do
+        film = flac71_mp4
+        before = sha(film)
+        expect(Neutraliser::Source.new(film).audio_tracks.first).to include(codec: 'flac', channels: 8)
+        expect(Neutraliser::FFmpegWrapper).not_to receive(:measure_loudness)
+
+        summary = process(film, allow_codec_change: allow)
+        result = summary[:results].fetch(0)
+
+        expect(summary).to include(skipped: 1, failed: 0, done: 0)
+        expect(result).to have_attributes(status: :skipped, reason: :too_many_channels)
+        expect(result.message).to match(/flac with 8 channels can't be re-encoded in \.mp4/)
+        expect(result.left).to have_attributes(reason: 'too_many_channels')
+        expect(sha(film)).to eq(before)
+        expect(Dir.children(tmp)).to contain_exactly('flac71.mp4', '.neutraliser') # the left record, no output or temp
+      end
+    end
+  end
 end

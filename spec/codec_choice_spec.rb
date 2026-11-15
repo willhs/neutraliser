@@ -65,6 +65,36 @@ RSpec.describe Neutraliser::CodecChoice do
     expect(result[:bitrate]).to eq(128_000)
   end
 
+  describe 'more than 5.1 channels (ffmpeg\'s AC-3 and E-AC-3 stop at 5.1)' do
+    it 'sends 7.1 E-AC-3 to FLAC where the container allows it' do
+      result = described_class.decide(make_track(codec: 'eac3', channels: 8, bit_rate: 1_536_000), '.mkv')
+      expect(result).to include(encoder: 'flac', encodable: true, lossless_output: true, changes_codec: true, bitrate: nil)
+    end
+
+    it 'sends 6.1 DTS to FLAC in MKV' do
+      expect(described_class.decide(make_track(codec: 'dts', channels: 7), '.mkv')).to include(encoder: 'flac')
+    end
+
+    it 'has no encoder for 7.1 in an MP4: no FLAC there, and E-AC-3 and AAC are not 7.1 stand-ins' do
+      %w[flac eac3 truehd dts].each do |codec|
+        result = described_class.decide(make_track(codec: codec, channels: 8), '.mp4')
+        expect(result).to include(encoder: nil, encodable: false, bitrate: nil, lossless_output: false)
+      end
+    end
+
+    it 'keeps 7.1 PCM in a container that takes PCM' do
+      result = described_class.decide(make_track(codec: 'pcm_s24le', channels: 8, bit_rate: 0), '.mov')
+      expect(result).to include(encoder: 'pcm_s24le', encodable: true)
+    end
+
+    it 'leaves stereo and 5.1 as they were' do
+      expect(described_class.decide(make_track(codec: 'eac3', channels: 6, bit_rate: 640_000), '.mp4'))
+        .to include(encoder: 'eac3', encodable: true, bitrate: 800_000)
+      expect(described_class.decide(make_track(codec: 'flac', channels: 6, bit_rate: 0), '.mp4')).to include(encoder: 'eac3', encodable: true)
+      expect(described_class.decide(make_track(codec: 'dts', channels: 6), '.mp4')).to include(encoder: 'eac3', encodable: true)
+    end
+  end
+
   it 'uses libopus for Opus source in WebM' do
     result = described_class.decide(make_track(codec: 'opus', bit_rate: 128_000), '.webm')
     expect(result[:encoder]).to eq('libopus')

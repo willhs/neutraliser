@@ -47,7 +47,7 @@ Ten findings are fixed, each shown failing first, two of them by adding a stamp 
 | 10 | Low | Dialogue estimate reads the wrong channel on two layouts and understates its own error | Fixed |
 | 11 | Low | CI has been red on `main` since 68298c7 (test fixture only) | Fixed |
 | 12 | Low | Nothing records that a flatten dropped Atmos | Fixed |
-| 13 | Low | 7.1 DD+, and 7.1 lossless in MP4, fail every sweep (safely) | Open |
+| 13 | Low | 7.1 DD+, and 7.1 lossless in MP4, fail every sweep (safely) | Closed (commit "Skip or convert 7.1 up front") |
 | 14 | Low | 7.1 is measured without its side channels | Open |
 | 15 | Low | Only the first frames' dialnorm is read | Open |
 | 16 | Note | LRA has a cliff at its gate | Open |
@@ -241,7 +241,11 @@ ffmpeg's E-AC-3 encoder stops at 5.1. The output check catches it, the source is
 FLAC 7.1 .mp4 (to E-AC-3)  exit 1  output flac/7.1/24 (untouched)  Output does not match the source
 ```
 
-So "nothing skipped" isn't quite met: these fail on every sweep, after a full measure each time. A TrueHD 7.1 in MKV goes to FLAC and is fine. I couldn't build real 7.1 E-AC-3 (ffmpeg can't write it), so the path is shown through FLAC in MP4. A fix would send 7.1 to FLAC where the container allows; left open because the real source can't be tested.
+So "nothing skipped" isn't quite met: these fail on every sweep, after a full measure each time. A TrueHD 7.1 in MKV goes to FLAC and is fine. I couldn't build real 7.1 E-AC-3 (ffmpeg can't write it), so the path is shown through FLAC in MP4. **Closed** in the commit titled "Skip or convert 7.1 up front", by the fix above, built on synthetic fixtures only (real 7.1 E-AC-3 is still untested). Re-checked first: the failure reproduced on a FLAC 7.1 `.mp4` after the full measure (`normalised track has 5 channels, source has 8`). It also hit 7.1 E-AC-3 in MKV, where E-AC-3 is allowed but cannot hold 8 channels. The fix:
+
+- `CodecChoice` knows ffmpeg's AC-3 and E-AC-3 stop at 5.1 (`MAX_CHANNELS`). Past 5.1 channels only FLAC holds the track: 7.1 E-AC-3 or DTS in MKV now resolves to FLAC, which is a codec change, so it still waits for `--allow-codec-change`. Where the container takes no FLAC or PCM (MP4, M4V) the decision has `encoder: nil, encodable: false`.
+- `Guards#channel_count` skips such a file before the measure, whatever flags are given, as `too_many_channels`, recorded as left alone with the reason in the sidecar and `report`. No convert-to-lossy 7.1 (AAC or Opus) was added: that is a product call, and the skip is the safe default.
+- Stereo and 5.1 decisions are unchanged (`spec/codec_choice_spec.rb`). Real-ffmpeg check: `spec/sceptical_review_spec.rb`, FLAC 7.1 `.mp4` is skipped with and without `--allow-codec-change`, `measure_loudness` is never called, and the file's bytes are unchanged.
 
 ### 14. 7.1 is measured without its side channels
 
