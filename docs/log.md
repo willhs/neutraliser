@@ -1,3 +1,11 @@
+## [2026-11-15] update | Pre-release honesty fixes that don't depend on the default
+
+- README no longer recommends `--fast` for a whole library (it never measures, so it compresses files already at target); the overnight and resume examples use the default pass. ADR-0002 section reworded to say so.
+- CHANGELOG `[Unreleased]` folded into a `[0.1.0]` draft section, undated, no tag.
+- Already true on main, left alone: the synthetic charts say "synthetic" in README and in their SVG subtitles; `analyze-plex` reads episodes for show libraries and the README and post drafts say TV is tested only against a fake server.
+- NAS detail generalised in `disk_guard.rb` (dated incident dropped).
+- NAS volume paths in the October library baseline note and script replaced with neutral `/vol-N/` (the no-private-details spec was failing on them).
+
 ## [2026-11-13] update | Bitrate headroom: AAC, AC-3, E-AC-3 re-encoded at 1.25x the first-generation bitrate
 Built the change research 0004 proposed. `CodecChoice.decide` takes the earlier stamp: its `source_bitrate` (same codec only) is the first generation, so a second pass lands on the same rate; AC-3 rounds up to a valid step (448k to 576k); codec changes, lossless, unknown bitrates and the other encoders are unchanged. The stamp's `source_bitrate` now carries the first-generation figure. ADR-0001 amended, vision line reworded, `Recipe` not bumped. Checked with real ffmpeg: AC-3 448k to 576k and a second pass over it stayed at 576k. Premise correction: the stamp holds no output bitrate field, only the first-generation source bitrate.
 

@@ -138,12 +138,12 @@ out = os.path.join(raw, "..")
 with open(os.path.join(out, "tagcheck.lst"), "w") as f:      # shell 'done' files still on disk
     for k, d in sorted(v1m.items()):
         if d["status"] == "done" and k in current:
-            f.write("/volume1/media/%s/%s\n" % (k[1], k[2]))
+            f.write("/vol-1/media/%s/%s\n" % (k[1], k[2]))
 with open(os.path.join(out, "atmoscheck.lst"), "w") as f:
     for k in sorted(done):
         if re.search(r"atmos|truehd|dts[-. ]?x", k[2], re.I) and k in current:
-            f.write("/volume1/media/%s/%s\n" % (k[1], k[2]))
-    f.write("/volume1/media/movies/Forrest Gump (1994)\n")
+            f.write("/vol-1/media/%s/%s\n" % (k[1], k[2]))
+    f.write("/vol-1/media/movies/Forrest Gump (1994)\n")
 
 # ---- what has any record at all (volume1): a file no engine has ever looked at
 print("\n== volume1 files by what recorded them")

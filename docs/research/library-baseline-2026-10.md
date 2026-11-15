@@ -22,7 +22,7 @@ Reproduce: `docs/research/library-baseline-2026-10.py RAW_DIR` (the join and eve
 The task's notes held up, with these corrections:
 
 - **"797 failed" counts failure records, not files.** 343 were timeouts that a later retry completed, 445 were `not_writable`-style permission errors, 6 subtitles, 3 other. One status per file (a file's last `done`, else its last record) leaves **323 files that never succeeded**: 318 permission, 3 subtitle, 1 file missing, 1 AC-3 probe error. See [Failures](#failures).
-- **"2,026 / 3,208 dynamic (63%)" is right as records** (2,026 Dynamic + 1,182 Linear `done`, all `/volume1/media/tv`, none of the movies). As a share of today's 7,011 TV files on `/volume1` it is 29%.
+- **"2,026 / 3,208 dynamic (63%)" is right as records** (2,026 Dynamic + 1,182 Linear `done`, all `/vol-1/media/tv`, none of the movies). As a share of today's 7,011 TV files on `/volume1` it is 29%.
 - **The CLI's `report` cannot see any of it.** The Aug run wrote no `NEUTRALISER_*` stamps, so `report` calls those files `untouched`. Dynamic and flattened files are findable only through the Aug manifests.
 - **The `.loudnorm_*.json` sidecars were not needed.** The manifests carry the same mode (`normalization_type`) and failure message, and the sidecars hold measurements, not outcomes.
 - **The sweep is not running.** The driver's status file says `stopped (signal)` on 2026-11-01 02:42, and `/volume1` TV has 6 stamped files out of 7,011 (the "backlog sweep is back on" status of 2026-10-28 got that far).
@@ -34,10 +34,10 @@ The task's notes held up, with these corrections:
 
 | Root | Files | linear | limited | dynamic | untouched (no stamp) |
 |---|---:|---:|---:|---:|---:|
-| `/volume1/media/tv` | 7,011 | 6 | 0 | 0 | 7,005 |
-| `/volume1/media/movies` | 816 | 0 | 0 | 0 | 816 |
-| `/volume2/media/tv` | 672 | 165 | 0 | 0 | 507 |
-| `/volume2/media/movies` | 34 | 7 | 0 | 0 | 27 |
+| `/vol-1/media/tv` | 7,011 | 6 | 0 | 0 | 7,005 |
+| `/vol-1/media/movies` | 816 | 0 | 0 | 0 | 816 |
+| `/vol-2/media/tv` | 672 | 165 | 0 | 0 | 507 |
+| `/vol-2/media/movies` | 34 | 7 | 0 | 0 | 27 |
 | `/share/USB3-2/TV Shows` | 1,253 | 0 | 39 | 0 | 1,214 |
 | `/share/USB3-2/Movies` | 0 | | | | |
 | **Total** | **9,786** | **178** | **39** | **0** | **9,569** |
@@ -70,7 +70,7 @@ Joins the report (stamp), the Aug CLI manifests (one status per file) and `manif
 
 ## Aug CLI run
 
-Source: 199 per-folder `.neutraliser-run-manifest.jsonl` files, 59,590 lines, mostly `queued` (Feb/Mar planning runs and the Aug queue). The run that did the work is 2026-08-09 to 08-17, `/volume1/media/tv` only.
+Source: 199 per-folder `.neutraliser-run-manifest.jsonl` files, 59,590 lines, mostly `queued` (Feb/Mar planning runs and the Aug queue). The run that did the work is 2026-08-09 to 08-17, `/vol-1/media/tv` only.
 
 | Records | Count |
 |---|---:|
@@ -133,7 +133,7 @@ The Aug CLI run shows the same pattern: the 7 Mandalorian S01 files above read 1
 ## USB3-2 and volume2
 
 - `/share/USB3-2/TV Shows`: 1,253 files, 39 stamped `limited` (from the shell fork's limited runs or the manifest import; not traced), 1,214 unstamped. Movies is empty.
-- `/volume2/media`: 706 files, 172 stamped linear (165 tv + 7 films) since 2026-10-28; none dynamic.
+- `/vol-2/media`: 706 files, 172 stamped linear (165 tv + 7 films) since 2026-10-28; none dynamic.
 
 ## What this changes for the goal
 
