@@ -14,7 +14,8 @@ require 'uri'
 # Every request needs the token as `X-Plex-Token`; anything else is a 401, as on
 # a real server. `requests` records what was asked, so a spec can see the path.
 class FakePlexServer
-  Title = Struct.new(:title, :path, :duration_s, keyword_init: true)
+  # channels is what Plex lists as the media's audioChannels (left out when nil, as a thin listing would).
+  Title = Struct.new(:title, :path, :duration_s, :channels, keyword_init: true)
 
   Library = Struct.new(:key, :title, :type, :items, keyword_init: true)
 
@@ -107,8 +108,9 @@ class FakePlexServer
 
   def media_for(title)
     part_id = @lock.synchronize { @parts.key(title.path) || (@parts.size + 1).tap { |id| @parts[id] = title.path } }
-    { 'duration' => (title.duration_s * 1000).to_i,
-      'Media' => [{ 'Part' => [{ 'key' => "/library/parts/#{part_id}/file" }] }] }
+    media = { 'Part' => [{ 'key' => "/library/parts/#{part_id}/file" }] }
+    media['audioChannels'] = title.channels if title.channels
+    { 'duration' => (title.duration_s * 1000).to_i, 'Media' => [media] }
   end
 
   def media(client, part_id, range)

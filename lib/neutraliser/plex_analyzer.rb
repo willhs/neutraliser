@@ -264,17 +264,18 @@ module Neutraliser
     # so the title is left out rather than given an invented level.
     def estimate_loudness(item, streaming_url)
       total_s = item['duration'].to_i / 1000.0
+      channels = audio_channels(item)
 
       if full || total_s <= READ_IN_FULL_BELOW_S
         # A failed read here raises and is handled by analyze_media_item.
-        measurement = analyze_streaming_audio(streaming_url)
+        measurement = analyze_streaming_audio(streaming_url, channels: channels)
         return LoudnessEstimate.exact(measurement.input_i) unless measurement.silent?
 
         log "   ⚠️  #{display_title(item)}: no audio signal measured, skipping"
         return nil
       end
 
-      levels = window_offsets(total_s).map { |offset| measure_window(streaming_url, offset) }
+      levels = window_offsets(total_s).map { |offset| measure_window(streaming_url, offset, channels) }
       estimate = LoudnessEstimate.sampled(levels)
       log "   ⚠️  #{display_title(item)}: too few readable audio windows (#{levels.compact.size}), skipping" unless estimate
       estimate
@@ -292,9 +293,9 @@ module Neutraliser
     # Dropping a bad window (rather than failing the title) keeps one flaky
     # seek over HTTP from costing the other four; LoudnessEstimate.sampled
     # refuses to report from too few.
-    def measure_window(streaming_url, offset)
+    def measure_window(streaming_url, offset, channels)
       measurement = analyze_streaming_audio(
-        streaming_url, start_offset: offset, duration: STREAM_SAMPLE_DURATION_S
+        streaming_url, start_offset: offset, duration: STREAM_SAMPLE_DURATION_S, channels: channels
       )
       measurement.silent? ? nil : measurement.input_i
     rescue FFmpegError => e
@@ -302,11 +303,19 @@ module Neutraliser
       nil
     end
 
+    # The channel count Plex lists for the title's media (its audioChannels), or nil when the listing has
+    # none. loudnorm drops the side channels of a 7.1 track, so the count decides whether the read also
+    # meters all of them (Measurement.side_channels); without it a 7.1 title is read as 5.1.
+    def audio_channels(item)
+      count = item.dig('Media', 0, 'audioChannels').to_i
+      count.positive? ? count : nil
+    end
+
     # Measures loudness straight off the Plex stream via FFmpegWrapper's
     # timeboxed, argv-form executor — no shell string, no temp file, no
     # sentinel-float fallback. A failed/timed-out measurement raises.
     # No duration/start_offset measures the whole stream.
-    def analyze_streaming_audio(streaming_url, start_offset: nil, duration: nil)
+    def analyze_streaming_audio(streaming_url, channels: nil, start_offset: nil, duration: nil)
       FFmpegWrapper.measure_loudness(
         streaming_url,
         start_offset: start_offset,
@@ -314,7 +323,8 @@ module Neutraliser
         target_tp: @profile[:tp],
         target_lra: @profile[:lra],
         input_args: ['-headers', "X-Plex-Token: #{@auth_token}\r\n"],
-        duration: duration
+        duration: duration,
+        **Measurement.side_channels(channels: channels)
       )
     end
 

@@ -1,6 +1,7 @@
 require 'spec_helper'
 require 'fileutils'
 require 'json'
+require 'open3'
 require 'tmpdir'
 require_relative 'support/fake_plex_server'
 
@@ -36,6 +37,24 @@ RSpec.describe 'analyze-plex against a fake Plex server', :real_ffmpeg do
   end
 
   def title(name, volume_db) = FakePlexServer::Title.new(title: name, path: clip(name, volume_db), duration_s: 8)
+
+  # A 7.1 clip whose front six channels sit 4 dB under its two side surrounds. loudnorm counts the first
+  # six channels only, so read alone it hears the quiet bed and leaves the loud sides out.
+  def clip_surround(name)
+    File.join(dir, "#{name}.mkv").tap do |path|
+      graph = '[0:a]asplit=2[q][l];[q]volume=-10dB,asplit=6[c0][c1][c2][c3][c4][c5];[l]volume=-6dB,asplit=2[s0][s1];' \
+              '[c0][c1][c2][c3][c4][c5][s0][s1]join=inputs=8:channel_layout=7.1:' \
+              'map=0.0-FL|1.0-FR|2.0-FC|3.0-LFE|4.0-BL|5.0-BR|6.0-SL|7.0-SR'
+      system('ffmpeg', '-hide_banner', '-v', 'error', '-y', '-f', 'lavfi', '-i', 'sine=frequency=440:sample_rate=48000:duration=8',
+             '-filter_complex', graph, '-c:a', 'flac', path) || raise('ffmpeg failed')
+    end
+  end
+
+  # Integrated loudness over every channel, as ffmpeg's own ebur128 reads it (not the loudnorm the tool uses).
+  def ebur128_i(path)
+    _, err, = Open3.capture3('ffmpeg', '-hide_banner', '-nostats', '-i', path, '-af', 'ebur128', '-f', 'null', '-')
+    err.scan(/I:\s+(-?\d+\.\d)\s+LUFS/).last.first.to_f
+  end
 
   let(:libraries) do
     [
@@ -76,6 +95,32 @@ RSpec.describe 'analyze-plex against a fake Plex server', :real_ffmpeg do
     titles = analyse(library_name: 'Shows').map { |r| r['title'] }
 
     expect(titles).to contain_exactly('Some Show S01E01 Pilot', 'Some Show S01E02 Second')
+  end
+
+  context 'with a 7.1 title whose loud channels are the side surrounds' do
+    let(:surround) { FakePlexServer::Title.new(title: 'Wide Film', path: clip_surround('wide'), duration_s: 8, channels: 8) }
+    let(:libraries) { [FakePlexServer::Library.new(key: '1', title: 'Films', type: 'movie', items: [surround])] }
+
+    it 'reads it with all eight channels, so it is not triaged too quiet' do
+      result = analyse.first
+
+      expect(result['current_level']).to be_within(0.5).of(ebur128_i(surround.path))
+      expect(result['adjustment_type']).to eq('OK')
+    end
+
+    it 'reads each sampled window with all eight channels too' do
+      stub_const('Neutraliser::PlexAnalyzer::READ_IN_FULL_BELOW_S', 5)
+      result = analyse.first
+
+      expect(result['measured']).to eq('sampled')
+      expect(result['current_level']).to be_within(0.5).of(ebur128_i(surround.path))
+    end
+
+    it 'falls back to the loudnorm-only read when Plex lists no channel count' do
+      surround.channels = nil
+
+      expect(analyse.first['adjustment_type']).to eq('Too Quiet')
+    end
   end
 
   it 'covers movies and TV in one run' do

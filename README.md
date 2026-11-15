@@ -344,7 +344,7 @@ This is proved with real-ffmpeg round-trip specs (MKV and MP4, audio hashes comp
 
 Loudness triage across your Plex movie and TV libraries, modifying nothing. Reads audio over Plex's own stream, so it doesn't need filesystem access to the media. TV libraries are read episode by episode (`Show S01E02 Title`).
 
-**How well tested:** movie libraries have been measured against a real Plex server. TV libraries are covered only by a fake Plex server in the specs (`spec/plex_fake_server_spec.rb`), so report anything odd on a real one.
+**How well tested:** movie libraries have been measured against a real Plex server. TV libraries, and 7.1 titles (read with all eight channels when Plex lists `audioChannels`, as `process` does), are covered only by a fake Plex server in the specs (`spec/plex_fake_server_spec.rb`), so report anything odd on a real one.
 
 **What it can and can't tell you:** by default each title is *sampled* (five 60-second windows spread across the runtime, combined on energy), and a sample can't support a ±1 LU verdict. Measured against full readings on 10 real films, five windows read up to 6.5 LU quieter (and once 1.0 LU louder) than the truth and were within 1 LU on only half of them ([the numbers](docs/research/plex-sampling-error-2026-10.md)). So a sampled title gets a verdict ("Too Loud" / "Too Quiet") only when its whole error range is clear of the tolerance band; everything else is reported as **Unclear**, with the range the true level could be in. Use `--full` to measure each title end to end (what `process` sees): accurate, but it reads the whole file over HTTP, about 2 to 7 minutes per film.
 

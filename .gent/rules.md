@@ -43,7 +43,7 @@ A Ruby CLI tool that normalises audio volume in video files using industry-stand
 - **`FileManager`**: Atomic file operations with integrity verification
 - **`CacheManager`**: Sidecar `.loudnorm_{profile}.json` caching system for analysis results
 - **`LocalStager`**: Stages files to local disk (`--local-stage`) before processing, copies results back
-- **`PlexAnalyzer`**: Plex library integration for media analysis, routed through FFmpegWrapper/Measurement/Profiles; samples five 60s windows per title (`--full` reads end to end). Show libraries are read as episodes (`/all?type=4`). Tested against `spec/support/fake_plex_server.rb`, not a real Plex, for TV
+- **`PlexAnalyzer`**: Plex library integration for media analysis, routed through FFmpegWrapper/Measurement/Profiles; samples five 60s windows per title (`--full` reads end to end). Show libraries are read as episodes (`/all?type=4`). A title's `Media.audioChannels` goes to `measure_loudness` (`Measurement.side_channels`), so a 7.1 title is metered with its side channels, full or sampled; no count listed means loudnorm alone. Tested against `spec/support/fake_plex_server.rb`, not a real Plex, for TV and 7.1
 - **`LoudnessEstimate`**: A title's loudness plus the range the truth can lie in; sampled estimates give a verdict only when the whole range clears the tolerance band, else `unclear` (research: `docs/research/plex-sampling-error-2026-10.md`)
 - **`VideoFiles`**: The one directory walk: literal paths, supported extensions, leftover temp detection
 - **`PlexEnv`**: Reads `PLEX_TOKEN`/`PLEX_SERVER_URL` from `.env` for `analyze-plex` only. Never add dotenv back: it runs `$(...)` from a file in the working directory, which may be a media folder
