@@ -14,7 +14,14 @@ module Neutraliser
   module Recipe
     # 2: AC-3 / E-AC-3 tracks are decoded with the stream's DRC off and keep their dialnorm
     # (DolbyStream), so their measured levels, and the gain from them, differ from recipe 1.
-    CURRENT = 2
+    # Constant gain, peak-capped (plus whatever --limit-db / --lra-target asked for).
+    CONSTANT_GAIN = 2
+    # 3: the levelling ladder (Ladder, --ladder): the least of gain, limiter and compression that
+    # works for each file, aimed at the programme or the dialogue.
+    LADDER = 3
+    # What a run writes when not told otherwise. Switching the default to the ladder is this one
+    # line (CURRENT = LADDER): --ladder defaults to on when it is.
+    CURRENT = CONSTANT_GAIN
     UNVERSIONED = nil
     UNVERSIONED_LABEL = 'unversioned'.freeze
 
@@ -26,15 +33,18 @@ module Neutraliser
       Integer(text.to_s.strip, 10)
     end
 
+    # The recipe a run writes.
+    def self.for(ladder:) = ladder ? LADDER : CONSTANT_GAIN
+
     def self.label(recipe) = recipe.nil? ? UNVERSIONED_LABEL : recipe.to_s
 
-    # A redo of the current recipe would never finish: every file it wrote
+    # A redo of the recipe this run writes would never finish: every file it wrote
     # would qualify again. Older ones and "unversioned" are what a redo is for.
-    def self.check_redoable!(recipes)
-      stale = recipes.select { |recipe| !recipe.nil? && recipe >= CURRENT }
+    def self.check_redoable!(recipes, writing: CURRENT)
+      stale = recipes.select { |recipe| !recipe.nil? && recipe >= writing }
       return if stale.empty?
 
-      raise ArgumentError, "Recipe #{stale.join(', ')} is the current one (#{CURRENT}) or newer; " \
+      raise ArgumentError, "Recipe #{stale.join(', ')} is the one this run writes (#{writing}) or newer; " \
                            '--redo-recipe is for older recipes and for files with none'
     end
   end

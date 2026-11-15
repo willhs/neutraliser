@@ -14,7 +14,7 @@ Direction: [vision](../philosophy/vision.md). Basis: [research 0002](../research
 3. Validate it on real files.
 4. Switch the default only if the validation holds.
 
-No default changes before step 4. `--keep-original-audio` stays an option, and the defaults for other people's libraries stay cautious on Atmos, DTS and TrueHD.
+No default changes before step 4. The ladder the vision describes is built and opt-in (`--ladder`, `--anchor programme|dialogue`, recipe 3; [task 0008](../tasks/0008-levelling-ladder-opt-in-mode/task.md)): switching the default once step 4 holds is `Recipe::CURRENT = LADDER` in `lib/neutraliser/recipe.rb`, plus `Ladder::LIMIT_DB` / `LRA_LIMIT` and the dialogue target if the validation moves them, and the docs. `--keep-original-audio` stays an option, and the defaults for other people's libraries stay cautious on Atmos, DTS and TrueHD.
 
 ## 0.1 criteria
 

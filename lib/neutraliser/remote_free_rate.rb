@@ -31,7 +31,7 @@ module Neutraliser
       profile = Profiles.find(stamp.profile)
       return nil unless profile && stamp.linear? && stamp.measured_i && stamp.measured_lra
 
-      new(integrated: stamp.measured_i + stamp.gain_db.to_f, lra: stamp.measured_lra, target: profile[:lufs],
+      new(integrated: stamp.measured_i + stamp.gain_db.to_f, lra: stamp.measured_lra, target: stamp.target_i || profile[:lufs],
           basis: :computed)
     end
 
@@ -40,7 +40,7 @@ module Neutraliser
       profile = Profiles.find(left.profile)
       return nil unless profile && left.measured_lra
 
-      new(integrated: left.measured_i, lra: left.measured_lra, target: profile[:lufs], basis: :computed)
+      new(integrated: left.measured_i, lra: left.measured_lra, target: left.target_i || profile[:lufs], basis: :computed)
     end
     private_class_method :from_stamp, :from_left
 

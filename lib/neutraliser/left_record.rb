@@ -16,10 +16,19 @@ module Neutraliser
   # measured_* are the file's loudnorm levels when the skip came after an
   # analysis (peak-limited, within tolerance); the object-audio and codec checks
   # run before one, so they are nil there.
-  LeftRecord = Data.define(:reason, :profile, :recipe, :message, :measured_i, :measured_tp, :measured_lra) do
-    def self.for(reason, profile, message: nil, measurement: nil)
-      new(reason: reason.to_s, profile: profile[:name], recipe: Recipe::CURRENT, message: message,
-          measured_i: measurement&.input_i, measured_tp: measurement&.input_tp, measured_lra: measurement&.input_lra)
+  #
+  # target_i is the programme level (LUFS) the file was judged against when that was its own, not its
+  # profile's: a dialogue-anchored aim (Ladder). nil otherwise.
+  LeftRecord = Data.define(:reason, :profile, :recipe, :message, :measured_i, :measured_tp, :measured_lra, :target_i) do
+    def initialize(target_i: nil, **fields)
+      super
+    end
+
+    # profile: the file's aim (Ladder.aim), whose name is the profile's.
+    def self.for(reason, profile, message: nil, measurement: nil, recipe: Recipe::CURRENT)
+      new(reason: reason.to_s, profile: profile[:name], recipe: recipe, message: message,
+          measured_i: measurement&.input_i, measured_tp: measurement&.input_tp, measured_lra: measurement&.input_lra,
+          target_i: profile[:anchor] == :dialogue ? profile[:lufs] : nil)
     end
 
     def self.from_entry(hash)
@@ -27,7 +36,8 @@ module Neutraliser
 
       left = hash['left']
       new(reason: left['reason'].to_s, profile: left['profile'], recipe: left['recipe'], message: left['message'],
-          measured_i: left['measured_i'], measured_tp: left['measured_tp'], measured_lra: left['measured_lra'])
+          measured_i: left['measured_i'], measured_tp: left['measured_tp'], measured_lra: left['measured_lra'],
+          target_i: left['target_i'])
     end
 
     # Only the fields that have a value, so the sidecar stays small.

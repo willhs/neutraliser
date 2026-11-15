@@ -40,13 +40,17 @@ module Neutraliser
     #
     # lra_target is this run's --lra-target. A file only counts as processed if it
     # also meets it: compressed, or measured under the target when it was normalised.
-    def initialize(root_dir, fast_verification: true, tolerance: nil, redo_recipes: [], lra_target: nil)
+    #
+    # recipe is the one this run writes, recorded for the files it makes or judges.
+    def initialize(root_dir, fast_verification: true, tolerance: nil, redo_recipes: [], lra_target: nil,
+                   recipe: Recipe::CURRENT)
       @path = File.join(root_dir, FILENAME)
       @entries = load
       @fast_verification = fast_verification
       @tolerance = tolerance
       @redo_recipes = redo_recipes
       @lra_target = lra_target
+      @recipe = recipe
     end
 
     # Cheap pre-check: has this exact file+profile been fully processed
@@ -92,7 +96,7 @@ module Neutraliser
     #
     # imported: an ImportedRecord when another engine (neutralise.sh) did the work, so
     # `report` can tell these files from ones nobody touched.
-    def mark_processed(file_path, profile, tolerance: nil, recipe: Recipe::CURRENT, left: nil, imported: nil)
+    def mark_processed(file_path, profile, tolerance: nil, recipe: @recipe, left: nil, imported: nil)
       entry = {
         'size' => File.size(file_path),
         'mtime' => File.mtime(file_path).to_i,

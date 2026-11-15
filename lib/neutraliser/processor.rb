@@ -20,15 +20,23 @@ module Neutraliser
     LRA_TARGET_NEEDS_CONSTANT_GAIN_MESSAGE = '--lra-target compresses with acompressor and then levels with constant gain; ' \
                                              'it cannot combine with --allow-dynamic, --fast, --fast-verify or the night profile'.freeze
     CENTRE_BOOST_NEEDS_LRA_TARGET_MESSAGE = '--centre-boost is part of --lra-target compression; add --lra-target N'.freeze
+    DIALOGUE_NEEDS_LADDER_MESSAGE = '--anchor dialogue is part of the levelling ladder: add --ladder, and leave out ' \
+                                    '--allow-dynamic, --fast, --fast-verify and the night profile'.freeze
 
     def initialize(replace: false, target_level: nil, profile: 'livingroom', tolerance: 1.0, cache: true,
                    dry_run: false, fast_verify: false, resume: false, fast: false, local_stage: false,
                    allow_dynamic: false, allow_object_audio_loss: false, keep_original_audio: false,
-                   limit_db: 0.0, min_gain: nil, allow_codec_change: false, disk_guard: nil, redo_recipes: [],
-                   lra_target: nil, centre_boost: nil)
+                   limit_db: nil, min_gain: nil, allow_codec_change: false, disk_guard: nil, redo_recipes: [],
+                   lra_target: nil, centre_boost: nil, ladder: Recipe::CURRENT == Recipe::LADDER, anchor: 'programme')
       @replace = replace
       base_profile = profile.is_a?(Hash) ? profile : Profiles.get_profile(profile)
-      @profile = if target_level
+      @anchor = anchor.to_s
+      raise ArgumentError, "Unknown anchor '#{anchor}': use #{Ladder::ANCHORS.join(' or ')}" unless Ladder::ANCHORS.include?(@anchor)
+
+      @profile = if @anchor == 'dialogue'
+                   Profiles.dialogue_profile((target_level || DialogueAnchor::DEFAULT.target).to_f,
+                                             tp: base_profile[:tp], lra: base_profile[:lra])
+                 elsif target_level
                    Profiles.custom_profile(target_level.to_f, tp: base_profile[:tp], lra: base_profile[:lra],
                                                               dynamic: base_profile[:dynamic])
                  else
@@ -41,16 +49,19 @@ module Neutraliser
       @resume = resume
       @fast = fast
       @local_stage = local_stage
-      @allow_dynamic = allow_dynamic || @profile[:dynamic] == true
+      @allow_dynamic = allow_dynamic || base_profile[:dynamic] == true
       @allow_object_audio_loss = allow_object_audio_loss
       @keep_original_audio = keep_original_audio
       @allow_codec_change = allow_codec_change
       @disk_guard = disk_guard || DiskGuard.new
+      @notes = []
+      @ladder = ladder_on?(ladder, fast, fast_verify)
+      @recipe = Recipe.for(ladder: @ladder)
       @redo_recipes = Array(redo_recipes).uniq
-      Recipe.check_redoable!(@redo_recipes)
-      @limit_db = limit_db.to_f
+      Recipe.check_redoable!(@redo_recipes, writing: @recipe)
+      @limit_db = (limit_db || ladder_limit_db).to_f
       @min_gain = (min_gain || tolerance).to_f
-      @lra_target = lra_target&.to_f
+      @lra_target = (lra_target || ladder_lra_target(fast_verify))&.to_f
       @centre_boost = centre_boost&.to_f
       raise ArgumentError, FAST_REQUIRES_DYNAMIC_MESSAGE if @fast && !@allow_dynamic
       raise ArgumentError, LIMIT_NEEDS_CONSTANT_GAIN_MESSAGE if @limit_db.positive? && @allow_dynamic
@@ -63,6 +74,7 @@ module Neutraliser
     end
 
     def process(path)
+      @notes.each { |note| log note }
       # Absolute, because ffmpeg reads a relative "Alien: Covenant.mkv" as a URL
       # with the protocol "Alien" (and "http:x.mkv" or "concat:a|b" as the real
       # thing), and never takes one starting with a dash for an option.
@@ -87,6 +99,42 @@ module Neutraliser
 
     private
 
+    # The ladder is a constant-gain method. A run that picks loudnorm instead (--allow-dynamic, the night
+    # profile, --fast) has chosen another method, so the ladder steps aside rather than refusing it:
+    # once the ladder is the default, those flags must still work on their own. A dialogue anchor has no
+    # meaning without the ladder.
+    # A --fast-verify sample can't see the dialogue either, so it can't judge a dialogue-anchored file done.
+    def ladder_on?(ladder, fast, fast_verify)
+      dynamic = @allow_dynamic || fast
+      raise ArgumentError, DIALOGUE_NEEDS_LADDER_MESSAGE if @anchor == 'dialogue' && (!ladder || dynamic || fast_verify)
+      return false unless ladder
+      return true unless dynamic
+
+      @notes << 'Note: the levelling ladder is constant gain; --allow-dynamic, --fast or the night profile ' \
+                'replaces it for this run'
+      false
+    end
+
+    # Rung 2 needs the limiter's latency option (ffmpeg 5.1+). Without it the ladder runs without the
+    # rung, and says so; an explicit --limit-db is still refused there.
+    def ladder_limit_db
+      return 0.0 unless @ladder
+      return Ladder::LIMIT_DB if FFmpegWrapper.wide_filter_options?
+
+      @notes << 'Note: ffmpeg is older than 5.1, so the ladder runs without its limiter rung'
+      0.0
+    end
+
+    # Rung 3. A --fast-verify skip is judged on a 30-second sample, which can't see a loudness range, so
+    # the rung is left out of such a run (an explicit --lra-target with it is refused, as before).
+    def ladder_lra_target(fast_verify)
+      return nil unless @ladder
+      return Ladder::LRA_LIMIT unless fast_verify
+
+      @notes << 'Note: --fast-verify judges files on a sample, so the ladder runs without its compression rung'
+      nil
+    end
+
     # --lra-target replaces the constant-gain-only default with "compress, then
     # constant gain", so it refuses every option that already decides the dynamics
     # some other way, and --centre-boost, which only means something inside it.
@@ -108,7 +156,7 @@ module Neutraliser
 
     def new_skip_decider(root)
       SkipDecider.new(root, fast_verification: @fast_verify, tolerance: @tolerance, redo_recipes: @redo_recipes,
-                            lra_target: @lra_target)
+                            lra_target: @lra_target, recipe: @recipe)
     end
 
     # Without a version that can name them, an Atmos track looks like plain
@@ -134,7 +182,7 @@ module Neutraliser
     def build_guards(object_audio_undetectable:)
       Guards.new(profile: @profile, replace: @replace, dry_run: @dry_run, disk_guard: @disk_guard,
                  allow_object_audio_loss: @allow_object_audio_loss, allow_codec_change: @allow_codec_change,
-                 object_audio_undetectable: object_audio_undetectable)
+                 object_audio_undetectable: object_audio_undetectable, recipe: @recipe)
     end
 
     def process_directory(dir_path)
@@ -422,46 +470,78 @@ module Neutraliser
       result
     end
 
+    # aim: where this file is levelled to (Ladder.aim): the profile, or under --anchor dialogue the
+    # programme level that puts this file's dialogue on target. Every decision below is made against it.
     def process_file_two_pass(original_path, working)
       measurement = analyze_loudness_for_path(working, original_path)
-      plan = compression_plan(working, measurement)
+      return skip_silent(original_path) if measurement.silent?
 
-      if measurement.silent?
-        log '  Primary audio track has no measurable level (silent), skipping'
-        FileResult.skipped(original_path, :silent)
-      elsif plan
-        process_file_compressed(original_path, working, measurement, plan)
-      elsif peak_limited?(measurement)
-        log "  Peak-limited: max useful gain #{gain_plan(measurement).applied.round(2)} dB is under " \
+      aim = aim_for(working, measurement)
+      plan = compression_plan(working, measurement, aim)
+
+      if plan
+        process_file_compressed(original_path, working, measurement, plan, aim_for(working, plan.after, plan.chain))
+      elsif peak_limited?(measurement, aim)
+        log "  Peak-limited: max useful gain #{gain_plan(measurement, aim).applied.round(2)} dB is under " \
             "#{@min_gain} dB towards target, skipping re-encode"
         FileResult.skipped(original_path, :peak_limited,
-                           left: LeftRecord.for(:peak_limited, @profile, measurement: measurement,
-                                                                         message: peak_limited_message(measurement)))
-      elsif measurement.needs_normalization?(@profile, tolerance: @tolerance)
+                           left: LeftRecord.for(:peak_limited, aim, measurement: measurement, recipe: @recipe,
+                                                                    message: peak_limited_message(measurement, aim)))
+      elsif measurement.needs_normalization?(aim, tolerance: @tolerance)
         if @dry_run
-          log "  [DRY RUN] Would normalize: #{measurement.input_i.round(1)} LUFS → #{@profile[:lufs]} LUFS"
+          log "  [DRY RUN] Would normalize: #{measurement.input_i.round(1)} LUFS → #{aim[:lufs]} LUFS"
           FileResult.done(original_path, :dry_run)
         else
-          codec_decision = normalize_file_with_paths(original_path, working, measurement)
+          codec_decision = normalize_file_with_paths(original_path, working, measurement, aim)
           FileResult.done(original_path, :normalized, mode: codec_decision[:mode])
         end
       else
         level = measurement.already_at_target? ? 'by the 30-second sample' : "#{measurement.input_i.round(2)} LUFS"
-        log "  Already at target level (#{level}, within #{@tolerance} LU of #{@profile[:lufs]}), skipping"
-        FileResult.skipped(original_path, :within_tolerance, left: within_tolerance_record(measurement))
+        log "  Already at target level (#{level}, within #{@tolerance} LU of #{aim[:lufs]}), skipping"
+        FileResult.skipped(original_path, :within_tolerance, left: within_tolerance_record(measurement, aim))
+      end
+    end
+
+    def skip_silent(original_path)
+      log '  Primary audio track has no measurable level (silent), skipping'
+      FileResult.skipped(original_path, :silent)
+    end
+
+    # The file's aim. A dialogue anchor reads the dialogue (one decode of the centre channel), through
+    # `chain` when the audio will be compressed first: compression moves the programme and the dialogue by
+    # different amounts, so the aim is worked out on the signal that will be levelled. The sentinel
+    # "already at target" measurement has no level to work from, so it keeps the profile.
+    def aim_for(working, measurement, chain = nil)
+      return @profile unless @profile[:anchor] == :dialogue && !measurement.already_at_target?
+
+      estimate = DialogueMeter.estimate(working.path, working.primary_track, pre_filter: chain)
+      aim = Ladder.aim(@profile, measurement.input_i, estimate)
+      log_aim(aim, estimate, measurement, chain)
+      aim
+    end
+
+    def log_aim(aim, estimate, measurement, chain)
+      stage = chain ? 'after compression' : 'measured'
+      if estimate.available?
+        log "  Dialogue #{stage}: #{estimate.level.round(1)} LUFS (#{estimate.method.to_s.tr('_', ' ')}), programme " \
+            "#{(measurement.input_i - estimate.level).round(1)} LU above it: aiming the programme at #{aim[:lufs]} LUFS " \
+            "for dialogue at #{@profile[:dialogue_target]}"
+      else
+        log "  No dialogue estimate (#{estimate.reason}): aiming the programme at #{aim[:lufs]} LUFS, " \
+            "#{Ladder::NO_DIALOGUE_OFFSET_LU} LU above the dialogue target"
       end
     end
 
     # The sentinel "already at target" measurement has no real levels to keep.
-    def within_tolerance_record(measurement)
+    def within_tolerance_record(measurement, aim)
       return nil if measurement.already_at_target?
 
-      LeftRecord.for(:within_tolerance, @profile, measurement: measurement)
+      LeftRecord.for(:within_tolerance, aim, measurement: measurement, recipe: @recipe)
     end
 
-    def peak_limited_message(measurement)
-      plan = gain_plan(measurement)
-      "peak ceiling allows #{plan.applied.round(2)} dB of the #{plan.desired.round(2)} dB towards #{@profile[:lufs]} LUFS"
+    def peak_limited_message(measurement, aim)
+      plan = gain_plan(measurement, aim)
+      "peak ceiling allows #{plan.applied.round(2)} dB of the #{plan.desired.round(2)} dB towards #{aim[:lufs]} LUFS"
     end
 
     def compression_needed?(measurement)
@@ -475,16 +555,16 @@ module Neutraliser
     # none would narrow it: it is then levelled like any other file. The search costs
     # up to six extra decodes of the file (see Compression); a dry run does them too,
     # because what it would pick is the thing worth seeing.
-    def compression_plan(working, measurement)
+    def compression_plan(working, measurement, aim = @profile)
       return nil unless compression_needed?(measurement)
 
       primary = working.primary_track
       log "  Loudness range #{measurement.input_lra.round(1)} LU is over --lra-target #{@lra_target} " \
           "(+#{@tolerance} tolerance): finding the gentlest compression that reaches it"
-      plan = Compression.plan(working.path, primary, measurement, @profile, lra_target: @lra_target,
-                                                                            tolerance: @tolerance,
-                                                                            centre_boost_db: @centre_boost.to_f,
-                                                                            limit_db: @limit_db)
+      plan = Compression.plan(working.path, primary, measurement, aim, lra_target: @lra_target,
+                                                                       tolerance: @tolerance,
+                                                                       centre_boost_db: @centre_boost.to_f,
+                                                                       limit_db: @limit_db)
       if plan
         log_compression_plan(plan, primary)
       else
@@ -493,21 +573,24 @@ module Neutraliser
       plan
     end
 
-    # Levels the compressed signal to the profile target (peak limiter per
-    # --limit-db) and stamps what was done.
-    def process_file_compressed(original_path, working, measurement, plan)
+    # Levels the compressed signal to its aim (peak limiter per --limit-db) and stamps what was done.
+    # Under a programme anchor the aim is the one the plan was made for; a dialogue anchor's is re-read
+    # after compression, so the gain plan is redone for it.
+    def process_file_compressed(original_path, working, measurement, plan, aim = @profile)
+      plan = plan.with(gain_plan: GainPlan.for(plan.after, aim, limit_db: @limit_db)) unless aim.equal?(@profile)
       if @dry_run
-        log "  [DRY RUN] Would compress (#{plan.label}) and level to #{@profile[:lufs]} LUFS"
+        log "  [DRY RUN] Would compress (#{plan.label}) and level to #{aim[:lufs]} LUFS"
         return FileResult.done(original_path, :dry_run)
       end
 
       codec_decision = render_normalization(
         original_path, working,
         log_message: "  Compressing (#{plan.rung.name}), then levelling #{plan.after.input_i.round(1)} LUFS " \
-                     "to #{@profile[:lufs]} LUFS (#{plan.applied.round(1)} dB)"
+                     "to #{aim[:lufs]} LUFS (#{plan.applied.round(1)} dB)"
       ) do |out|
-        FFmpegWrapper.apply_normalization(working, out, measurement, @profile, keep_original: @keep_original_audio,
-                                                                               limit_db: @limit_db, compression: plan)
+        FFmpegWrapper.apply_normalization(working, out, measurement, aim, keep_original: @keep_original_audio,
+                                                                          limit_db: @limit_db, compression: plan,
+                                                                          recipe: @recipe)
       end
       FileResult.done(original_path, :normalized, mode: codec_decision[:mode])
     end
@@ -535,14 +618,14 @@ module Neutraliser
     # Constant-gain mode only: a file far from target whose peak ceiling
     # leaves less than min_gain dB of gain towards it (or none at all, or a
     # gain the wrong way). Re-encoding it is pure generation loss.
-    def peak_limited?(measurement)
-      return false if @allow_dynamic || !measurement.needs_normalization?(@profile, tolerance: @tolerance)
+    def peak_limited?(measurement, aim)
+      return false if @allow_dynamic || !measurement.needs_normalization?(aim, tolerance: @tolerance)
 
-      !gain_plan(measurement).worthwhile?(@min_gain)
+      !gain_plan(measurement, aim).worthwhile?(@min_gain)
     end
 
-    def gain_plan(measurement)
-      GainPlan.for(measurement, @profile, limit_db: @limit_db)
+    def gain_plan(measurement, aim)
+      GainPlan.for(measurement, aim, limit_db: @limit_db)
     end
 
     def process_file_fast(original_path, working)
@@ -565,18 +648,18 @@ module Neutraliser
       analyzer.analyze(working, cached_as: original_path, profile: @profile, tolerance: @tolerance)
     end
 
-    def normalize_file_with_paths(original_path, working, measurement)
+    def normalize_file_with_paths(original_path, working, measurement, aim = @profile)
       current_lufs = measurement.input_i
-      target_lufs = @profile[:lufs]
+      target_lufs = aim[:lufs]
       adjustment = target_lufs - current_lufs
 
       render_normalization(
         original_path, working,
         log_message: "  Current: #{current_lufs.round(1)} LUFS, Target: #{target_lufs} LUFS (#{adjustment.round(1)} LU adjustment)"
       ) do |out|
-        FFmpegWrapper.apply_normalization(working, out, measurement, @profile, allow_dynamic: @allow_dynamic,
-                                                                               keep_original: @keep_original_audio,
-                                                                               limit_db: @limit_db)
+        FFmpegWrapper.apply_normalization(working, out, measurement, aim, allow_dynamic: @allow_dynamic,
+                                                                          keep_original: @keep_original_audio,
+                                                                          limit_db: @limit_db, recipe: @recipe)
       end
     end
 

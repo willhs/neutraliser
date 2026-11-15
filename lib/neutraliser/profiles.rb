@@ -31,7 +31,19 @@ module Neutraliser
       return PROFILES[name] if PROFILES.key?(name)
 
       match = name.to_s.match(/\Acustom([+-]?\d+(?:\.\d+)?)\z/)
-      match && custom_profile(match[1].to_f)
+      return custom_profile(match[1].to_f) if match
+
+      match = name.to_s.match(/\Adialogue([+-]?\d+(?:\.\d+)?)\z/)
+      match && dialogue_profile(match[1].to_f)
+    end
+
+    # A dialogue-anchored aim (Ladder, --anchor dialogue): each file's dialogue at `dialogue_target`
+    # LUFS. :lufs is the programme level a file with no dialogue estimate is levelled to; Ladder.aim
+    # works out every other file's. The name carries the target, as custom ones do, and says it is
+    # dialogue: a file levelled so its dialogue sits at -27 isn't done for a -27 programme.
+    def self.dialogue_profile(dialogue_target, tp: -1.5, lra: 12.0)
+      { name: format('dialogue%+g', dialogue_target), lufs: dialogue_target.to_f + Ladder::NO_DIALOGUE_OFFSET_LU, tp: tp,
+        lra: lra, dynamic: false, anchor: :dialogue, dialogue_target: dialogue_target.to_f }
     end
 
     # `dynamic: true` marks a compression profile: it implies allow-dynamic,
@@ -59,6 +71,8 @@ module Neutraliser
       when 'night'
         'Night mode compression profile (implies dynamic): reduced dynamic range for quiet listening'
       else
+        return "Dialogue at #{profile[:dialogue_target]} LUFS (--anchor dialogue)" if profile[:anchor] == :dialogue
+
         "Custom profile with #{profile[:lufs]} LUFS target"
       end
     end

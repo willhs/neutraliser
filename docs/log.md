@@ -1,3 +1,7 @@
+## [2026-11-15] create | Levelling ladder as an opt-in mode (task 0008)
+
+`--ladder` (recipe 3) bundles the vision's ladder: constant gain, then a limiter up to 6 dB, then compression over LRA 13, with conversion only under the allow flags. `--anchor dialogue --target-level N` aims dialogue (centre-channel estimate) instead of the programme, so Will's -27 / -24 / -20 pick is config. New stamp fields `NEUTRALISER_TARGET_I` and `NEUTRALISER_DIALOGUE_I`; `report` shows each file's rung. Default unchanged; the flip is `Recipe::CURRENT = LADDER`. Updated data_contracts, README, roadmap, CHANGELOG.
+
 ## [2026-11-15] update | Pre-release honesty fixes that don't depend on the default
 
 - README no longer recommends `--fast` for a whole library (it never measures, so it compresses files already at target); the overnight and resume examples use the default pass. ADR-0002 section reworded to say so.

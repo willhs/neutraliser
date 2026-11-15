@@ -17,11 +17,14 @@ module Neutraliser
 
     module_function
 
-    # track: a Source's primary_track. Raises FFmpegError if the read itself fails.
-    def estimate(file, track)
+    # track: a Source's primary_track. pre_filter: a chain the track goes through first (a compression
+    # candidate, so the ladder can see where the dialogue lands after it); it must keep the channel
+    # layout. Raises FFmpegError if the read itself fails.
+    def estimate(file, track, pre_filter: nil)
       return DialogueEstimate.unavailable(no_centre_reason(track)) unless centre_channel?(track)
 
-      measurement = FFmpegWrapper.measure_loudness(file, audio_index: track[:index], pre_filter: CENTRE_ONLY)
+      measurement = FFmpegWrapper.measure_loudness(file, audio_index: track[:index],
+                                                         pre_filter: [pre_filter, CENTRE_ONLY].compact.join(','))
       return DialogueEstimate.unavailable('silent centre channel') if measurement.silent?
 
       DialogueEstimate.centre_channel(measurement.input_i)

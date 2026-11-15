@@ -23,8 +23,15 @@ module Neutraliser
     DIALOGUE_FIELDS = %w[dialogue_i dialogue_method dialogue_confidence speech_share ldr dialnorm dialogue_remote_free].freeze
 
     # state is the stamp's mode ('linear' / 'limited' / 'compressed' / 'dynamic'), or 'untouched' when
-    # the file carries no record. left says why an untouched file was left alone, if known.
-    Row = Data.define(:file, :stamp, :left, :imported) do
+    # the file carries no record. left says why an untouched file was left alone, if known. rung is the
+    # ladder rung the stamp shows the file took (Ladder::Rung), nil without a stamp.
+    Row = Data.define(:file, :stamp, :left, :imported, :rung) do
+      def initialize(rung: nil, **fields)
+        super
+      end
+
+      def rung_label = rung&.label
+
       def state
         return stamp.mode || 'unknown' if stamp
 
@@ -53,7 +60,8 @@ module Neutraliser
         source = sources[file] = Source.new(file)
         stamp = source.stamp
         Row.new(file: file, stamp: stamp, left: stamp ? nil : SkipDecider.left_record_for(file, deciders),
-                imported: stamp ? nil : SkipDecider.imported_record_for(file, deciders))
+                imported: stamp ? nil : SkipDecider.imported_record_for(file, deciders),
+                rung: stamp ? Ladder::Rung.of(stamp, source.primary_track) : nil)
       end
       # Judged now, not on first use: a caller may delete the files (the rate harness does) once built.
       @final_levels = {}
@@ -77,6 +85,7 @@ module Neutraliser
         reencoded: rows.count { |row| row.stamp&.prior },
         profiles: rows.filter_map { |row| row.stamp&.profile }.tally.sort.to_h,
         recipes: rows.filter_map(&:recipe_label).tally.sort_by { |label, _| label }.to_h,
+        rungs: rows.filter_map(&:rung_label).tally.sort.to_h,
         dialnorms: rows.filter_map { |row| row.stamp&.source_dialnorm }.tally.sort.to_h,
         left: rows.filter_map { |row| row.left&.reason }.tally.sort.to_h
       }
@@ -104,6 +113,7 @@ module Neutraliser
       lines << "Re-encoded over an earlier pass: #{c[:reencoded]} (mode and recipe say what the last pass did; prior holds the rest)" if c[:reencoded].positive?
       lines << "Profiles: #{c[:profiles].map { |name, n| "#{name}=#{n}" }.join(', ')}" if c[:profiles].any?
       lines << "Recipes: #{c[:recipes].map { |label, n| "#{label}=#{n}" }.join(', ')}" if c[:recipes].any?
+      lines << "Rungs: #{c[:rungs].map { |label, n| "#{label}=#{n}" }.join(', ')}" if c[:rungs].any?
       lines << "Dialnorm carried over (dB): #{c[:dialnorms].map { |db, n| "#{db}=#{n}" }.join(', ')}" if c[:dialnorms].any?
       lines << rate.summary
       lines.concat(dialogue_rate.summary_lines) if dialogue_rate
@@ -111,19 +121,19 @@ module Neutraliser
     end
 
     def to_tsv
-      header = ['file', 'state', *TSV_FIELDS, 'left_reason', 'left_message', *OUTPUT_FIELDS, *DIALOGUE_FIELDS].join("\t")
+      header = ['file', 'state', *TSV_FIELDS, 'left_reason', 'left_message', *OUTPUT_FIELDS, *DIALOGUE_FIELDS, 'rung'].join("\t")
       body = rows.map do |row|
         levels = @final_levels[row.file]
         [row.file, row.state, *TSV_FIELDS.map { |field| row.value(field) }, row.left&.reason, row.left&.message,
          levels&.integrated&.round(2), levels&.lra&.round(2), levels&.basis, levels && rate.remote_free?(levels),
-         *dialogue_tsv(row)].join("\t")
+         *dialogue_tsv(row), row.rung_label].join("\t")
       end
       [header, *body].join("\n")
     end
 
     def to_json(*)
       files = rows.map do |row|
-        { file: row.file.scrub, state: row.state, stamp: row.stamp&.to_h, left: row.left&.to_h, imported: row.imported&.to_h_compact, output: output_h(row),
+        { file: row.file.scrub, state: row.state, rung: row.rung_label, stamp: row.stamp&.to_h, left: row.left&.to_h, imported: row.imported&.to_h_compact, output: output_h(row),
           dialogue: dialogue_h(row) }.compact
       end
       summary = counts.merge(remote_free_rate: rate.to_h)
@@ -135,7 +145,11 @@ module Neutraliser
     def final_levels_for(row) = @final_levels[row.file]
 
     # One-line words for a row, for a person reading a list of them.
-    def state_text(row) = row.left ? "#{row.state} (#{row.left.reason})" : row.state
+    def state_text(row)
+      return "#{row.state} (#{row.left.reason})" if row.left
+
+      row.rung ? "#{row.state} (rung #{row.rung_label})" : row.state
+    end
 
     def levels_text(row)
       levels = final_levels_for(row)

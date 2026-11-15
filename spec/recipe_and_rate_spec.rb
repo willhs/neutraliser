@@ -94,7 +94,7 @@ RSpec.describe 'Recipe versions, left-alone records and the remote-free rate', :
 
     it 'refuses to redo the current recipe' do
       expect { Neutraliser::Processor.new(redo_recipes: [Neutraliser::Recipe::CURRENT]) }
-        .to raise_error(ArgumentError, /current one/)
+        .to raise_error(ArgumentError, /this run writes/)
     end
   end
 

@@ -28,22 +28,28 @@ module Neutraliser
   #
   # recipe is the leveling method's version (Recipe); nil on a stamp from before
   # versioning, which stays valid.
+  #
+  # target_i and dialogue_i are set only when the file was aimed at its dialogue (Ladder, --anchor
+  # dialogue): the programme level (LUFS) this file was levelled to, and the dialogue estimate it was
+  # worked out from (nil when the file had none and took the fallback). A programme-anchored file's
+  # target is its profile's.
   Stamp = Data.define(:version, :profile, :recipe, :mode, :gain_db, :source_codec, :source_bitrate,
                       :measured_i, :measured_tp, :measured_lra, :date,
-                      :compression, :centre_boost_db, :lra_after, :source_dialnorm, :source_profile, :prior)
+                      :compression, :centre_boost_db, :lra_after, :source_dialnorm, :source_profile, :prior,
+                      :target_i, :dialogue_i)
 
   class Stamp
     # The compression fields are absent from every non-compressed stamp; source_dialnorm from every
     # one whose source wasn't AC-3 / E-AC-3 (or whose frames held none); source_profile and
     # prior from stamps that predate them, and those with no profile or earlier pass to name.
     def initialize(compression: nil, centre_boost_db: nil, lra_after: nil, source_dialnorm: nil, source_profile: nil,
-                   prior: nil, **fields)
+                   prior: nil, target_i: nil, dialogue_i: nil, **fields)
       super
     end
 
     def self.tag_name(field) = "NEUTRALISER_#{field.upcase}"
 
-    FLOAT_FIELDS = %i[gain_db measured_i measured_tp measured_lra centre_boost_db lra_after].freeze
+    FLOAT_FIELDS = %i[gain_db measured_i measured_tp measured_lra centre_boost_db lra_after target_i dialogue_i].freeze
     INTEGER_FIELDS = %i[source_bitrate recipe source_dialnorm].freeze
 
     # Builds a Stamp from probed tags (stream or container level). Tag-name
@@ -65,8 +71,8 @@ module Neutraliser
       value
     end
 
-    def self.now(**fields)
-      new(version: VERSION, recipe: Recipe::CURRENT, date: Time.now.utc.iso8601, **fields)
+    def self.now(recipe: Recipe::CURRENT, **fields)
+      new(version: VERSION, recipe: recipe, date: Time.now.utc.iso8601, **fields)
     end
 
     # Every field is always written: an empty value makes ffmpeg delete the

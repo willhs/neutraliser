@@ -210,6 +210,16 @@ neutraliser process --lra-target 12 --centre-boost 3 movie.mkv
 
 On the synthetic 5.1 clip in `spec/support/lra_fixture.rb` (pink-noise scenes, loudness range 15.3 LU) this takes the range to 10.0 LU at `--lra-target 12`, and to 7.9 LU with `--centre-boost 4`. Those are measurements, not a claim about how any film sounds; the table is in [the fixture note](docs/research/compression-ladder-fixtures-2026-11.md). Compression is applied once: a file stamped `compressed` is skipped on later runs, and a file normalised earlier without compression is picked up if its recorded range is over the target.
 
+**The levelling ladder** (opt-in for now, `--ladder`): do the least that works for each file. Constant gain when the file reaches its target within the peak ceiling; plus a peak limiter (up to 6 dB) when peaks block the gain; plus compression when its loudness range is over 13 LU. A DTS / TrueHD or Atmos track is converted and levelled only under `--allow-codec-change` / `--allow-object-audio-loss`. `--limit-db` and `--lra-target` override each rung. The target can be the whole programme (the profile or `--target-level`) or the dialogue (`--anchor dialogue`, default -27 LUFS, read from the centre channel of a 5.1 / 7.1 mix; stereo and mono files aim their programme 3 LU above it). Files are stamped recipe 3, and `report` shows which rung each took:
+
+```bash
+neutraliser process --dry-run --ladder /media/movies
+neutraliser process --ladder --anchor dialogue --target-level -27 --replace /media/movies
+neutraliser report /media/movies   # Rungs: 1-gain=..., 2-limiter=..., 3-compress=..., +convert
+```
+
+Under a programme anchor the profile name doesn't change, so files already levelled for it are left alone; `--redo-recipe 2` re-levels them with the ladder. A dialogue anchor is a new target (`dialogue-27`), so it levels every file again. `--allow-dynamic`, `--fast` and the `night` profile replace the ladder for their run.
+
 **Hit an exact LUFS target** instead of a named profile:
 
 ```bash
@@ -280,7 +290,9 @@ Normalise a file or every video under a directory.
 | `--keep-original-audio` | `false` | Keep the untouched original primary audio as an extra, non-default track titled `<title> (original, not normalised)`, after the normalised one. Costs file size; makes processing reversible. A re-run never adds a second copy |
 | `--allow-object-audio-loss` | `false` | Process files whose primary track is Atmos / DTS:X anyway. Re-encoding drops the object audio (plain 5.1/7.1 out); each such file logs a warning. Default skips them with reason `object_audio` |
 | `--min-gain` | `--tolerance` | A peak-capped file is re-encoded only if the gain **towards** target is at least this many dB; otherwise skipped (`peak_limited`) |
-| `--limit-db` | `0` | Let a peak limiter take up to N dB off overshooting peaks so quiet-but-peaky files can reach target. Off = strict constant gain. Such files are stamped `limited` and reported; not combinable with `--allow-dynamic`/`--fast`/`night` |
+| `--ladder` / `--no-ladder` | off | **The levelling ladder** (recipe 3): constant gain, then a limiter up to 6 dB (`--limit-db`), then compression over 13 LU (`--lra-target`), each only when the file needs it. Rung 2 is left out on ffmpeg before 5.1 and rung 3 under `--fast-verify`, with a log line; `--allow-dynamic`, `--fast` and `night` replace the ladder for that run |
+| `--anchor` | `programme` | With `--ladder`: `programme` aims the whole mix at the profile / `--target-level`; `dialogue` aims each file's dialogue (centre-channel estimate) at `--target-level` (default `-27`), one more read of the centre channel per surround file. Not combinable with `--fast-verify` |
+| `--limit-db` | `0` (`6` with `--ladder`) | Let a peak limiter take up to N dB off overshooting peaks so quiet-but-peaky files can reach target. Off = strict constant gain. Such files are stamped `limited` and reported; not combinable with `--allow-dynamic`/`--fast`/`night` |
 | `--redo-recipe` | none | Process files again when an older recipe made them: comma-separated numbers, or `unversioned` for files stamped before recipes existed. Without it a file counts as done whatever recipe made it, so a new default never re-levels a library by itself |
 | `--lra-target` | off | **Opt-in compression.** When a file's loudness range is over N LU (by more than `--tolerance`), run it through `acompressor` first, using the gentlest of six settings that brings the range down to N, then level to the profile target as usual. Stamped `compressed` with the setting and the range before and after. Costs one to six extra reads of the file to choose the setting (one when the gentlest does it, six when none does); `--dry-run` shows the choice. A target no setting reaches gets the setting that narrows the range most, logged as not reached, or no compression at all when none narrows it by `--tolerance`. Not combinable with `--allow-dynamic`/`--fast`/`--fast-verify`/`night` |
 | `--centre-boost` | off | With `--lra-target`: lift the centre (dialogue) channel of a 5.1 primary track by N dB (0 to 12) before compressing. Skipped, with a log note, for any other layout |
@@ -351,7 +363,7 @@ Copy `.env.example` to `.env` and add your token. Only `analyze-plex` reads that
 
 ### `report PATH`
 
-Reads the `NEUTRALISER_*` tags from every video under PATH (or one file) with ffprobe and changes nothing. By default it prints counts: normalised linear, limited, compressed (only when there are any), normalised dynamic, untouched, the profile mix and the recipe mix, then the remote-free rate.
+Reads the `NEUTRALISER_*` tags from every video under PATH (or one file) with ffprobe and changes nothing. By default it prints counts: normalised linear, limited, compressed (only when there are any), normalised dynamic, untouched, the profile mix, the recipe mix and the ladder rung each file took (`1-gain`, `2-limiter`, `3-compress`, `dynamic`, with `+convert` when the codec changed or object audio was flattened; read from the stamp, so files made before the ladder get one too), then the remote-free rate. `tsv` has it as the last column, `rung`, and `json` as each file's `rung`.
 
 **Untouched files say why.** A file a run looked at and left alone is recorded in the `.neutraliser` sidecar: peak-limited (with its measured levels), Atmos / DTS:X, a DTS / TrueHD codec change, or already within tolerance (with its levels). `report` shows the reason, and the levels in `tsv` and `json`. Files from before recipes were stamped show as `unversioned`.
 
@@ -391,7 +403,7 @@ Tries a recipe on copies of a random sample of files and prints its remote-free 
 | `--plan` | off | List the files that would be copied and their size; copy nothing |
 | `--work-dir` | system temp | Where the copies go; `--keep` keeps them |
 | `--measure` / `--no-measure` | measure | Measure the copies, or compute from their records |
-| `--profile`, `--target-level`, `--tolerance`, `--allow-dynamic`, `--limit-db`, `--min-gain`, `--allow-codec-change`, `--allow-object-audio-loss` | as `process` | The recipe under test |
+| `--profile`, `--target-level`, `--tolerance`, `--allow-dynamic`, `--ladder`, `--anchor`, `--limit-db`, `--lra-target`, `--min-gain`, `--allow-codec-change`, `--allow-object-audio-loss` | as `process` | The recipe under test |
 | `--within`, `--lra-limit` | `2.0`, `12.0` | The remote-free limits |
 | `--dialogue` / `--no-dialogue`, `--dialogue-target`, `--ldr-limit` | on, `-27.0`, `5.0` | The dialogue estimate and its anchor, as in `report --measure`; prints each copy's dialogue level and a dialogue-anchored rate beside the usual one |
 

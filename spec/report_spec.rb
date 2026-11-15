@@ -32,7 +32,7 @@ RSpec.describe Neutraliser::Report do
     expect(described_class.new(dir).counts).to eq(
       total: 4, linear: 2, limited: 0, compressed: 0, dynamic: 1, imported: 0, untouched: 1, imported_from: {},
       reencoded: 0, profiles: { 'livingroom' => 2, 'night' => 1 }, recipes: { Neutraliser::Recipe::CURRENT.to_s => 3 },
-      dialnorms: {}, left: {}
+      rungs: { '1-gain' => 2, 'dynamic' => 1 }, dialnorms: {}, left: {}
     )
   end
 

@@ -93,10 +93,19 @@ module Neutraliser
                                      desc: 'Re-encode Atmos / DTS:X tracks anyway, losing the objects'
     option :keep_original_audio, type: :boolean, default: false,
                                  desc: 'Keep the untouched original audio as an extra non-default track (reversible)'
-    option :limit_db, type: :numeric, default: 0.0,
-                      desc: 'Let a peak limiter take up to N dB off overshooting peaks so quiet-but-peaky files can reach target (0 = off, strict constant gain)'
+    option :ladder, type: :boolean, default: Recipe::CURRENT == Recipe::LADDER,
+                    desc: 'Levelling ladder: the least that works per file: constant gain, then a peak limiter (up to ' \
+                          "#{Ladder::LIMIT_DB.to_i} dB) when peaks block the gain, then compression when the loudness range is over " \
+                          "#{Ladder::LRA_LIMIT.to_i} LU. --limit-db and --lra-target override each rung. Stamped recipe #{Recipe::LADDER}"
+    option :anchor, type: :string, default: 'programme', enum: Ladder::ANCHORS,
+                    desc: 'With --ladder: aim the whole programme at the target (--profile / --target-level), or the ' \
+                          "dialogue (--target-level, default #{DialogueAnchor::DEFAULT.target.to_i}), read from the centre channel"
+    option :limit_db, type: :numeric,
+                      desc: 'Let a peak limiter take up to N dB off overshooting peaks so quiet-but-peaky files can reach target ' \
+                            "(default 0 = off, strict constant gain; #{Ladder::LIMIT_DB.to_i} with --ladder)"
     option :lra_target, type: :numeric,
-                        desc: 'Opt-in compression: when a file\'s loudness range is over N LU, compress it (the gentlest acompressor setting that reaches N) before levelling. Off by default'
+                        desc: 'Opt-in compression: when a file\'s loudness range is over N LU, compress it (the gentlest acompressor setting ' \
+                              "that reaches N) before levelling. Off by default; #{Ladder::LRA_LIMIT.to_i} with --ladder"
     option :centre_boost, type: :numeric,
                           desc: 'With --lra-target, lift the centre (dialogue) channel of a 5.1 track by N dB before compressing (0-12)'
     option :min_gain, type: :numeric,
@@ -223,7 +232,10 @@ module Neutraliser
     option :target_level, type: :numeric, desc: 'Recipe: target LUFS (overrides profile)'
     option :tolerance, type: :numeric, default: 1.0, desc: 'Recipe: skip files within this many LU of target'
     option :allow_dynamic, type: :boolean, default: false, desc: 'Recipe: allow loudnorm to compress dynamics'
-    option :limit_db, type: :numeric, default: 0.0, desc: 'Recipe: peak limiter reach in dB (0 = off)'
+    option :ladder, type: :boolean, default: Recipe::CURRENT == Recipe::LADDER, desc: 'Recipe: the levelling ladder (see process --ladder)'
+    option :anchor, type: :string, default: 'programme', enum: Ladder::ANCHORS, desc: 'Recipe: with --ladder, aim the programme or the dialogue'
+    option :lra_target, type: :numeric, desc: 'Recipe: compress files whose loudness range is over N LU'
+    option :limit_db, type: :numeric, desc: 'Recipe: peak limiter reach in dB (default 0 = off; 6 with --ladder)'
     option :min_gain, type: :numeric, desc: 'Recipe: skip a peak-capped file when the gain would be under N dB'
     option :allow_codec_change, type: :boolean, default: false, desc: 'Recipe: process DTS / TrueHD anyway'
     option :allow_object_audio_loss, type: :boolean, default: false, desc: 'Recipe: process Atmos / DTS:X anyway'
@@ -345,7 +357,8 @@ module Neutraliser
     def recipe_options
       { profile: options[:profile], target_level: options[:target_level], tolerance: options[:tolerance],
         allow_dynamic: options[:allow_dynamic], limit_db: options[:limit_db], min_gain: options[:min_gain],
-        allow_codec_change: options[:allow_codec_change], allow_object_audio_loss: options[:allow_object_audio_loss] }
+        allow_codec_change: options[:allow_codec_change], allow_object_audio_loss: options[:allow_object_audio_loss],
+        ladder: options[:ladder], anchor: options[:anchor], lra_target: options[:lra_target] }
     end
 
     def print_plan(harness)
@@ -396,6 +409,8 @@ module Neutraliser
         lra_target: options[:lra_target],
         centre_boost: options[:centre_boost],
         allow_codec_change: options[:allow_codec_change],
+        ladder: options[:ladder],
+        anchor: options[:anchor],
         disk_guard: guard,
         redo_recipes: options[:redo_recipe].to_s.split(',').map { |text| Recipe.parse(text) }
       )

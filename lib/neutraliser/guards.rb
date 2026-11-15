@@ -40,8 +40,9 @@ module Neutraliser
     # object_audio_undetectable: this ffmpeg is too old to name Atmos / DTS:X, so a
     # file named as such is skipped rather than guessed at (see ObjectAudio.undetectable?).
     def initialize(profile:, replace:, dry_run:, disk_guard:, allow_object_audio_loss:, allow_codec_change:,
-                   object_audio_undetectable: false)
+                   object_audio_undetectable: false, recipe: Recipe::CURRENT)
       @profile = profile
+      @recipe = recipe
       @replace = replace
       @dry_run = dry_run
       @disk_guard = disk_guard
@@ -177,7 +178,7 @@ module Neutraliser
 
     # A skip the sidecar remembers as left alone (LeftRecord), not as done.
     def left_alone(reason, message, line)
-      Verdict.skip(reason, message: message, log: [line], left: LeftRecord.for(reason, @profile, message: message))
+      Verdict.skip(reason, message: message, log: [line], left: LeftRecord.for(reason, @profile, message: message, recipe: @recipe))
     end
 
     # Where the output is written: beside the real file when --replace goes

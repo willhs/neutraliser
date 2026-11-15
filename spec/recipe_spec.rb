@@ -26,8 +26,13 @@ RSpec.describe Neutraliser::Recipe do
     end
 
     it 'refuses the current recipe or a newer one, which no run could finish' do
-      expect { described_class.check_redoable!([3]) }.to raise_error(ArgumentError, /current one \(3\)/)
+      expect { described_class.check_redoable!([3]) }.to raise_error(ArgumentError, /this run writes \(3\)/)
       expect { described_class.check_redoable!([4]) }.to raise_error(ArgumentError)
+    end
+
+    it 'judges against the recipe the run writes: a ladder run may redo recipe 2' do
+      expect { described_class.check_redoable!([2], writing: Neutraliser::Recipe::LADDER) }.not_to raise_error
+      expect { described_class.check_redoable!([3], writing: Neutraliser::Recipe::LADDER) }.to raise_error(ArgumentError)
     end
   end
 end

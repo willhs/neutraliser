@@ -682,7 +682,8 @@ RSpec.describe Neutraliser::Processor do
       processor = described_class.new(allow_object_audio_loss: true)
       allow(processor).to receive(:analyze_loudness_for_path).and_return(measured)
       expect(processor).to receive(:normalize_file_with_paths)
-        .with(video_file, an_instance_of(Neutraliser::Source), measured).and_return({ mode: Neutraliser::Mode::LINEAR })
+        .with(video_file, an_instance_of(Neutraliser::Source), measured, processor.profile)
+        .and_return({ mode: Neutraliser::Mode::LINEAR })
 
       result, output = run(processor)
 

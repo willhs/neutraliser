@@ -218,7 +218,7 @@ module Neutraliser
     end
 
     def self.apply_normalization(source, output_path, measured_data, profile, allow_dynamic: false,
-                                 keep_original: false, limit_db: 0.0, compression: nil)
+                                 keep_original: false, limit_db: 0.0, compression: nil, recipe: Recipe::CURRENT)
       primary_track = source.primary_track
       codec_decision = decide_codec(source, output_path)
 
@@ -237,7 +237,8 @@ module Neutraliser
                elsif mode == Mode::LINEAR
                  profile[:lufs] - measured_data.input_i
                end
-        build_stamp(profile, mode, codec_decision, gain: gain, measured: measured_data, compression: compression, prior: prior)
+        build_stamp(profile, mode, codec_decision, gain: gain, measured: measured_data, compression: compression, prior: prior,
+                                                   recipe: recipe)
       end
       remux = remux_plan(source, output_path, audio_filter, codec_decision, stamp_for.call(predicted_mode),
                          keep_original: keep_original)
@@ -472,9 +473,14 @@ module Neutraliser
       valid && fits ? Mode::LINEAR : Mode::DYNAMIC
     end
 
-    def self.build_stamp(profile, mode, codec_decision, gain:, measured:, compression: nil, prior: nil)
+    # profile: the file's aim (Ladder.aim). A dialogue-anchored one records the programme level it was
+    # levelled to and the dialogue estimate behind it.
+    def self.build_stamp(profile, mode, codec_decision, gain:, measured:, compression: nil, prior: nil,
+                         recipe: Recipe::CURRENT)
+      dialogue = profile[:anchor] == :dialogue
       Stamp.now(
-        profile: profile[:name], mode: mode.to_s, gain_db: gain, prior: prior,
+        recipe: recipe, profile: profile[:name], mode: mode.to_s, gain_db: gain, prior: prior,
+        target_i: dialogue ? profile[:lufs] : nil, dialogue_i: dialogue ? profile[:dialogue_i] : nil,
         source_codec: codec_decision[:source_codec], source_dialnorm: codec_decision[:dialnorm],
         source_profile: codec_decision[:source_profile],
         source_bitrate: codec_decision[:first_generation_bitrate].to_i.positive? ? codec_decision[:first_generation_bitrate] : nil,

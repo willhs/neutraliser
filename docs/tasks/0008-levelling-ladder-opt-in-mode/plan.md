@@ -90,47 +90,47 @@ and tolerance checks work unchanged on it.
 
 ## Phase 1: Recipe and stamp groundwork
 
-- [ ] `recipe.rb`: `CONSTANT_GAIN`, `LADDER`, `CURRENT = CONSTANT_GAIN`, `for(ladder:)`, `check_redoable!(recipes, writing: CURRENT)` refusing `>= writing`.
-- [ ] `stamp.rb`: `target_i`, `dialogue_i` (float, default nil); `Stamp.now(recipe: Recipe::CURRENT, ...)`.
-- [ ] `left_record.rb`: optional `target_i`; `for(..., recipe:, target_i:)`; `from_entry` reads it.
-- [ ] `skip_decider.rb`: `recipe:` in the constructor, used as `mark_processed`'s default.
-- [ ] `guards.rb`: `recipe:` passed to `LeftRecord.for`.
-- [ ] `remote_free_rate.rb`: `FinalLevels` uses `target_i` when set.
-- [ ] Run: `bundle exec rspec --tag '~real_ffmpeg'` — green (no behaviour change).
+- [x] `recipe.rb`: `CONSTANT_GAIN`, `LADDER`, `CURRENT = CONSTANT_GAIN`, `for(ladder:)`, `check_redoable!(recipes, writing: CURRENT)` refusing `>= writing`.
+- [x] `stamp.rb`: `target_i`, `dialogue_i` (float, default nil); `Stamp.now(recipe: Recipe::CURRENT, ...)`.
+- [x] `left_record.rb`: optional `target_i`; `for(..., recipe:, target_i:)`; `from_entry` reads it.
+- [x] `skip_decider.rb`: `recipe:` in the constructor, used as `mark_processed`'s default.
+- [x] `guards.rb`: `recipe:` passed to `LeftRecord.for`.
+- [x] `remote_free_rate.rb`: `FinalLevels` uses `target_i` when set.
+- [x] Run: `bundle exec rspec --tag '~real_ffmpeg'` — green (no behaviour change).
 
 ## Phase 2: Ladder module and profiles
 
-- [ ] `ladder.rb`: constants, `ANCHORS`, `aim(profile, measurement, estimate)`, `Rung.of(stamp, track)` with `label`.
-- [ ] `profiles.rb`: `dialogue_profile(target, tp:, lra:)` named `dialogue-27` (`lufs = target + 3`, `anchor: :dialogue`, `dialogue_target:`); `find` parses `dialogue-N`.
-- [ ] `dialogue_meter.rb`: `estimate(file, track, pre_filter: nil)`.
-- [ ] `spec/ladder_spec.rb`: aim (estimate, no estimate, floor), rung labels, profile round trip.
+- [x] `ladder.rb`: constants, `ANCHORS`, `aim(profile, measurement, estimate)`, `Rung.of(stamp, track)` with `label`.
+- [x] `profiles.rb`: `dialogue_profile(target, tp:, lra:)` named `dialogue-27` (`lufs = target + 3`, `anchor: :dialogue`, `dialogue_target:`); `find` parses `dialogue-N`.
+- [x] `dialogue_meter.rb`: `estimate(file, track, pre_filter: nil)`.
+- [x] `spec/ladder_spec.rb`: aim (estimate, no estimate, floor), rung labels, profile round trip.
 
 ## Phase 3: Processor and CLI
 
-- [ ] `Processor.new`: `ladder:`, `anchor:`, `limit_db: nil`; rung defaults, notes, refusals; `@recipe`.
-- [ ] `process_file_two_pass`: per-file aim used for compression, peak-limited, tolerance, gain, left records; dialogue re-aim after compression.
-- [ ] `FFmpegWrapper.apply_normalization(recipe:)` → `build_stamp` writes recipe, `target_i`, `dialogue_i`.
-- [ ] CLI `process` and `rate-sample`: `--ladder` (default `Recipe::CURRENT == Recipe::LADDER`), `--anchor`, `--limit-db` without a default.
-- [ ] Specs: option wiring, refusals, flip (`stub_const('Neutraliser::Recipe::CURRENT', 3)` → ladder on), recipe 3 stamped, no-ladder unchanged.
+- [x] `Processor.new`: `ladder:`, `anchor:`, `limit_db: nil`; rung defaults, notes, refusals; `@recipe`.
+- [x] `process_file_two_pass`: per-file aim used for compression, peak-limited, tolerance, gain, left records; dialogue re-aim after compression.
+- [x] `FFmpegWrapper.apply_normalization(recipe:)` → `build_stamp` writes recipe, `target_i`, `dialogue_i`.
+- [x] CLI `process` and `rate-sample`: `--ladder` (default `Recipe::CURRENT == Recipe::LADDER`), `--anchor`, `--limit-db` without a default.
+- [x] Specs: option wiring, refusals, flip (`stub_const('Neutraliser::Recipe::CURRENT', 3)` → ladder on), recipe 3 stamped, no-ladder unchanged.
 
 ## Phase 4: Report rungs
 
-- [ ] `Report::Row#rung`; `counts[:rungs]`; `Rungs:` summary line; `rung` TSV column after `state`; JSON `rung`.
-- [ ] Update `spec/report_spec.rb` for the new column.
+- [x] `Report::Row#rung`; `counts[:rungs]`; `Rungs:` summary line; `rung` TSV column after `state`; JSON `rung`.
+- [x] Update `spec/report_spec.rb` for the new column.
 
 ## Phase 5: Real-file fixtures
 
-- [ ] `spec/support/ladder_fixture.rb`: narrow clip (rung 1), quiet-but-peaky clip (rung 2), `LraFixture` (rung 3), DTS 5.1 clip (rung 4), 5.1 clip with a known centre level (dialogue anchor).
-- [ ] `spec/ladder_real_spec.rb` (`:real_ffmpeg`): each fixture through `process --ladder --replace`, stamp mode + recipe 3, `report` rung; rung 2 skips under ffmpeg 5.1; dialogue anchor lands the centre within 1.5 LU of -27.
-- [ ] Run: `bundle exec rspec` and `bundle exec rubocop` — green.
+- [x] `spec/support/ladder_fixture.rb`: narrow clip (rung 1), quiet-but-peaky clip (rung 2), `LraFixture` (rung 3), DTS 5.1 clip (rung 4), 5.1 clip with a known centre level (dialogue anchor).
+- [x] `spec/ladder_real_spec.rb` (`:real_ffmpeg`): each fixture through `process --ladder --replace`, stamp mode + recipe 3, `report` rung; rung 2 skips under ffmpeg 5.1; dialogue anchor lands the centre within 1.5 LU of -27.
+- [x] Run: `bundle exec rspec` and `bundle exec rubocop` — green.
 
 ## Phase 6: Docs
 
-- [ ] `docs/ops/data_contracts.md`: recipe 3, `TARGET_I`, `DIALOGUE_I`, left `target_i`.
-- [ ] README, AGENTS (`.gent/rules.md`), CHANGELOG: `--ladder`, `--anchor`, rungs in report, how to flip the default.
-- [ ] `docs/philosophy/vision.md` is `agent_write: false`: leave it. Roadmap: note the ladder exists opt-in.
-- [ ] `docs/log.d/<job>.md` and `docs/index.d/<job>.md` fragments.
+- [x] `docs/ops/data_contracts.md`: recipe 3, `TARGET_I`, `DIALOGUE_I`, left `target_i`.
+- [x] README, AGENTS (`.gent/rules.md`), CHANGELOG: `--ladder`, `--anchor`, rungs in report, how to flip the default.
+- [x] `docs/philosophy/vision.md` is `agent_write: false`: left alone. Roadmap: note the ladder exists opt-in.
+- [x] `docs/log.d/<job>.md` and `docs/index.d/<job>.md` fragments.
 
 ## Phase 7: Wrap (commit & finalize)
 
-- [ ] `decisions.tsv` complete; commit all paths (no push, no merge).
+- [x] `decisions.tsv` complete; commit all paths (no push, no merge).
