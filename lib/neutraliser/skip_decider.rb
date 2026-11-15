@@ -42,8 +42,12 @@ module Neutraliser
     # also meets it: compressed, or measured under the target when it was normalised.
     #
     # recipe is the one this run writes, recorded for the files it makes or judges.
+    #
+    # redo_side_channels: also do over a file with more than six audio channels that neutraliser stamped, or
+    # left alone on a measurement, before 7.1 was metered over all its channels (Recipe::SIDE_CHANNELS_METERED_FROM).
+    # --redo-recipe cannot name these: they carry the recipe a run writes.
     def initialize(root_dir, fast_verification: true, tolerance: nil, redo_recipes: [], lra_target: nil,
-                   recipe: Recipe::CURRENT)
+                   recipe: Recipe::CURRENT, redo_side_channels: false)
       @path = File.join(root_dir, FILENAME)
       @entries = load
       @fast_verification = fast_verification
@@ -51,6 +55,7 @@ module Neutraliser
       @redo_recipes = redo_recipes
       @lra_target = lra_target
       @recipe = recipe
+      @redo_side_channels = redo_side_channels
     end
 
     # Cheap pre-check: has this exact file+profile been fully processed
@@ -58,6 +63,7 @@ module Neutraliser
     # shared with whoever else is asking about this file). No loudness
     # measurement either way.
     def already_processed?(file_path, profile, source: Source.new(file_path))
+      return false if six_channel_judgement?(file_path, source)
       return true if sidecar_hit?(file_path, profile)
 
       stamp = File.exist?(file_path) ? source.stamp : nil
@@ -200,6 +206,28 @@ module Neutraliser
     end
 
     def redo?(recipe) = @redo_recipes.include?(recipe)
+
+    # Under --redo-side-channels: was this file's last judgement made by the six-channel meter? The judgement
+    # is its stamp (dated by the stamp) or, for a file left within tolerance, the sidecar's left record
+    # (dated by the entry). A file with neither (never touched, or levelled by the retired script) was not
+    # judged by this meter. The sidecar entry of a stamped file is not a date: a tag hit refreshes it.
+    def six_channel_judgement?(file_path, source)
+      return false unless @redo_side_channels && File.exist?(file_path)
+
+      stamp = source.stamp
+      entry = current_entry(file_path)
+      left = entry if entry&.key?('left')
+      return false unless stamp || left
+
+      judged_at = [stamp&.date, left && left['processed_at']].filter_map { |text| parse_time(text) }.max
+      Recipe.six_channel_meter?(channels: source.primary_track[:channels], judged_at: judged_at)
+    end
+
+    def parse_time(text)
+      Time.iso8601(text.to_s)
+    rescue ArgumentError
+      nil
+    end
 
     # Without --lra-target any stamp for the profile is enough. With it, a
     # compressed file is done (compression is applied once, not stacked), and a

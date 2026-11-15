@@ -27,7 +27,7 @@ module Neutraliser
                    dry_run: false, fast_verify: false, resume: false, fast: false, local_stage: false,
                    allow_dynamic: false, allow_object_audio_loss: false, keep_original_audio: false,
                    limit_db: nil, min_gain: nil, allow_codec_change: false, disk_guard: nil, redo_recipes: [],
-                   lra_target: nil, centre_boost: nil, ladder: Recipe::CURRENT == Recipe::LADDER, anchor: 'programme')
+                   redo_side_channels: false, lra_target: nil, centre_boost: nil, ladder: Recipe::CURRENT == Recipe::LADDER, anchor: 'programme')
       @replace = replace
       base_profile = profile.is_a?(Hash) ? profile : Profiles.get_profile(profile)
       @anchor = anchor.to_s
@@ -58,6 +58,7 @@ module Neutraliser
       @ladder = ladder_on?(ladder, fast, fast_verify)
       @recipe = Recipe.for(ladder: @ladder)
       @redo_recipes = Array(redo_recipes).uniq
+      @redo_side_channels = redo_side_channels
       Recipe.check_redoable!(@redo_recipes, writing: @recipe)
       @limit_db = (limit_db || ladder_limit_db).to_f
       @min_gain = (min_gain || tolerance).to_f
@@ -156,7 +157,7 @@ module Neutraliser
 
     def new_skip_decider(root)
       SkipDecider.new(root, fast_verification: @fast_verify, tolerance: @tolerance, redo_recipes: @redo_recipes,
-                            lra_target: @lra_target, recipe: @recipe)
+                            lra_target: @lra_target, recipe: @recipe, redo_side_channels: @redo_side_channels)
     end
 
     # Without a version that can name them, an Atmos track looks like plain
@@ -282,7 +283,7 @@ module Neutraliser
       return false unless entry && FileResult.final_reason?(entry['reason'])
       # An earlier run called these done, and this one was asked for more. SkipDecider
       # decides, on one probe, so a file this redo already did isn't done twice.
-      return false if (@redo_recipes.any? || @lra_target) && FileResult.done_reason?(entry['reason'])
+      return false if (@redo_recipes.any? || @redo_side_channels || @lra_target) && FileResult.done_reason?(entry['reason'])
 
       entry['profile'] == @profile[:name] && entry['target_lufs'] == @profile[:lufs] && entry['replace'] == @replace
     end

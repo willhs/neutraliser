@@ -97,6 +97,7 @@ The record lives in the file because the sidecar is tied to the run's root direc
 - docs/ops/runbook.md
 
 ### Change Log
+- 2026-11-16 (agent:implement): Analysis cache version 1.3 (a track above six channels is metered over all of them, range included; 1.2 caches are discarded). `NEUTRALISER_DATE` and the sidecar `left` entry's `processed_at` are read by `process --redo-side-channels` to find 7.1 judgements made before that, which carry the same recipe as later ones
 - 2026-11-15 (agent:levelling-ladder): Recipe 3 (`--ladder`); `NEUTRALISER_TARGET_I`, `NEUTRALISER_DIALOGUE_I`, the `dialogue<target>` profile name and the left record's `target_i`
 - 2026-11-02 (agent:sceptical-review): Added `NEUTRALISER_SOURCE_PROFILE` and `NEUTRALISER_PRIOR`; `import-manifest` entries carry no `recipe` (they were recording the current one)
 - 2026-11-01 (agent:dolby-metadata): Added `NEUTRALISER_SOURCE_DIALNORM`; recipe 2 (AC-3 / E-AC-3 decoded with `-drc_scale 0`, dialnorm carried); analysis cache version 1.2

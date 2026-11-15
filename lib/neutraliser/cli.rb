@@ -122,6 +122,10 @@ module Neutraliser
                          desc: "Process again files made by these older recipes: comma-separated numbers, or 'unversioned' for files " \
                                'from before recipes were stamped (e.g. 1,unversioned). Without it a file counts as done whatever ' \
                                'recipe made it'
+    option :redo_side_channels, type: :boolean, default: false,
+                                desc: 'Process again files with more than six audio channels (7.1) that were levelled, or left alone, ' \
+                                      'before 7.1 was metered over all its channels (before 2026-11-15 12:40 UTC). A file already ' \
+                                      'within tolerance on the new reading is left alone. Not selectable by --redo-recipe'
     option :linear_only, type: :boolean, default: false,
                          desc: 'Deprecated no-op: constant gain is now the default'
     def process(path)
@@ -412,6 +416,7 @@ module Neutraliser
         ladder: options[:ladder],
         anchor: options[:anchor],
         disk_guard: guard,
+        redo_side_channels: options[:redo_side_channels],
         redo_recipes: options[:redo_recipe].to_s.split(',').map { |text| Recipe.parse(text) }
       )
     rescue ArgumentError, FileManagerError, SystemCallError => e

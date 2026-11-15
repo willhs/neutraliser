@@ -245,7 +245,7 @@ target", **[verified]**), so the cost lands on exactly the files the ladder exis
 because of its recipe" (recipe.rb says so) or whether the README should say what happens. Until
 then the README sentence is wrong.
 
-**3. [Medium] A pre-`13be53a` analysis cache still lands a 7.1 file 3 LU over target.**
+**3. [Medium] A pre-`13be53a` analysis cache still lands a 7.1 file 3 LU over target. Fixed (16 Nov, task `a9b7230e`).**
 `CacheManager::CACHE_VERSION` was not bumped, so a `.loudnorm_<profile>.json` written by an older
 build (a dry run or any left-alone pass writes one) is trusted, with the six-channel reading.
 *Reproduce* **[verified]**: `bin/neutraliser process --dry-run sev1.mkv` with the tree from
@@ -255,6 +255,12 @@ Only caches from builds before `13be53a` are affected, so it matters for Will's 
 not for a fresh install. Bumping the version discards every cache on the NAS (a full re-read), so
 I did not do it: *task filed* `a9b7230e-d1e2-4d19-af70-d0ef6d0396a0`.
 *Code anchors:* `CacheManager::CACHE_VERSION`, `AudioAnalyser#analyse`, `Measurement#with_all_channels`.
+*Fixed:* `CACHE_VERSION` is 1.3, so every 1.2 cache is dropped and re-read. The cost argument above turned out
+smaller than feared: a cache only stands for a file that has not been levelled (levelling changes size and mtime),
+so the re-read is of files still waiting. The stored entry has no channel count, so 5.1 caches go too.
+Regression: `spec/seven_one_real_spec.rb` "does not trust a 7.1 analysis cached under the six-channel meter"
+(red before: output -18.2 LUFS against -20). Files already levelled (finding 7) are `process --redo-side-channels`
+(runbook, "7.1 files levelled before the side channels were metered"); the stamps themselves are not touched.
 
 **4. [Medium] `--anchor dialogue` has no ceiling on how loud the programme may be aimed.**
 `Ladder.aim` floors "loudness above dialogue" at 0 and has no upper bound. A 7.1 clip whose centre
@@ -302,6 +308,7 @@ loudnorm alone (noted in the log, not in the README).
 *Reproduce:* `rg -n 'channels|measure_loudness' lib/neutraliser/plex_analyzer.rb` shows the measurement
 call has no channel count; `process clip.mkv --redo-recipe 2` refuses the current recipe.
 Recovery is filed with finding 3; Plex propagation is `c2aa02bc-a761-441e-a483-9ed574609db1`.
+*Recovery built (16 Nov):* `process --redo-side-channels` (runbook); the `analyze-plex` half was fixed in `4af6c56`.
 
 **8. [Info] What changed on the default path, all additive.** Every `process` now passes two
 empty `NEUTRALISER_TARGET_I=` / `NEUTRALISER_DIALOGUE_I=` tags (an empty value deletes a tag, so

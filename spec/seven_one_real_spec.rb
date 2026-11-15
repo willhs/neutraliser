@@ -54,22 +54,92 @@ RSpec.describe 'Loudness of 7.1 files (finding 14)', :real_ffmpeg do
     expect(counted).to eq(plain)
   end
 
+  def run_cli(*args)
+    out = StringIO.new
+    real = [$stdout, $stderr]
+    $stdout = $stderr = out
+    begin
+      Neutraliser::CLI.start(args)
+    rescue SystemExit => e
+      raise "neutraliser exited #{e.status}:\n#{out.string}" unless e.status.zero?
+    ensure
+      $stdout, $stderr = real
+    end
+    out.string
+  end
+
+  let(:livingroom) { Neutraliser::Profiles.find('livingroom') }
+
   it 'levels a 7.1 clip to within 0.5 LU of the target through process --replace' do
     Dir.mktmpdir do |dir|
       path = File.join(dir, 'pcm71.mkv')
       FileUtils.cp(@pcm71, path)
-      out = StringIO.new
-      real = [$stdout, $stderr]
-      $stdout = $stderr = out
-      begin
-        Neutraliser::CLI.start(['process', '--replace', path])
-      rescue SystemExit => e
-        raise "neutraliser exited #{e.status}:\n#{out.string}" unless e.status.zero?
-      ensure
-        $stdout, $stderr = real
-      end
+      run_cli('process', '--replace', path)
 
-      expect(ebur128(path)).to be_within(0.5).of(Neutraliser::Profiles.find('livingroom')[:lufs])
+      expect(ebur128(path)).to be_within(0.5).of(livingroom[:lufs])
+    end
+  end
+
+  # Review findings 3 and 7 (docs/research/pre-release-review-2026-11.md): a `.loudnorm_livingroom.json`
+  # written before the side channels were metered holds the six-channel figure, which reads a 7.1 file
+  # low, so the file would be levelled up too far. The cache version was not bumped with the meter.
+  it 'does not trust a 7.1 analysis cached under the six-channel meter (cache version 1.2)' do
+    Dir.mktmpdir do |dir|
+      path = File.join(dir, 'pcm71.mkv')
+      FileUtils.cp(@pcm71, path)
+      six_channel = Neutraliser::FFmpegWrapper.measure_loudness(path, audio_index: 0)
+      cache = Neutraliser::CacheManager.new
+      cache.save_analysis(path, livingroom, six_channel)
+      cache_file = cache.cache_path(path, livingroom)
+      File.write(cache_file, File.read(cache_file).sub(/"cache_version": "[^"]+"/, '"cache_version": "1.2"'))
+      expect(ebur128(path) - six_channel.input_i).to be > 1.0 # the figure the old build cached is wrong
+
+      run_cli('process', '--replace', path)
+
+      expect(ebur128(path)).to be_within(0.5).of(livingroom[:lufs])
+    end
+  end
+
+  # Finding 7: files already levelled by the six-channel meter carry a recipe 2 stamp, which
+  # --redo-recipe refuses (it is the recipe a run writes). --redo-side-channels finds them by channel
+  # count and stamp date, and a second run does not find them again.
+  describe '--redo-side-channels' do
+    def stamped_seven_one(dir, date:, over_target: 1.7)
+      path = File.join(dir, 'stamped71.mkv')
+      LraFixture.run!('ffmpeg', '-hide_banner', '-loglevel', 'error', '-y', '-i', @pcm71, '-map', '0', '-c', 'copy',
+                      '-af', "volume=#{livingroom[:lufs] + over_target - ebur128(@pcm71)}dB", '-c:a', 'pcm_s24le',
+                      '-metadata', 'NEUTRALISER_PROFILE=livingroom', '-metadata', 'NEUTRALISER_RECIPE=2',
+                      '-metadata', 'NEUTRALISER_MODE=linear', '-metadata', "NEUTRALISER_DATE=#{date}", path)
+      path
+    end
+
+    it 'leaves a stamped 7.1 file alone by default and re-levels it with the flag, once' do
+      Dir.mktmpdir do |dir|
+        path = stamped_seven_one(dir, date: '2026-11-10T00:00:00Z')
+        louder = ebur128(path)
+        expect(louder).to be > livingroom[:lufs] + 1.0
+
+        run_cli('process', '--replace', path)
+        expect(ebur128(path)).to be_within(0.05).of(louder)
+
+        run_cli('process', '--replace', '--redo-side-channels', path)
+        expect(ebur128(path)).to be_within(0.5).of(livingroom[:lufs])
+
+        redone = ebur128(path)
+        run_cli('process', '--replace', '--redo-side-channels', path)
+        expect(ebur128(path)).to be_within(0.05).of(redone)
+      end
+    end
+
+    it 'leaves a 7.1 file stamped after the side channels were metered alone' do
+      Dir.mktmpdir do |dir|
+        path = stamped_seven_one(dir, date: '2026-11-20T00:00:00Z')
+        louder = ebur128(path)
+
+        run_cli('process', '--replace', '--redo-side-channels', path)
+
+        expect(ebur128(path)).to be_within(0.05).of(louder)
+      end
     end
   end
 end

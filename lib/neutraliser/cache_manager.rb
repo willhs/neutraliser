@@ -4,7 +4,14 @@ require 'time'
 
 module Neutraliser
   class CacheManager
-    CACHE_VERSION = '1.2'
+    # Bumped whenever a cached figure would now be measured differently, because a file is only measured
+    # once while its cache stands. 1.2: AC-3 / E-AC-3 decoded with the stream's DRC off (recipe 2).
+    # 1.3: a track above six channels is metered over all of them, range included (research 0003
+    # finding 14, review finding 5); a 1.2 entry holds loudnorm's six-channel figures, which read a 7.1 file
+    # low and would level it too far up. It cannot be told apart from a 5.1 entry (no channel count is
+    # stored), so every 1.2 cache is dropped and re-measured, which for a file with a standing cache is one
+    # more read: a normalised file has changed size and mtime and lost its cache anyway.
+    CACHE_VERSION = '1.3'
 
     def initialize(enabled: true)
       @enabled = enabled

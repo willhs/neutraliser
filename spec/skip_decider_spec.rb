@@ -335,4 +335,72 @@ RSpec.describe Neutraliser::SkipDecider do
       expect(decider.already_processed?(video_path, profile)).to be false
     end
   end
+  describe 'redo_side_channels: (7.1 judged by the six-channel meter)' do
+    let(:before_fix) { (Neutraliser::Recipe::SIDE_CHANNELS_METERED_FROM - 3600).iso8601 }
+    let(:after_fix) { (Neutraliser::Recipe::SIDE_CHANNELS_METERED_FROM + 3600).iso8601 }
+
+    def stamped(date)
+      Neutraliser::Stamp.now(profile: 'livingroom', mode: 'linear', gain_db: 1.0, source_codec: 'eac3',
+                             source_bitrate: nil, measured_i: -21.0, measured_tp: -5.0, measured_lra: 6.0)
+                        .with(date: date, recipe: Neutraliser::Recipe::CURRENT)
+    end
+
+    def probe_as(channels:, stamp: nil)
+      stub_probes('movie.mp4' => { audio: [ProbeFixture.audio(codec: 'eac3', channels: channels, default: true,
+                                                              tags: stamp ? stamp.to_tags : {})] })
+    end
+
+    def decider(flag) = described_class.new(temp_dir, redo_side_channels: flag)
+
+    it 'does the file over only when asked, and the sidecar entry does not stand in the way' do
+      probe_as(channels: 8, stamp: stamped(before_fix))
+      sidecar = described_class.new(temp_dir)
+      sidecar.mark_processed(video_path, profile)
+
+      expect(decider(false).already_processed?(video_path, profile)).to be true
+      expect(decider(true).already_processed?(video_path, profile)).to be false
+    end
+
+    it 'does over a 7.1 stamp with no date' do
+      probe_as(channels: 8, stamp: stamped(nil))
+
+      expect(decider(true).already_processed?(video_path, profile)).to be false
+    end
+
+    it 'keeps a 7.1 file stamped since the side channels were metered' do
+      probe_as(channels: 8, stamp: stamped(after_fix))
+
+      expect(decider(true).already_processed?(video_path, profile)).to be true
+    end
+
+    it 'keeps a 5.1 file stamped before: its meter never changed' do
+      probe_as(channels: 6, stamp: stamped(before_fix))
+
+      expect(decider(true).already_processed?(video_path, profile)).to be true
+    end
+
+    it 'does not claim a 7.1 file nobody has judged' do
+      probe_as(channels: 8)
+      sidecar = described_class.new(temp_dir)
+      sidecar.mark_processed(video_path, profile)
+
+      expect(decider(true).already_processed?(video_path, profile)).to be true
+    end
+
+    it 'does over a 7.1 file left within tolerance on the old reading, and keeps one left on the new' do
+      probe_as(channels: 8)
+      left = Neutraliser::LeftRecord.new(reason: :within_tolerance, profile: 'livingroom', recipe: 2,
+                                         message: 'close enough', measured_i: -20.4, measured_tp: -3.0,
+                                         measured_lra: 5.0, target_i: nil)
+      sidecar = described_class.new(temp_dir)
+      sidecar.mark_processed(video_path, profile, tolerance: 1.0, left: left)
+      expect(decider(true).already_processed?(video_path, profile)).to be true
+
+      entries = JSON.parse(File.read(File.join(temp_dir, '.neutraliser')))
+      entries.each_value { |entry| entry['processed_at'] = before_fix }
+      File.write(File.join(temp_dir, '.neutraliser'), JSON.generate(entries))
+
+      expect(decider(true).already_processed?(video_path, profile)).to be false
+    end
+  end
 end

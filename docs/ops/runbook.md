@@ -34,6 +34,21 @@ Subtitles are always copied, never dropped. A stream ffmpeg can't identify (`Sub
 
 PGS (`hdmv_pgs_subtitle`) tracks log `Could not find codec parameters … unspecified size` when the probe window holds no subtitle packets. That is a probe warning, not by itself a failure: the codec is known, so the preflight lets it through. Not reproduced locally (ffmpeg can't encode a PGS fixture); if a PGS file does fail, the manifest's one-line message now shows the real cause instead of the warning buried in a dump.
 
+### 7.1 files levelled before the side channels were metered
+Until 2026-11-15 (commits `13be53a`, `172a5fb`) a track above six channels was metered by loudnorm alone, which ignores the 7th and 8th (the side surrounds). It read a 7.1 file low, so the file was levelled up too far (up to ~1.8 LU over target in the research fixture; more with loud sides) and its loudness range could miss the ladder's compression rung. Two kinds of leftover exist in a library that ran an older build; 5.1 and stereo files are not affected.
+
+1. **Analysis caches** (`<name>.loudnorm_<profile>.json`, a measured-but-not-yet-levelled file). Handled by the upgrade, nothing to do: cache version 1.3 discards every 1.2 cache the next time the file is looked at and measures it again. (A cache has no channel count, so 5.1 caches go too; that is one extra read of a file that is still waiting to be levelled. A file that was levelled has a new size and mtime and had lost its cache already.)
+2. **Files already levelled** (stamp recipe 2, or 3 from `--ladder`) **and 7.1 files left alone as `within_tolerance`**. These stay "done" on purpose: a new build never re-levels a library by itself, and `--redo-recipe 2` refuses recipe 2 because it is the recipe a run writes. Recovery is explicit:
+
+   ```
+   neutraliser process /path/to/library --dry-run --redo-side-channels   # what it would do, nothing written
+   neutraliser process /path/to/library --replace --redo-side-channels   # do it
+   ```
+
+   `--redo-side-channels` selects a file only if its primary audio track has more than six channels **and** neutraliser last judged it before 2026-11-15 12:40 UTC: the stamp's `NEUTRALISER_DATE` (no date counts as old), or for a file with no stamp, the sidecar's `left` record. A file with neither (never touched, or levelled by `neutralise.sh`) is skipped. Selected files are measured with the current meter; one already within `--tolerance` of target on the new reading is left alone (recorded `within_tolerance`, nothing re-encoded), the rest are levelled once more and restamped with today's date, so a second run selects nothing. Combine it with the profile and options the library was run with (`--profile`, `--ladder` ...); a file stamped for another profile is not "done" for this one and is handled as usual.
+
+Costs and limits: a flagged run reads every selected file once (a full loudnorm and ebur128 pass), and re-encodes those off target, one more lossy generation each (research 0004 measured three passes with the +25% bitrate headroom as acceptable). The cut-off is a time, not a build number: a 7.1 file stamped after 12:40 UTC on 15 Nov by a machine still running an older build is missed, so deploy the new build everywhere before the first flagged run, and re-check any such host's files with `report --measure`. Not verified against a real library: this was built and tested on synthetic 7.1 clips only (no NAS access).
+
 ### Where production runs
 Production does not run this CLI yet. New media is normalised on the NAS by media-server's shell fork: Sonarr/Radarr import -> `scripts/neutralise-enqueue.sh` -> `neutralise-driver.sh` -> `neutralise.sh`, plus a weekly sweep kicked hourly from the Mac. Its state (`driver.status`, `driver.log`, `manifest.jsonl`, the import queue) is in a staging directory on the NAS; the `check-prod` skill reads it (its address and path live in the skill's gitignored `local.env`). Moving the driver onto this CLI is goal 9c9e4d8c ([parity audit](../research/prod-parity-audit-2026-10.md)).
 
@@ -58,6 +73,7 @@ Preflight checks run before the loudness pass because that pass is the expensive
 - docs/ops/data_contracts.md
 
 ### Change Log
+- 2026-11-16 (agent:implement): Added "7.1 files levelled before the side channels were metered": analysis cache 1.3 and `process --redo-side-channels`
 - 2026-10-22 (agent:agent-experience): Added "Where production runs" (media-server's NAS driver, not this CLI); dropped the unsupported MacBook claim for the Aug run
 - 2026-10-15 (agent:preflight-failures): Added failure triage, permissions, unsupported subtitles, ffmpeg version and timeouts
 - 2025-09-24 (agent:create-project): Created runbook placeholder

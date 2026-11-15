@@ -44,6 +44,16 @@ RSpec.describe Neutraliser::CacheManager do
       expect(File.exist?(cache_file)).to be(false)
     end
 
+    it 'drops an analysis cached by version 1.2, before 7.1 was metered over all its channels' do
+      manager = described_class.new(enabled: true)
+      manager.save_analysis(video_file, profile, measurement)
+      cache_file = manager.cache_path(video_file, profile)
+      File.write(cache_file, File.read(cache_file).sub(/"cache_version": "[^"]+"/, '"cache_version": "1.2"'))
+
+      expect(manager.load_cached_analysis(video_file, profile)).to be_nil
+      expect(File.exist?(cache_file)).to be(false)
+    end
+
     it 'invalidates cache when source video is newer than cache' do
       manager = described_class.new(enabled: true)
       manager.save_analysis(video_file, profile, measurement)

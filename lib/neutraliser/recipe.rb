@@ -19,7 +19,8 @@ module Neutraliser
     # with ebur128 alongside loudnorm, which only counts six, so they land on target instead of up to
     # ~1.8 LU over. That corrects a measurement defect in the same method rather than adding a new one,
     # nothing here has been released yet, and a number above LADDER would make the recipes
-    # non-monotonic (check_redoable! reads "newer" as "higher").
+    # non-monotonic (check_redoable! reads "newer" as "higher"). Files levelled before that are found by
+    # SIDE_CHANNELS_METERED_FROM, not by recipe.
     CONSTANT_GAIN = 2
     # 3: the levelling ladder (Ladder, --ladder): the least of gain, limiter and compression that
     # works for each file, aimed at the programme or the dialogue.
@@ -27,6 +28,20 @@ module Neutraliser
     # What a run writes when not told otherwise. Switching the default to the ladder is this one
     # line (CURRENT = LADDER): --ladder defaults to on when it is.
     CURRENT = CONSTANT_GAIN
+    # From this moment (UTC; just after the last 7.1 measurement change, 172a5fb) a track above six channels
+    # is metered over all of them. Neither recipe nor cache version can mark that: the recipe stayed at 2 on
+    # purpose (see CONSTANT_GAIN), and a 7.1 file's stamp is otherwise the same as a 5.1 one's. What tells a
+    # file levelled by the six-channel meter apart is its channel count and when it was judged, so
+    # `process --redo-side-channels` selects on those (SkipDecider).
+    SIDE_CHANNELS_METERED_FROM = Time.utc(2026, 11, 15, 12, 40, 0)
+
+    # True when a judgement of a track with this many channels, made at judged_at (a Time, or nil when no
+    # date is known), was made with loudnorm's six-channel meter. An unknown date counts as old: reading a
+    # file again costs a measurement, trusting a wrong figure costs a mis-levelled file.
+    def self.six_channel_meter?(channels:, judged_at:)
+      channels.to_i > Measurement::LOUDNORM_CHANNELS && (judged_at.nil? || judged_at < SIDE_CHANNELS_METERED_FROM)
+    end
+
     UNVERSIONED = nil
     UNVERSIONED_LABEL = 'unversioned'.freeze
 
