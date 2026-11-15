@@ -50,6 +50,7 @@ Entry point and navigation map for the neutraliser documentation set. Neutralise
 - [`research/plex-sampling-error-2026-10.md`](research/plex-sampling-error-2026-10.md) — How far a sampled loudness estimate sits from a film's true loudness (10 real Plex films); why analyze-plex gives "Unclear" instead of guessing, and `--full`
 - [`research/0003-sceptical-review-dolby-dialogue-compression/research.md`](research/0003-sceptical-review-dolby-dialogue-compression/research.md) — Sceptical review, on real-ffmpeg fixtures, of the Dolby fix, dialogue estimate, opt-in compression and recipes before a library sweep restarts: findings by severity, what was fixed, what only real files or ears can settle, and the restart verdict
 - [`research/0002-streaming-loudness-and-dialogue/research.md`](research/0002-streaming-loudness-and-dialogue/research.md) — What streamers do about volume jumps and quiet dialogue, and whether it works. Recommends anchoring on dialogue, and found two bugs: stream DRC baked in and dialnorm reset on Dolby tracks
+- [`research/landscape.md`](research/landscape.md) — Updated 2026-11-15: side-by-side of how others handle dialogue and levelling, and the honest one-line claim
 
 ## Tasks
 - [`tasks/0001-plex-library-analysis/task.md`](tasks/0001-plex-library-analysis/task.md) — Plex library audio analysis command (complete)
