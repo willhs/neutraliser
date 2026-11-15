@@ -1,0 +1,568 @@
+{
+  "seed": 20261117,
+  "picks": [
+    {
+      "plex_id": "7520",
+      "kind": "movie",
+      "title": "Ronin (1998)",
+      "genres": [
+        "Action",
+        "Adventure"
+      ],
+      "part_key": "/library/parts/8360/1765658192/file.mkv",
+      "bytes": 6142021408,
+      "duration_ms": 7279700,
+      "plex_codec": "ac3",
+      "plex_channels": 6,
+      "resolution": "1080",
+      "group": "dolby51",
+      "dialnorm": -19,
+      "track": {
+        "index": 1,
+        "codec": "eac3",
+        "channels": 2
+      },
+      "eng_text_subs": 0,
+      "why": [
+        "dialnorm"
+      ]
+    },
+    {
+      "plex_id": "8900",
+      "kind": "movie",
+      "title": "The Nightmare Before Christmas (1993)",
+      "genres": [
+        "Family",
+        "Fantasy"
+      ],
+      "part_key": "/library/parts/21871/1784995620/file.mkv",
+      "bytes": 3583522811,
+      "duration_ms": 4596704,
+      "plex_codec": "eac3",
+      "plex_channels": 6,
+      "resolution": "1080",
+      "group": "dolby51",
+      "dialnorm": -28,
+      "track": {
+        "index": 1,
+        "codec": "eac3",
+        "channels": 6
+      },
+      "eng_text_subs": 1,
+      "why": [
+        "dialnorm"
+      ]
+    },
+    {
+      "plex_id": "16366",
+      "kind": "episode",
+      "title": "The Simpsons S13E3 Homer the Moe",
+      "genres": [],
+      "part_key": "/library/parts/23930/1785926910/file.mkv",
+      "bytes": 286293299,
+      "duration_ms": 1354496,
+      "plex_codec": "eac3",
+      "plex_channels": 6,
+      "resolution": "1080",
+      "group": "dolby51",
+      "dialnorm": -22,
+      "track": {
+        "index": 0,
+        "codec": "eac3",
+        "channels": 6
+      },
+      "eng_text_subs": 1,
+      "why": [
+        "dialnorm"
+      ]
+    },
+    {
+      "plex_id": "16407",
+      "kind": "episode",
+      "title": "The Simpsons S14E21 The Bart of War",
+      "genres": [],
+      "part_key": "/library/parts/23970/1785931874/file.mkv",
+      "bytes": 258367463,
+      "duration_ms": 1321088,
+      "plex_codec": "eac3",
+      "plex_channels": 6,
+      "resolution": "1080",
+      "group": "dolby51",
+      "dialnorm": -24,
+      "track": {
+        "index": 0,
+        "codec": "eac3",
+        "channels": 6
+      },
+      "eng_text_subs": 1,
+      "why": [
+        "dialnorm"
+      ]
+    },
+    {
+      "plex_id": "16420",
+      "kind": "episode",
+      "title": "The Simpsons S11E10 Little Big Mom",
+      "genres": [],
+      "part_key": "/library/parts/23982/1785928615/file.mkv",
+      "bytes": 330505592,
+      "duration_ms": 1354496,
+      "plex_codec": "eac3",
+      "plex_channels": 6,
+      "resolution": "1080",
+      "group": "dolby51",
+      "dialnorm": -23,
+      "track": {
+        "index": 0,
+        "codec": "eac3",
+        "channels": 6
+      },
+      "eng_text_subs": 1,
+      "why": [
+        "dialnorm"
+      ]
+    },
+    {
+      "plex_id": "16181",
+      "kind": "episode",
+      "title": "Stranger Things S5E8 Chapter Eight: The Rightside Up",
+      "genres": [],
+      "part_key": "/library/parts/23457/1785558938/file.mkv",
+      "bytes": 1777966082,
+      "duration_ms": 7697376,
+      "plex_codec": "eac3",
+      "plex_channels": 6,
+      "resolution": "1080",
+      "group": "dolby51",
+      "dialnorm": -26,
+      "track": {
+        "index": 0,
+        "codec": "eac3",
+        "channels": 6
+      },
+      "eng_text_subs": 1,
+      "why": [
+        "dialnorm"
+      ]
+    },
+    {
+      "plex_id": "6678",
+      "kind": "movie",
+      "title": "Watchmen (2009)",
+      "genres": [
+        "Science Fiction",
+        "Mystery"
+      ],
+      "part_key": "/library/parts/26290/1786747310/file.mkv",
+      "bytes": 4330103469,
+      "duration_ms": 9725822,
+      "plex_codec": "eac3",
+      "plex_channels": 6,
+      "resolution": "1080",
+      "group": "dolby51",
+      "dialnorm": -27,
+      "track": {
+        "index": 0,
+        "codec": "eac3",
+        "channels": 6
+      },
+      "eng_text_subs": 1,
+      "why": [
+        "dialnorm"
+      ]
+    },
+    {
+      "plex_id": "9092",
+      "kind": "movie",
+      "title": "The Cat Returns (2002)",
+      "genres": [
+        "Family",
+        "Animation"
+      ],
+      "part_key": "/library/parts/23904/1785919087/file.mkv",
+      "bytes": 2874431591,
+      "duration_ms": 4528160,
+      "plex_codec": "eac3",
+      "plex_channels": 6,
+      "resolution": "1080",
+      "group": "dolby51",
+      "dialnorm": -24,
+      "track": {
+        "index": 0,
+        "codec": "eac3",
+        "channels": 6
+      },
+      "eng_text_subs": 2,
+      "why": [
+        "dialnorm"
+      ]
+    },
+    {
+      "plex_id": "9036",
+      "kind": "movie",
+      "title": "The Hateful Eight (2015)",
+      "genres": [
+        "Western",
+        "Mystery"
+      ],
+      "part_key": "/library/parts/24052/1786030132/file.mkv",
+      "bytes": 3448737313,
+      "duration_ms": 10065824,
+      "plex_codec": "eac3",
+      "plex_channels": 6,
+      "resolution": "1080",
+      "group": "dolby51",
+      "dialnorm": -27,
+      "track": {
+        "index": 0,
+        "codec": "eac3",
+        "channels": 6
+      },
+      "eng_text_subs": 1,
+      "why": [
+        "dialnorm"
+      ]
+    },
+    {
+      "plex_id": "10308",
+      "kind": "movie",
+      "title": "Jason Bourne (2016)",
+      "genres": [
+        "Action",
+        "Adventure"
+      ],
+      "part_key": "/library/parts/23897/1785899729/file.mkv",
+      "bytes": 2774883315,
+      "duration_ms": 7397024,
+      "plex_codec": "eac3",
+      "plex_channels": 6,
+      "resolution": "1080",
+      "group": "dolby51",
+      "dialnorm": -23,
+      "track": {
+        "index": 0,
+        "codec": "eac3",
+        "channels": 6
+      },
+      "eng_text_subs": 1,
+      "why": [
+        "dialnorm"
+      ]
+    },
+    {
+      "plex_id": "10230",
+      "kind": "movie",
+      "title": "Jurassic Park (1993)",
+      "genres": [
+        "Adventure",
+        "Science Fiction"
+      ],
+      "part_key": "/library/parts/24021/1785950874/file.mkv",
+      "bytes": 3042964764,
+      "duration_ms": 7588734,
+      "plex_codec": "eac3",
+      "plex_channels": 6,
+      "resolution": "1080",
+      "group": "dolby51",
+      "dialnorm": -24,
+      "track": {
+        "index": 0,
+        "codec": "eac3",
+        "channels": 6
+      },
+      "eng_text_subs": 2,
+      "why": [
+        "dialnorm"
+      ]
+    },
+    {
+      "plex_id": "9075",
+      "kind": "movie",
+      "title": "The Departed (2006)",
+      "genres": [
+        "Drama",
+        "Thriller"
+      ],
+      "part_key": "/library/parts/24332/1786344593/file.mkv",
+      "bytes": 3952012743,
+      "duration_ms": 9078737,
+      "plex_codec": "eac3",
+      "plex_channels": 6,
+      "resolution": "1080",
+      "group": "dolby51",
+      "dialnorm": -25,
+      "track": {
+        "index": 0,
+        "codec": "eac3",
+        "channels": 6
+      },
+      "eng_text_subs": 0,
+      "why": [
+        "dialnorm"
+      ]
+    },
+    {
+      "plex_id": "10039",
+      "kind": "movie",
+      "title": "Mission: Impossible II (2000)",
+      "genres": [
+        "Action",
+        "Adventure"
+      ],
+      "part_key": "/library/parts/24522/1786467123/file.mkv",
+      "bytes": 3774510406,
+      "duration_ms": 7446176,
+      "plex_codec": "eac3",
+      "plex_channels": 6,
+      "resolution": "1080",
+      "group": "dolby51",
+      "dialnorm": -27,
+      "track": {
+        "index": 0,
+        "codec": "eac3",
+        "channels": 6
+      },
+      "eng_text_subs": 1,
+      "why": [
+        "dialnorm"
+      ]
+    },
+    {
+      "plex_id": "7948",
+      "kind": "movie",
+      "title": "Kill Bill: Vol. 1 (2003)",
+      "genres": [
+        "Action",
+        "Crime"
+      ],
+      "part_key": "/library/parts/9214/1722353157/file.mkv",
+      "bytes": 5013072747,
+      "duration_ms": 6643680,
+      "plex_codec": "eac3",
+      "plex_channels": 6,
+      "resolution": "1080",
+      "group": "dolby51",
+      "dialnorm": -21,
+      "track": {
+        "index": 0,
+        "codec": "eac3",
+        "channels": 6
+      },
+      "eng_text_subs": 1,
+      "why": [
+        "dialnorm"
+      ]
+    },
+    {
+      "plex_id": "7763",
+      "kind": "movie",
+      "title": "Monty Python's the Meaning of Life (1983)",
+      "genres": [
+        "Comedy",
+        "Musical"
+      ],
+      "part_key": "/library/parts/8832/1765602467/file.mkv",
+      "bytes": 6776803923,
+      "duration_ms": 6420117,
+      "plex_codec": "eac3",
+      "plex_channels": 6,
+      "resolution": "1080",
+      "group": "dolby51",
+      "dialnorm": null,
+      "dialnorm_error": "[AVFormatContext @ 0x8aac17980] Requested output format 'aac' is not known.",
+      "track": {
+        "index": 0,
+        "codec": "aac",
+        "channels": 2
+      },
+      "eng_text_subs": 1,
+      "why": [
+        "songs"
+      ]
+    },
+    {
+      "plex_id": "12962",
+      "kind": "movie",
+      "title": "The Rocker (2008)",
+      "genres": [
+        "Comedy",
+        "Music"
+      ],
+      "part_key": "/library/parts/19519/1793247958/file.mkv",
+      "bytes": 8211575051,
+      "duration_ms": 6137764,
+      "plex_codec": "ac3",
+      "plex_channels": 6,
+      "resolution": "1080",
+      "group": "dolby51",
+      "dialnorm": -31,
+      "track": {
+        "index": 0,
+        "codec": "ac3",
+        "channels": 6
+      },
+      "eng_text_subs": 1,
+      "why": [
+        "songs"
+      ]
+    },
+    {
+      "plex_id": "9553",
+      "kind": "movie",
+      "title": "South Park: Bigger, Longer & Uncut (1999)",
+      "genres": [
+        "Comedy",
+        "Musical"
+      ],
+      "part_key": "/library/parts/12738/1759674392/file.mkv",
+      "bytes": 3128358273,
+      "duration_ms": 4874583,
+      "plex_codec": "ac3",
+      "plex_channels": 6,
+      "resolution": "1080",
+      "group": "dolby51",
+      "dialnorm": -31,
+      "track": {
+        "index": 0,
+        "codec": "ac3",
+        "channels": 6
+      },
+      "eng_text_subs": 1,
+      "why": [
+        "songs"
+      ]
+    },
+    {
+      "plex_id": "9934",
+      "kind": "movie",
+      "title": "Ocean's Twelve (2004)",
+      "genres": [
+        "Thriller",
+        "Crime"
+      ],
+      "part_key": "/library/parts/13552/1758964572/file.mp4",
+      "bytes": 2020312311,
+      "duration_ms": 7518100,
+      "plex_codec": "ac3",
+      "plex_channels": 6,
+      "resolution": "720",
+      "group": "dolby51",
+      "dialnorm": null,
+      "dialnorm_error": "[AVFormatContext @ 0xb4c80bc00] Requested output format 'aac' is not known.",
+      "track": {
+        "index": 0,
+        "codec": "aac",
+        "channels": 2
+      },
+      "eng_text_subs": 1,
+      "why": [
+        "score"
+      ]
+    },
+    {
+      "plex_id": "9973",
+      "kind": "movie",
+      "title": "Ocean's Eleven (2001)",
+      "genres": [
+        "Thriller",
+        "Crime"
+      ],
+      "part_key": "/library/parts/13627/1759388000/file.mp4",
+      "bytes": 1878937742,
+      "duration_ms": 6994202,
+      "plex_codec": "ac3",
+      "plex_channels": 6,
+      "resolution": "720",
+      "group": "dolby51",
+      "dialnorm": null,
+      "dialnorm_error": "[AVFormatContext @ 0xa24c5bc00] Requested output format 'aac' is not known.",
+      "track": {
+        "index": 0,
+        "codec": "aac",
+        "channels": 2
+      },
+      "eng_text_subs": 1,
+      "why": [
+        "score"
+      ]
+    },
+    {
+      "plex_id": "7238",
+      "kind": "movie",
+      "title": "The Chronicles of Riddick (2004)",
+      "genres": [
+        "Science Fiction",
+        "Action"
+      ],
+      "part_key": "/library/parts/7738/1766165242/file.mkv",
+      "bytes": 6439533502,
+      "duration_ms": 8046100,
+      "plex_codec": "ac3",
+      "plex_channels": 6,
+      "resolution": "1080",
+      "group": "dolby51",
+      "dialnorm": -31,
+      "track": {
+        "index": 0,
+        "codec": "ac3",
+        "channels": 6
+      },
+      "eng_text_subs": 1,
+      "why": [
+        "score"
+      ]
+    },
+    {
+      "plex_id": "8738",
+      "kind": "movie",
+      "title": "The Lord of the Rings: The Two Towers (2002)",
+      "genres": [
+        "Adventure",
+        "Action"
+      ],
+      "part_key": "/library/parts/10810/1759773182/file.mkv",
+      "bytes": 6526488249,
+      "duration_ms": 14125022,
+      "plex_codec": "ac3",
+      "plex_channels": 6,
+      "resolution": "1080",
+      "group": "dolby51",
+      "dialnorm": -31,
+      "track": {
+        "index": 0,
+        "codec": "ac3",
+        "channels": 6
+      },
+      "eng_text_subs": 1,
+      "why": [
+        "score"
+      ]
+    },
+    {
+      "plex_id": "8336",
+      "kind": "movie",
+      "title": "Gladiator (2000)",
+      "genres": [
+        "Action",
+        "Adventure"
+      ],
+      "part_key": "/library/parts/9987/1765456547/file.mkv",
+      "bytes": 7006065297,
+      "duration_ms": 9300900,
+      "plex_codec": "ac3",
+      "plex_channels": 6,
+      "resolution": "1080",
+      "group": "dolby51",
+      "dialnorm": -31,
+      "track": {
+        "index": 0,
+        "codec": "ac3",
+        "channels": 6
+      },
+      "eng_text_subs": 1,
+      "why": [
+        "score"
+      ]
+    }
+  ]
+}

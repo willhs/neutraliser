@@ -1,0 +1,350 @@
+{
+  "seed": 20261117,
+  "picks": [
+    {
+      "plex_id": "15617",
+      "kind": "episode",
+      "title": "The Simpsons S25E1 Homerland",
+      "genres": [],
+      "part_key": "/library/parts/23726/1785740271/file.mkv",
+      "bytes": 350648018,
+      "duration_ms": 1271008,
+      "plex_codec": "eac3",
+      "plex_channels": 6,
+      "resolution": "1080",
+      "group": "dolby51",
+      "dialnorm": -24,
+      "track": {
+        "index": 0,
+        "codec": "eac3",
+        "channels": 6
+      },
+      "eng_text_subs": 1,
+      "why": [
+        "dialnorm"
+      ]
+    },
+    {
+      "plex_id": "15627",
+      "kind": "episode",
+      "title": "The Simpsons S29E8 Mr. Lisa's Opus",
+      "genres": [],
+      "part_key": "/library/parts/23725/1785739790/file.mkv",
+      "bytes": 296606236,
+      "duration_ms": 1268672,
+      "plex_codec": "eac3",
+      "plex_channels": 6,
+      "resolution": "1080",
+      "group": "dolby51",
+      "dialnorm": -24,
+      "track": {
+        "index": 0,
+        "codec": "eac3",
+        "channels": 6
+      },
+      "eng_text_subs": 1,
+      "why": [
+        "dialnorm"
+      ]
+    },
+    {
+      "plex_id": "16403",
+      "kind": "episode",
+      "title": "The Simpsons S14E17 Three Gays of the Condo",
+      "genres": [],
+      "part_key": "/library/parts/23966/1785931255/file.mkv",
+      "bytes": 206071812,
+      "duration_ms": 1320288,
+      "plex_codec": "eac3",
+      "plex_channels": 6,
+      "resolution": "1080",
+      "group": "dolby51",
+      "dialnorm": -24,
+      "track": {
+        "index": 0,
+        "codec": "eac3",
+        "channels": 6
+      },
+      "eng_text_subs": 1,
+      "why": [
+        "dialnorm"
+      ]
+    },
+    {
+      "plex_id": "13408",
+      "kind": "episode",
+      "title": "The Office (US) S7E19 Garage Sale",
+      "genres": [],
+      "part_key": "/library/parts/27888/1791945637/file.mkv",
+      "bytes": 936261368,
+      "duration_ms": 1327328,
+      "plex_codec": "eac3",
+      "plex_channels": 6,
+      "resolution": "1080",
+      "group": "dolby51",
+      "dialnorm": -24,
+      "track": {
+        "index": 0,
+        "codec": "eac3",
+        "channels": 6
+      },
+      "eng_text_subs": 1,
+      "why": [
+        "dialnorm"
+      ]
+    },
+    {
+      "plex_id": "16371",
+      "kind": "episode",
+      "title": "The Simpsons S13E8 Sweets and Sour Marge",
+      "genres": [],
+      "part_key": "/library/parts/23935/1785927847/file.mkv",
+      "bytes": 274065111,
+      "duration_ms": 1354368,
+      "plex_codec": "eac3",
+      "plex_channels": 6,
+      "resolution": "1080",
+      "group": "dolby51",
+      "dialnorm": -23,
+      "track": {
+        "index": 0,
+        "codec": "eac3",
+        "channels": 6
+      },
+      "eng_text_subs": 1,
+      "why": [
+        "dialnorm"
+      ]
+    },
+    {
+      "plex_id": "16330",
+      "kind": "episode",
+      "title": "Doctor Who (2005) S12E8 The Haunting of Villa Diodati",
+      "genres": [],
+      "part_key": "/library/parts/23846/1785803331/file.mkv",
+      "bytes": 369840867,
+      "duration_ms": 2982640,
+      "plex_codec": "ac3",
+      "plex_channels": 6,
+      "resolution": "1080",
+      "group": "dolby51",
+      "dialnorm": -23,
+      "track": {
+        "index": 0,
+        "codec": "ac3",
+        "channels": 6
+      },
+      "eng_text_subs": 0,
+      "why": [
+        "dialnorm"
+      ]
+    },
+    {
+      "plex_id": "15605",
+      "kind": "episode",
+      "title": "The Simpsons S24E3 Adventures in Baby-Getting",
+      "genres": [],
+      "part_key": "/library/parts/22833/1785455074/file.mkv",
+      "bytes": 1386330016,
+      "duration_ms": 1283200,
+      "plex_codec": "eac3",
+      "plex_channels": 6,
+      "resolution": "1080",
+      "group": "dolby51",
+      "dialnorm": -22,
+      "track": {
+        "index": 0,
+        "codec": "eac3",
+        "channels": 6
+      },
+      "eng_text_subs": 1,
+      "why": [
+        "dialnorm"
+      ]
+    },
+    {
+      "plex_id": "16665",
+      "kind": "episode",
+      "title": "Futurama S11E7 Lord Nibbler in the Nothingverse",
+      "genres": [],
+      "part_key": "/library/parts/27181/1788774983/file.mkv",
+      "bytes": 798844118,
+      "duration_ms": 1499552,
+      "plex_codec": "eac3",
+      "plex_channels": 6,
+      "resolution": "1080",
+      "group": "dolby51",
+      "dialnorm": -24,
+      "track": {
+        "index": 0,
+        "codec": "eac3",
+        "channels": 6
+      },
+      "eng_text_subs": 2,
+      "why": [
+        "dialnorm"
+      ]
+    },
+    {
+      "plex_id": "15829",
+      "kind": "episode",
+      "title": "The Orville S3E3 Mortality Paradox",
+      "genres": [],
+      "part_key": "/library/parts/23064/1771308592/file.mkv",
+      "bytes": 610910766,
+      "duration_ms": 3611776,
+      "plex_codec": "eac3",
+      "plex_channels": 6,
+      "resolution": "1080",
+      "group": "dolby51",
+      "dialnorm": -24,
+      "track": {
+        "index": 0,
+        "codec": "eac3",
+        "channels": 6
+      },
+      "eng_text_subs": 1,
+      "why": [
+        "dialnorm"
+      ]
+    },
+    {
+      "plex_id": "13398",
+      "kind": "episode",
+      "title": "The Office (US) S7E9 WUPHF.com",
+      "genres": [],
+      "part_key": "/library/parts/27677/1791945417/file.mkv",
+      "bytes": 935895774,
+      "duration_ms": 1328352,
+      "plex_codec": "eac3",
+      "plex_channels": 6,
+      "resolution": "1080",
+      "group": "dolby51",
+      "dialnorm": -25,
+      "track": {
+        "index": 0,
+        "codec": "eac3",
+        "channels": 6
+      },
+      "eng_text_subs": 1,
+      "why": [
+        "dialnorm"
+      ]
+    },
+    {
+      "plex_id": "5883",
+      "kind": "episode",
+      "title": "Futurama S10E9 The Trouble with Truffles",
+      "genres": [],
+      "part_key": "/library/parts/27179/1788774165/file.mkv",
+      "bytes": 177860836,
+      "duration_ms": 1477760,
+      "plex_codec": "eac3",
+      "plex_channels": 6,
+      "resolution": "1080",
+      "group": "dolby51",
+      "dialnorm": -24,
+      "track": {
+        "index": 0,
+        "codec": "eac3",
+        "channels": 6
+      },
+      "eng_text_subs": 2,
+      "why": [
+        "dialnorm"
+      ]
+    },
+    {
+      "plex_id": "16364",
+      "kind": "episode",
+      "title": "The Simpsons S13E1 Treehouse of Horror XII",
+      "genres": [],
+      "part_key": "/library/parts/23928/1785926494/file.mkv",
+      "bytes": 280142557,
+      "duration_ms": 1354944,
+      "plex_codec": "eac3",
+      "plex_channels": 6,
+      "resolution": "1080",
+      "group": "dolby51",
+      "dialnorm": -23,
+      "track": {
+        "index": 0,
+        "codec": "eac3",
+        "channels": 6
+      },
+      "eng_text_subs": 1,
+      "why": [
+        "dialnorm"
+      ]
+    },
+    {
+      "plex_id": "3186",
+      "kind": "episode",
+      "title": "Welcome to Wrexham S4E5 Anything's Possible",
+      "genres": [],
+      "part_key": "/library/parts/27200/1789193134/file.mkv",
+      "bytes": 740902452,
+      "duration_ms": 2570816,
+      "plex_codec": "eac3",
+      "plex_channels": 6,
+      "resolution": "1080",
+      "group": "dolby51",
+      "dialnorm": -24,
+      "track": {
+        "index": 0,
+        "codec": "eac3",
+        "channels": 6
+      },
+      "eng_text_subs": 1,
+      "why": [
+        "dialnorm"
+      ]
+    },
+    {
+      "plex_id": "13409",
+      "kind": "episode",
+      "title": "The Office (US) S7E20 Training Day",
+      "genres": [],
+      "part_key": "/library/parts/27889/1791945647/file.mkv",
+      "bytes": 1443819923,
+      "duration_ms": 2050048,
+      "plex_codec": "eac3",
+      "plex_channels": 6,
+      "resolution": "1080",
+      "group": "dolby51",
+      "dialnorm": -25,
+      "track": {
+        "index": 0,
+        "codec": "eac3",
+        "channels": 6
+      },
+      "eng_text_subs": 1,
+      "why": [
+        "dialnorm"
+      ]
+    },
+    {
+      "plex_id": "13782",
+      "kind": "episode",
+      "title": "Futurama S6E1 Rebirth",
+      "genres": [],
+      "part_key": "/library/parts/20505/1783489783/file.mkv",
+      "bytes": 964019006,
+      "duration_ms": 1298848,
+      "plex_codec": "eac3",
+      "plex_channels": 6,
+      "resolution": "1080",
+      "group": "dolby51",
+      "dialnorm": -24,
+      "track": {
+        "index": 0,
+        "codec": "eac3",
+        "channels": 6
+      },
+      "eng_text_subs": 1,
+      "why": [
+        "dialnorm"
+      ]
+    }
+  ]
+}
