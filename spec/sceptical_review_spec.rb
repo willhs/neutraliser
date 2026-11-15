@@ -29,18 +29,7 @@ RSpec.describe 'Sceptical review regressions', :real_ffmpeg do
   def lra(path) = DolbyFixture.measure(path, '-drc_scale', 0)[:lra]
 
   # A stereo AC-3 clip of pink noise steps: [[seconds, dBFS amplitude], ...].
-  def steps_clip(name, steps)
-    wav = File.join(tmp, "#{name}.wav")
-    inputs = steps.each_with_index.flat_map do |(seconds, db), i|
-      ['-f', 'lavfi', '-i', format('anoisesrc=color=pink:seed=%d:duration=%d:sample_rate=48000:amplitude=%.5f', i + 1, seconds, 10**(db / 20.0))]
-    end
-    labels = steps.each_index.map { |i| "[#{i}:a]" }.join
-    DolbyFixture.ffmpeg(*inputs, '-filter_complex', "#{labels}concat=n=#{steps.size}:v=0:a=1,aformat=channel_layouts=stereo[mix]",
-                        '-map', '[mix]', '-c:a', 'pcm_s24le', wav)
-    stream = File.join(tmp, "#{name}.ac3")
-    DolbyFixture.encode(wav, stream, codec: 'ac3', dialnorm: -27)
-    DolbyFixture.mkv(stream, File.join(tmp, "#{name}.mkv"))
-  end
+  def steps_clip(name, steps) = DolbyFixture.steps_clip(tmp, name, steps)
 
   def wide_clip(dir: tmp, name: 'film.mkv')
     wav = DolbyFixture.programme(File.join(tmp, 'programme.wav'), seconds: 24)

@@ -51,6 +51,20 @@ module DolbyFixture
     out
   end
 
+  # A stereo AC-3 clip of pink noise steps in `dir`: [[seconds, dBFS amplitude], ...].
+  def steps_clip(dir, name, steps)
+    wav = File.join(dir, "#{name}.wav")
+    inputs = steps.each_with_index.flat_map do |(seconds, db), i|
+      ['-f', 'lavfi', '-i', format('anoisesrc=color=pink:seed=%d:duration=%d:sample_rate=48000:amplitude=%.5f', i + 1, seconds, 10**(db / 20.0))]
+    end
+    labels = steps.each_index.map { |i| "[#{i}:a]" }.join
+    ffmpeg(*inputs, '-filter_complex', "#{labels}concat=n=#{steps.size}:v=0:a=1,aformat=channel_layouts=stereo[mix]",
+           '-map', '[mix]', '-c:a', 'pcm_s24le', wav)
+    stream = File.join(dir, "#{name}.ac3")
+    encode(wav, stream, codec: 'ac3', dialnorm: -27)
+    mkv(stream, File.join(dir, "#{name}.mkv"))
+  end
+
   # The first audio stream as a raw stream, bytes.
   def raw_stream(path, format)
     out = "#{path}.out.#{format}"

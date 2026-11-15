@@ -416,8 +416,15 @@ or a claim (2, 4, wording in 4 above) or need data I can't touch (7).
 ### Not verified
 
 - Job 2b33fcf6 (7.1 encoder choice): not landed when I looked, not reviewed.
-- A ladder pass on a wide-range file whose compression cannot narrow it, after losing the sidecar
-  (it should re-measure every sweep rather than re-encode): reasoned from the code, not run.
+- A ladder pass on a wide-range file whose compression cannot narrow it, after losing the sidecar:
+  **run 16 Nov** (`spec/ladder_real_spec.rb`, 'a second sweep re-measures…'; a synthetic 4 s/-48 dB, 4 s/-12 dB
+  bursts clip, `--ladder --lra-target 3 --tolerance 1`, since the default ladder limit of 13 LU would let the
+  clip's 4.8 LU stamp count as done). Sweep 1 searched the rungs, found none narrowed the range by 1 LU, and
+  levelled linearly (stamp `linear`, recipe 3, LRA 4.8). With the sidecar kept, sweep 2 skipped on the sidecar. With
+  the sidecar deleted, sweep 3 re-measured (ran the rung search again) and stopped at 'Already at target level
+  (-19.97 LUFS, within 1 LU of -20.0)': no re-encode, same bytes, same stamp, no `prior`. No generation loss;
+  no code change needed. Not covered: a stamp whose LRA is over the limit *and* a level outside tolerance, which
+  is the ordinary re-level path.
 - Real films, real 7.1, real ears: nothing here says how any of it sounds.
 
 ### Reproduction kit and limits

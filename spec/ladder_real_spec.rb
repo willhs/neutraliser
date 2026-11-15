@@ -1,7 +1,9 @@
 require 'spec_helper'
 require 'fileutils'
+require 'digest'
 require 'stringio'
 require_relative 'support/ladder_fixture'
+require_relative 'support/dolby_fixture'
 
 # The levelling ladder run for real: `process --ladder --replace` on one generated clip per rung, the
 # output read back with ebur128 (not the loudnorm filter the tool decides with), the stamp read from the
@@ -120,6 +122,33 @@ RSpec.describe 'Levelling ladder (--ladder) on real files', :real_ffmpeg do
     expect(stamp.target_i).to be_within(0.1).of(stamp.measured_i + stamp.gain_db)
     expect(LadderFixture.centre_loudness(path)).to be_within(1.0).of(-27.0)
     expect(run_cli('--ladder', '--anchor', 'dialogue', path)).to include('Already processed, skipping')
+  end
+
+  # A file no rung narrows is never "done" by its stamp: the stamp is linear with a range over the target, so
+  # a sweep asks the sidecar, and with the sidecar gone it measures again. It must leave the file as it is,
+  # not encode a second generation (pre-release review, 'not verified'). The bursts' range sits under the
+  # gate, so the strongest rung widens it (as in sceptical_review_spec.rb); the target is set under the
+  # clip's own range to make it a file the ladder cannot satisfy.
+  it 'a second sweep re-measures a file no rung narrows after the sidecar is lost, and leaves it alone' do
+    path = DolbyFixture.steps_clip(@dir, 'bursts', [[4, -48], [4, -12]] * 4)
+    sidecar = File.join(@dir, Neutraliser::SkipDecider::FILENAME)
+    sweep = ['--ladder', '--lra-target', '3', '--tolerance', '1', path]
+
+    run_cli(*sweep)
+    first = stamp_of(path)
+    expect(first).to have_attributes(mode: 'linear', recipe: 3)
+    expect(first.measured_lra).to be > 4.0
+    bytes = Digest::SHA256.file(path).hexdigest
+
+    expect(File.exist?(sidecar)).to be(true)
+    File.delete(sidecar)
+    out = run_cli(*sweep)
+
+    expect(out).to include('finding the gentlest compression', 'Already at target level')
+    expect(out).not_to include('Replaced')
+    expect(Digest::SHA256.file(path).hexdigest).to eq(bytes)
+    expect(stamp_of(path)).to eq(first)
+    expect(stamp_of(path).prior).to be_nil
   end
 
   it 'report counts the rungs across a library' do
