@@ -1,0 +1,148 @@
+{
+  "picks": [
+    {
+      "plex_id": "10123",
+      "kind": "movie",
+      "title": "Madagascar: Escape 2 Africa (2008)",
+      "duration_ms": 5384463,
+      "bytes": 4230772089,
+      "part_key": "/library/parts/22750/1785349520/file.mkv",
+      "codec": "truehd",
+      "channels": 8,
+      "profile": "dolby truehd + dolby atmos",
+      "why": "TrueHD Atmos 7.1, animated film"
+    },
+    {
+      "plex_id": "16746",
+      "kind": "movie",
+      "title": "Forrest Gump (1994)",
+      "duration_ms": 8527936,
+      "bytes": 7975853427,
+      "part_key": "/library/parts/27729/1792318704/file.mkv",
+      "codec": "truehd",
+      "channels": 8,
+      "profile": "dolby truehd + dolby atmos",
+      "why": "TrueHD Atmos 7.1, drama"
+    },
+    {
+      "plex_id": "7018",
+      "kind": "movie",
+      "title": "The Matrix Resurrections (2021)",
+      "duration_ms": 8877536,
+      "bytes": 9873324431,
+      "part_key": "/library/parts/7259/1722354715/file.mkv",
+      "codec": "truehd",
+      "channels": 8,
+      "profile": "dolby truehd + dolby atmos",
+      "why": "TrueHD Atmos 7.1, action"
+    },
+    {
+      "plex_id": "7036",
+      "kind": "movie",
+      "title": "The Martian (2015)",
+      "duration_ms": 9080781,
+      "bytes": 3199108598,
+      "part_key": "/library/parts/24027/1785981833/file.mkv",
+      "codec": "eac3",
+      "channels": 8,
+      "profile": null,
+      "why": "E-AC-3 7.1, film"
+    },
+    {
+      "plex_id": "7315",
+      "kind": "movie",
+      "title": "Star Trek Into Darkness (2013)",
+      "duration_ms": 7926432,
+      "bytes": 5774112377,
+      "part_key": "/library/parts/7902/1765543497/file.mkv",
+      "codec": "eac3",
+      "channels": 8,
+      "profile": null,
+      "why": "E-AC-3 7.1, film"
+    },
+    {
+      "plex_id": "8330",
+      "kind": "movie",
+      "title": "Godzilla (1998)",
+      "duration_ms": 8323483,
+      "bytes": 7384762790,
+      "part_key": "/library/parts/9975/1765460350/file.mkv",
+      "codec": "eac3",
+      "channels": 8,
+      "profile": null,
+      "why": "E-AC-3 7.1 that is not the default track"
+    },
+    {
+      "plex_id": "9346",
+      "kind": "movie",
+      "title": "Star Wars: Episode III - Revenge of the Sith (2005)",
+      "duration_ms": 8406346,
+      "bytes": 2690446274,
+      "part_key": "/library/parts/12282/1721557090/file.mkv",
+      "codec": "aac",
+      "channels": 8,
+      "profile": "he-aac",
+      "why": "HE-AAC 7.1"
+    },
+    {
+      "plex_id": "10557",
+      "kind": "movie",
+      "title": "Fantastic Beasts and Where to Find Them (2016)",
+      "duration_ms": 7972448,
+      "bytes": 5236349686,
+      "part_key": "/library/parts/27136/1787754604/file.mkv",
+      "codec": "aac",
+      "channels": 8,
+      "profile": "lc",
+      "why": "AAC-LC 7.1"
+    },
+    {
+      "plex_id": "12147",
+      "kind": "movie",
+      "title": "98 ()",
+      "duration_ms": 10257268,
+      "bytes": 25545022563,
+      "part_key": "/library/parts/17667/1773143745/file.mkv",
+      "codec": "flac",
+      "channels": 8,
+      "profile": null,
+      "why": "FLAC 7.1"
+    },
+    {
+      "plex_id": "14135",
+      "kind": "episode",
+      "title": "Andor S2E10 Make It Stop",
+      "duration_ms": 2880352,
+      "bytes": 487972176,
+      "part_key": "/library/parts/23601/1785654977/file.mkv",
+      "codec": "eac3",
+      "channels": 6,
+      "profile": "dolby digital plus + dolby atmos",
+      "why": "E-AC-3 JOC Atmos 5.1, episode"
+    },
+    {
+      "plex_id": "8947",
+      "kind": "movie",
+      "title": "The Little Mermaid (1989)",
+      "duration_ms": 4966835,
+      "bytes": 4025500675,
+      "part_key": "/library/parts/21872/1792021550/file.mkv",
+      "codec": "eac3",
+      "channels": 6,
+      "profile": "dolby digital plus + dolby atmos",
+      "why": "E-AC-3 JOC Atmos 5.1, film"
+    },
+    {
+      "plex_id": "14108",
+      "kind": "episode",
+      "title": "Andor S1E1 Kassa",
+      "duration_ms": 2352900,
+      "bytes": 576405798,
+      "part_key": "/library/parts/21016/1786432477/file.mkv",
+      "codec": "eac3",
+      "channels": 6,
+      "profile": null,
+      "why": "name says TrueHD 7.1 Atmos, stream is E-AC-3 5.1"
+    }
+  ]
+}
