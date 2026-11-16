@@ -56,6 +56,7 @@ Entry point and navigation map for the neutraliser documentation set. Neutralise
 - [`research/pre-release-review-2026-11.md`](research/pre-release-review-2026-11.md) — Updated 2026-11-16: finding 5 fixed, 7.1 range now read over all channels
 - [`research/0005-dialogue-estimate-real-files/research.md`](research/0005-dialogue-estimate-real-files/research.md) — Dialogue estimate measured on 79 real files against dialnorm and a subtitle-cue reference: fails the 90%-within-2-LU mark on films, what dialogue -27 / -24 would ask of the library, recommendation to keep -20
 - [`research/pre-release-review-2026-11.md`](research/pre-release-review-2026-11.md) — Updated 2026-11-16: second --ladder sweep after sidecar loss run, not re-encoded
+- [`research/0006-71-and-atmos-real-files/research.md`](research/0006-71-and-atmos-real-files/research.md) — 7.1 and Atmos tracks in the real library (counts) and 8 measured against independent meters: meter, skips and name hints as specified; E-AC-3 7.1 fails under --ladder, analyze-plex reads a different track from a sweep
 
 ## Tasks
 - [`tasks/0001-plex-library-analysis/task.md`](tasks/0001-plex-library-analysis/task.md) — Plex library audio analysis command (complete)

@@ -1,0 +1,418 @@
+{
+  "tally": {
+    "movie_titles": 810,
+    "movie_multi_audio": 171,
+    "movie_sweep_pick_not_first": 11,
+    "movie_plex_channels_differ_from_first": 24,
+    "movie_plex_channels_differ_from_sweep_pick": 28,
+    "movie_side_channel_decision_differs": 1,
+    "episode_titles": 8500,
+    "episode_multi_audio": 654,
+    "episode_plex_channels_differ_from_first": 84,
+    "episode_plex_channels_differ_from_sweep_pick": 84,
+    "episode_sweep_pick_not_first": 46
+  },
+  "examples": [
+    {
+      "kind": "movie",
+      "title": "Fantastic Beasts and Where to Find Them (2016)",
+      "plex_audio_channels": 8,
+      "first": {
+        "codec": "aac",
+        "channels": 8,
+        "languageCode": "eng"
+      },
+      "sweep_pick": {
+        "codec": "ac3",
+        "channels": 6,
+        "languageCode": "tur",
+        "default": true
+      }
+    },
+    {
+      "kind": "movie",
+      "title": "From Here to Eternity (1953)",
+      "plex_audio_channels": 6,
+      "first": {
+        "codec": "ac3",
+        "channels": 6,
+        "languageCode": "eng"
+      },
+      "sweep_pick": {
+        "codec": "aac",
+        "channels": 1,
+        "languageCode": "eng",
+        "default": true
+      }
+    },
+    {
+      "kind": "movie",
+      "title": "Gandhi (1982)",
+      "plex_audio_channels": 6,
+      "first": {
+        "codec": "ac3",
+        "channels": 6,
+        "languageCode": "eng"
+      },
+      "sweep_pick": {
+        "codec": "flac",
+        "channels": 2,
+        "languageCode": "eng",
+        "default": true
+      }
+    },
+    {
+      "kind": "movie",
+      "title": "Police Academy 4: Citizens on Patrol (1987)",
+      "plex_audio_channels": 2,
+      "first": {
+        "codec": "dca",
+        "channels": 1,
+        "languageCode": "eng"
+      },
+      "sweep_pick": {
+        "codec": "ac3",
+        "channels": 2,
+        "languageCode": "tur",
+        "default": true
+      }
+    },
+    {
+      "kind": "movie",
+      "title": "The Road Warrior (1981)",
+      "plex_audio_channels": 6,
+      "first": {
+        "codec": "dca",
+        "channels": 6,
+        "languageCode": "eng"
+      },
+      "sweep_pick": {
+        "codec": "eac3",
+        "channels": 2,
+        "languageCode": "tur",
+        "default": true
+      }
+    },
+    {
+      "kind": "movie",
+      "title": "Ronin (1998)",
+      "plex_audio_channels": 6,
+      "first": {
+        "codec": "ac3",
+        "channels": 6,
+        "languageCode": "eng"
+      },
+      "sweep_pick": {
+        "codec": "eac3",
+        "channels": 2,
+        "languageCode": "eng",
+        "default": true
+      }
+    },
+    {
+      "kind": "episode",
+      "title": "CatDog S1E1",
+      "plex_audio_channels": 2,
+      "first": {
+        "codec": "eac3",
+        "channels": 2,
+        "languageCode": "eng"
+      },
+      "sweep_pick": {
+        "codec": "ac3",
+        "channels": 2,
+        "languageCode": "eng",
+        "default": true
+      }
+    },
+    {
+      "kind": "episode",
+      "title": "CatDog S1E2",
+      "plex_audio_channels": 2,
+      "first": {
+        "codec": "eac3",
+        "channels": 2,
+        "languageCode": "eng"
+      },
+      "sweep_pick": {
+        "codec": "ac3",
+        "channels": 2,
+        "languageCode": "eng",
+        "default": true
+      }
+    },
+    {
+      "kind": "episode",
+      "title": "CatDog S1E3",
+      "plex_audio_channels": 2,
+      "first": {
+        "codec": "eac3",
+        "channels": 2,
+        "languageCode": "eng"
+      },
+      "sweep_pick": {
+        "codec": "ac3",
+        "channels": 2,
+        "languageCode": "eng",
+        "default": true
+      }
+    },
+    {
+      "kind": "episode",
+      "title": "CatDog S1E4",
+      "plex_audio_channels": 2,
+      "first": {
+        "codec": "eac3",
+        "channels": 2,
+        "languageCode": "eng"
+      },
+      "sweep_pick": {
+        "codec": "ac3",
+        "channels": 2,
+        "languageCode": "eng",
+        "default": true
+      }
+    },
+    {
+      "kind": "episode",
+      "title": "CatDog S1E5",
+      "plex_audio_channels": 2,
+      "first": {
+        "codec": "eac3",
+        "channels": 2,
+        "languageCode": "eng"
+      },
+      "sweep_pick": {
+        "codec": "ac3",
+        "channels": 2,
+        "languageCode": "nld",
+        "default": true
+      }
+    },
+    {
+      "kind": "episode",
+      "title": "CatDog S1E6",
+      "plex_audio_channels": 2,
+      "first": {
+        "codec": "eac3",
+        "channels": 2,
+        "languageCode": "eng"
+      },
+      "sweep_pick": {
+        "codec": "ac3",
+        "channels": 2,
+        "languageCode": "eng",
+        "default": true
+      }
+    },
+    {
+      "kind": "episode",
+      "title": "CatDog S1E7",
+      "plex_audio_channels": 2,
+      "first": {
+        "codec": "eac3",
+        "channels": 2,
+        "languageCode": "eng"
+      },
+      "sweep_pick": {
+        "codec": "ac3",
+        "channels": 2,
+        "languageCode": "eng",
+        "default": true
+      }
+    },
+    {
+      "kind": "episode",
+      "title": "CatDog S1E8",
+      "plex_audio_channels": 2,
+      "first": {
+        "codec": "eac3",
+        "channels": 2,
+        "languageCode": "eng"
+      },
+      "sweep_pick": {
+        "codec": "ac3",
+        "channels": 2,
+        "languageCode": "eng",
+        "default": true
+      }
+    },
+    {
+      "kind": "episode",
+      "title": "CatDog S1E9",
+      "plex_audio_channels": 2,
+      "first": {
+        "codec": "eac3",
+        "channels": 2,
+        "languageCode": "eng"
+      },
+      "sweep_pick": {
+        "codec": "ac3",
+        "channels": 2,
+        "languageCode": "eng",
+        "default": true
+      }
+    },
+    {
+      "kind": "episode",
+      "title": "CatDog S1E10",
+      "plex_audio_channels": 2,
+      "first": {
+        "codec": "eac3",
+        "channels": 2,
+        "languageCode": "eng"
+      },
+      "sweep_pick": {
+        "codec": "ac3",
+        "channels": 2,
+        "languageCode": "nld",
+        "default": true
+      }
+    },
+    {
+      "kind": "episode",
+      "title": "CatDog S1E11",
+      "plex_audio_channels": 2,
+      "first": {
+        "codec": "eac3",
+        "channels": 2,
+        "languageCode": "eng"
+      },
+      "sweep_pick": {
+        "codec": "ac3",
+        "channels": 2,
+        "languageCode": "eng",
+        "default": true
+      }
+    },
+    {
+      "kind": "episode",
+      "title": "CatDog S1E12",
+      "plex_audio_channels": 2,
+      "first": {
+        "codec": "eac3",
+        "channels": 2,
+        "languageCode": "eng"
+      },
+      "sweep_pick": {
+        "codec": "ac3",
+        "channels": 2,
+        "languageCode": "eng",
+        "default": true
+      }
+    },
+    {
+      "kind": "episode",
+      "title": "CatDog S1E14",
+      "plex_audio_channels": 2,
+      "first": {
+        "codec": "eac3",
+        "channels": 2,
+        "languageCode": "eng"
+      },
+      "sweep_pick": {
+        "codec": "ac3",
+        "channels": 2,
+        "languageCode": "eng",
+        "default": true
+      }
+    },
+    {
+      "kind": "episode",
+      "title": "CatDog S1E15",
+      "plex_audio_channels": 2,
+      "first": {
+        "codec": "eac3",
+        "channels": 2,
+        "languageCode": "eng"
+      },
+      "sweep_pick": {
+        "codec": "ac3",
+        "channels": 2,
+        "languageCode": "nld",
+        "default": true
+      }
+    },
+    {
+      "kind": "episode",
+      "title": "CatDog S1E16",
+      "plex_audio_channels": 2,
+      "first": {
+        "codec": "eac3",
+        "channels": 2,
+        "languageCode": "eng"
+      },
+      "sweep_pick": {
+        "codec": "ac3",
+        "channels": 2,
+        "languageCode": "nld",
+        "default": true
+      }
+    },
+    {
+      "kind": "episode",
+      "title": "CatDog S1E17",
+      "plex_audio_channels": 2,
+      "first": {
+        "codec": "eac3",
+        "channels": 2,
+        "languageCode": "eng"
+      },
+      "sweep_pick": {
+        "codec": "ac3",
+        "channels": 2,
+        "languageCode": "eng",
+        "default": true
+      }
+    },
+    {
+      "kind": "episode",
+      "title": "CatDog S1E18",
+      "plex_audio_channels": 2,
+      "first": {
+        "codec": "eac3",
+        "channels": 2,
+        "languageCode": "eng"
+      },
+      "sweep_pick": {
+        "codec": "ac3",
+        "channels": 2,
+        "languageCode": "eng",
+        "default": true
+      }
+    },
+    {
+      "kind": "episode",
+      "title": "CatDog S1E19",
+      "plex_audio_channels": 2,
+      "first": {
+        "codec": "eac3",
+        "channels": 2,
+        "languageCode": "eng"
+      },
+      "sweep_pick": {
+        "codec": "ac3",
+        "channels": 2,
+        "languageCode": "eng",
+        "default": true
+      }
+    },
+    {
+      "kind": "episode",
+      "title": "CatDog S1E20",
+      "plex_audio_channels": 2,
+      "first": {
+        "codec": "eac3",
+        "channels": 2,
+        "languageCode": "eng"
+      },
+      "sweep_pick": {
+        "codec": "ac3",
+        "channels": 2,
+        "languageCode": "eng",
+        "default": true
+      }
+    }
+  ],
+  "example_count": 25
+}
