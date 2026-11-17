@@ -158,10 +158,10 @@ module Neutraliser
     # reports failure (a corrupt or truncated container, a file still being written), FFmpegTimeoutError
     # if it hangs, and Errno::ENOENT if ffprobe isn't installed: each distinct from "the media is
     # fine". Callers go through Source, which keeps the answer.
-    def self.probe_file(input_path)
+    def self.probe_file(input_path, input_args: [])
       cmd = [
         'ffprobe', '-hide_banner', '-v', 'info', '-show_streams', '-show_format', '-show_chapters',
-        '-of', 'json', input_path
+        '-of', 'json', *input_args, input_path
       ]
       stdout, stderr, status = execute_with_timeout(cmd, PROBE_TIMEOUT, 'File probe')
       raise FFmpegError.from_run('File probe', stderr, status) unless status.success?

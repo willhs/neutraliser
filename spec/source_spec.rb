@@ -182,7 +182,7 @@ RSpec.describe Neutraliser::Source do
       source.unsupported_subtitles
       source.mp4_family?
 
-      expect(Neutraliser::FFmpegWrapper).to have_received(:probe_file).with('film.mkv').once
+      expect(Neutraliser::FFmpegWrapper).to have_received(:probe_file).with('film.mkv', input_args: []).once
     end
 
     it 'shares the probe with a copy of the file (a staged working copy), which is read from its own path' do

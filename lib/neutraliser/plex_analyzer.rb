@@ -267,18 +267,18 @@ module Neutraliser
     # so the title is left out rather than given an invented level.
     def estimate_loudness(item, streaming_url)
       total_s = item['duration'].to_i / 1000.0
-      channels = audio_channels(item)
+      track = sweep_track(streaming_url)
 
       if full || total_s <= READ_IN_FULL_BELOW_S
         # A failed read here raises and is handled by analyze_media_item.
-        measurement = analyze_streaming_audio(streaming_url, channels: channels, expected_s: total_s)
+        measurement = analyze_streaming_audio(streaming_url, track: track, expected_s: total_s)
         return LoudnessEstimate.exact(measurement.input_i) unless measurement.silent?
 
         log "   ⚠️  #{display_title(item)}: no audio signal measured, skipping"
         return nil
       end
 
-      levels = window_offsets(total_s).map { |offset| measure_window(streaming_url, offset, channels, total_s) }
+      levels = window_offsets(total_s).map { |offset| measure_window(streaming_url, offset, track, total_s) }
       estimate = LoudnessEstimate.sampled(levels)
       log "   ⚠️  #{display_title(item)}: too few readable audio windows (#{levels.compact.size}), skipping" unless estimate
       estimate
@@ -296,10 +296,10 @@ module Neutraliser
     # Dropping a bad window (rather than failing the title) keeps one flaky
     # seek over HTTP from costing the other four; LoudnessEstimate.sampled
     # refuses to report from too few.
-    def measure_window(streaming_url, offset, channels, total_s)
+    def measure_window(streaming_url, offset, track, total_s)
       start = [offset, 0].max
       measurement = analyze_streaming_audio(
-        streaming_url, start_offset: offset, duration: STREAM_SAMPLE_DURATION_S, channels: channels,
+        streaming_url, start_offset: offset, duration: STREAM_SAMPLE_DURATION_S, track: track,
                        expected_s: [STREAM_SAMPLE_DURATION_S, total_s - start].min
       )
       measurement.silent? ? nil : measurement.input_i
@@ -308,29 +308,35 @@ module Neutraliser
       nil
     end
 
-    # The channel count Plex lists for the title's media (its audioChannels), or nil when the listing has
-    # none. loudnorm drops the side channels of a 7.1 track, so the count decides whether the read also
-    # meters all of them (Measurement.side_channels); without it a 7.1 title is read as 5.1.
-    def audio_channels(item)
-      count = item.dig('Media', 0, 'audioChannels').to_i
-      count.positive? ? count : nil
+    # The audio track a sweep would normalise (Source#primary_track: default flag, else first English, else
+    # first), found by probing the stream, so the read measures that track with its own channel count.
+    # Plex's audioChannels describes the media's first listed audio, not necessarily this track. loudnorm
+    # drops the side channels of a 7.1 track, so the count decides whether the read also meters all of
+    # them (Measurement.side_channels). A title with no audio raises, and is left out by analyze_media_item.
+    def sweep_track(streaming_url)
+      source = Source.new(streaming_url, input_args: plex_headers)
+      raise FFmpegError, 'no audio track found' unless source.audio?
+
+      source.primary_track
     end
+
+    def plex_headers = ['-headers', "X-Plex-Token: #{@auth_token}\r\n"]
 
     # Measures loudness straight off the Plex stream via FFmpegWrapper's
     # timeboxed, argv-form executor — no shell string, no temp file, no
     # sentinel-float fallback. A failed/timed-out measurement raises, and so does a read that came back
     # shorter than expected_s (seconds the read should cover; 0 or nil when Plex did not say).
     # No duration/start_offset measures the whole stream.
-    def analyze_streaming_audio(streaming_url, expected_s: nil, channels: nil, start_offset: nil, duration: nil)
+    def analyze_streaming_audio(streaming_url, track:, expected_s: nil, start_offset: nil, duration: nil)
       measurement = FFmpegWrapper.measure_loudness(
         streaming_url,
         start_offset: start_offset,
         target_i: @profile[:lufs],
         target_tp: @profile[:tp],
         target_lra: @profile[:lra],
-        input_args: ['-headers', "X-Plex-Token: #{@auth_token}\r\n"],
+        input_args: plex_headers, audio_index: track[:index],
         duration: duration, track_read: true,
-        **Measurement.side_channels(channels: channels)
+        **Measurement.side_channels(track)
       )
       raise_if_cut_short(measurement, expected_s)
       measurement

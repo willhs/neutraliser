@@ -12,6 +12,8 @@ RSpec.describe Neutraliser::PlexAnalyzer do
   before do
     allow(Neutraliser.logger).to receive(:log)
     analyzer.instance_variable_set(:@auth_token, token)
+    # The probe of the stream URL is covered against the fake server; these examples stub the meter.
+    allow(analyzer).to receive(:sweep_track).and_return({ index: 0, channels: 2 })
   end
 
   def measurement_for(lufs)
@@ -54,7 +56,7 @@ RSpec.describe Neutraliser::PlexAnalyzer do
         measurement
       end
 
-      result = analyzer.send(:analyze_streaming_audio, "#{server_url}/library/parts/1/file.mkv")
+      result = analyzer.send(:analyze_streaming_audio, "#{server_url}/library/parts/1/file.mkv", track: { index: 0, channels: 2 })
 
       expect(result).to eq(measurement)
     end
@@ -63,7 +65,7 @@ RSpec.describe Neutraliser::PlexAnalyzer do
       allow(Neutraliser::FFmpegWrapper).to receive(:measure_loudness)
         .and_raise(Neutraliser::FFmpegError, 'boom')
 
-      expect { analyzer.send(:analyze_streaming_audio, "#{server_url}/x") }
+      expect { analyzer.send(:analyze_streaming_audio, "#{server_url}/x", track: { index: 0, channels: 2 }) }
         .to raise_error(Neutraliser::FFmpegError)
     end
   end
@@ -204,6 +206,7 @@ RSpec.describe Neutraliser::PlexAnalyzer do
     it 'with full: true reads a long title end to end in one pass and gives a firm verdict near the tolerance edge' do
       full_analyzer = described_class.new(server_url: server_url, token: token, profile: profile, tolerance: 1.0, full: true)
       full_analyzer.instance_variable_set(:@auth_token, token)
+      allow(full_analyzer).to receive(:sweep_track).and_return({ index: 0, channels: 2 })
       calls = []
       allow(Neutraliser::FFmpegWrapper).to receive(:measure_loudness) do |_url, **kwargs|
         calls << kwargs.slice(:start_offset, :duration)

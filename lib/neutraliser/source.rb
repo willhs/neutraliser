@@ -37,7 +37,8 @@ module Neutraliser
     attr_reader :path
 
     # Probes lazily: no subprocess until a fact is asked for.
-    def initialize(path, facts: nil)
+    def initialize(path, facts: nil, input_args: [])
+      @input_args = input_args
       @path = path
       @facts = facts
     end
@@ -178,7 +179,7 @@ module Neutraliser
       return @facts if @facts
       raise @error if @error
 
-      stdout, stderr = FFmpegWrapper.probe_file(path)
+      stdout, stderr = FFmpegWrapper.probe_file(path, input_args: @input_args)
       @facts = self.class.parse(stdout, stderr)
     rescue FFmpegError => e
       @error = e

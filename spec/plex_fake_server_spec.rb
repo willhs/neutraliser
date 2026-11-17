@@ -116,10 +116,31 @@ RSpec.describe 'analyze-plex against a fake Plex server', :real_ffmpeg do
       expect(result['current_level']).to be_within(0.5).of(ebur128_i(surround.path))
     end
 
-    it 'falls back to the loudnorm-only read when Plex lists no channel count' do
-      surround.channels = nil
+    it 'takes the channel count from the track, not from what Plex lists' do
+      surround.channels = 2
 
-      expect(analyse.first['adjustment_type']).to eq('Too Quiet')
+      expect(analyse.first['adjustment_type']).to eq('OK')
+    end
+  end
+
+  # A sweep levels the default-flagged track, which here is the second stream, 6 dB louder than the first.
+  context 'with a title whose default audio track is not the first' do
+    let(:two_tracks) do
+      path = File.join(dir, 'two.mkv')
+      system('ffmpeg', '-hide_banner', '-v', 'error', '-y',
+             '-f', 'lavfi', '-i', 'sine=frequency=440:duration=8:sample_rate=48000',
+             '-filter_complex', '[0:a]volume=-20dB[a0];[0:a]volume=-8dB[a1]',
+             '-map', '[a0]', '-map', '[a1]', '-c:a', 'flac', '-disposition:a:0', '0', '-disposition:a:1', 'default', path) || raise('ffmpeg failed')
+      FakePlexServer::Title.new(title: 'Dubbed Film', path: path, duration_s: 8, channels: 2)
+    end
+    let(:libraries) { [FakePlexServer::Library.new(key: '1', title: 'Films', type: 'movie', items: [two_tracks])] }
+
+    it 'measures that track' do
+      _, err, = Open3.capture3('ffmpeg', '-hide_banner', '-nostats', '-i', two_tracks.path, '-map', '0:a:1',
+                               '-af', 'ebur128', '-f', 'null', '-')
+      default_level = err.scan(/I:\s+(-?[\d.]+) LUFS/).last.first.to_f
+
+      expect(analyse.first['current_level']).to be_within(0.5).of(default_level)
     end
   end
 
