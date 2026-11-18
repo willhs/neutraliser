@@ -1,3 +1,7 @@
+## [2026-11-18] update | analyze-plex measures the track a sweep would process
+
+`PlexAnalyzer` now probes each title's stream URL (`Source`, token via `-headers`) and measures `Source#primary_track` by its own index and channel count, instead of `0:a:0` with Plex's `Media.audioChannels` (research 0006: 11 films / 46 episodes differ in track, 24 / 84 in channel count). A title the probe cannot read, or with no audio, is left out. Specs: default-flagged second track, channel count from the track not Plex.
+
 ## [2026-11-17] create | Research 0006: 7.1 and Atmos on real library files
 
 Counted the Plex library's 8-channel (13, all films) and Atmos (39 by profile, no DTS:X, no 7.1 DTS-HD MA) tracks, measured 8 real tracks on scratch copies against two independent meters, and ran three 7.1 films through a real `process --replace`. 7.1 metering, object-audio skips and name hints behave as specified; E-AC-3 7.1 under `--ladder` encodes and then fails output verification, and `analyze-plex` reads a different track from a sweep on 57 titles. Four planned files were not completed. Read-only on media.
