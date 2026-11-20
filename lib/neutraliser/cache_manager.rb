@@ -11,7 +11,10 @@ module Neutraliser
     # low and would level it too far up. It cannot be told apart from a 5.1 entry (no channel count is
     # stored), so every 1.2 cache is dropped and re-measured, which for a file with a standing cache is one
     # more read: a normalised file has changed size and mtime and lost its cache anyway.
-    CACHE_VERSION = '1.3'
+    # 1.4: a track above six channels caches loudnorm's own target_offset plus the side channels' gap, not
+    # target minus loudness; the 1.3 figure was added a second time by a dynamic pass (--allow-dynamic, the
+    # night profile) and played a 7.1 file about 14 dB over target. Every 1.3 entry is dropped.
+    CACHE_VERSION = '1.4'
 
     def initialize(enabled: true)
       @enabled = enabled

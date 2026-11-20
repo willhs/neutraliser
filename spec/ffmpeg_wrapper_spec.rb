@@ -98,7 +98,9 @@ RSpec.describe Neutraliser::FFmpegWrapper do
 
       result = described_class.measure_loudness('sides.mkv', channels: 8)
 
-      expect(result).to have_attributes(input_i: -21.0, input_tp: -15.2, input_thresh: -31.0, input_lra: 15.2, target_offset: 1.0)
+      expect(result).to have_attributes(input_i: -21.0, input_tp: -15.2, input_thresh: -31.0, input_lra: 15.2)
+      # loudnorm's 0.0 plus the gap between its read (-24.05) and ebur128's (-21.0), not the 1.0 dB to target
+      expect(result.target_offset).to be_within(0.001).of(-3.05)
     end
 
     it 'raises FFmpegError including stderr when command fails' do

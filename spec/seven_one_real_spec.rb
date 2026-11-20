@@ -80,6 +80,23 @@ RSpec.describe 'Loudness of 7.1 files (finding 14)', :real_ffmpeg do
     end
   end
 
+  # Sceptical review of 7.1 (docs/research/0007-*): loudnorm's `offset=` is extra gain when it runs in
+  # dynamic mode (--allow-dynamic, the night profile, a file that does not fit linear). The 7.1 read replaced
+  # the offset with the linear-mode gain (target - integrated), so a dynamic pass added it a second time
+  # and a 7.1 clip came out about 14 dB over target (-5.7 LUFS for -20).
+  { '--allow-dynamic' => [-20.0, ['--allow-dynamic']],
+    'the night profile' => [-16.0, ['--profile', 'night']] }.each do |label, (target, flags)|
+    it "levels a 7.1 clip to within 1 LU of the target under #{label} (loudnorm dynamic)" do
+      Dir.mktmpdir do |dir|
+        path = File.join(dir, 'pcm71.mkv')
+        FileUtils.cp(@pcm71, path)
+        run_cli('process', '--replace', *flags, path)
+
+        expect(ebur128(path)).to be_within(1.0).of(target)
+      end
+    end
+  end
+
   # Review findings 3 and 7 (docs/research/pre-release-review-2026-11.md): a `.loudnorm_livingroom.json`
   # written before the side channels were metered holds the six-channel figure, which reads a 7.1 file
   # low, so the file would be levelled up too far. The cache version was not bumped with the meter.

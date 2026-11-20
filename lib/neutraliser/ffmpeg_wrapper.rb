@@ -74,7 +74,7 @@ module Neutraliser
       _, stderr, status = execute_with_timeout(cmd, ANALYSIS_TIMEOUT, 'Loudness measurement')
       raise FFmpegError.from_run('Measurement', stderr, status) unless status.success?
 
-      read_loudness(stderr, channels, target_i)
+      read_loudness(stderr, channels)
     end
 
     # The -map / filter arguments for a loudness read: loudnorm alone, or for a track with channels
@@ -89,9 +89,9 @@ module Neutraliser
     end
 
     # The Measurement out of a loudness read's stderr, with ebur128's figures in when the read ran both.
-    def self.read_loudness(stderr, channels, target_i)
+    def self.read_loudness(stderr, channels)
       measurement = Measurement.from_loudnorm_json(parse_loudnorm_json(stderr))
-      measurement = measurement.with_all_channels(**parse_ebur128_summary(stderr), target_i: target_i) if channels.to_i > Measurement::LOUDNORM_CHANNELS
+      measurement = measurement.with_all_channels(**parse_ebur128_summary(stderr)) if channels.to_i > Measurement::LOUDNORM_CHANNELS
       measurement.with_read_seconds(parse_read_seconds(stderr))
     end
 
@@ -226,7 +226,7 @@ module Neutraliser
       _, stderr, status = execute_with_timeout(cmd, QUICK_TIMEOUT, 'Quick loudness sample')
       return nil unless status.success?
 
-      read_loudness(stderr, channels, target_i)
+      read_loudness(stderr, channels)
     rescue StandardError
       # A quick sample is a best-effort optimisation, not a required step —
       # any failure here (parse error, unexpected ffmpeg behaviour, etc.)

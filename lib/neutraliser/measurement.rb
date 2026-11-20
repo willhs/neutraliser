@@ -109,12 +109,19 @@ module Neutraliser
     # EBU Tech 3342 definition, so on six channels or under they agree within about half a LU; a nil
     # range (the summary did not print one) keeps loudnorm's.
     # A silent measurement stays silent (ebur128 reads it as -inf too).
-    def with_all_channels(integrated:, threshold:, true_peak:, target_i:, range: nil)
+    #
+    # `target_offset` is not "target minus loudness". loudnorm's `offset=` is the extra gain its dynamic
+    # mode adds (its own linear mode ignores it and works the gain out from measured_I), and its own read
+    # reports about 0. A track that goes dynamic (--allow-dynamic, the night profile, a file that does not
+    # fit linear) lands on the target as loudnorm hears it, six channels, so the offset carries only the
+    # gap between the two readings: the side channels' share, which the dynamic pass cannot hear.
+    # (Taking target - integrated here added the whole gain a second time: a 7.1 clip came out 14 dB over.)
+    def with_all_channels(integrated:, threshold:, true_peak:, range: nil)
       return self if silent? || integrated.nil? || !integrated.finite?
 
       self.class.new(
         input_i: integrated, input_tp: [input_tp, true_peak || input_tp].max, input_lra: range&.finite? ? range : input_lra,
-        input_thresh: threshold || input_thresh, target_offset: target_i - integrated
+        input_thresh: threshold || input_thresh, target_offset: target_offset + (input_i - integrated)
       )
     end
 
