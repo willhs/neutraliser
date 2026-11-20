@@ -1,3 +1,7 @@
+## [2026-11-21] docs | README ready for v0.1.0
+
+As-is notice at the top, Known limits section, Contributing reworded (no PR process). LICENSE (MIT) already existed, clone URL already real, install verified from a clean clone. The +25% bitrate sentence is marked for Will; candidate wordings are in Steady task e3946d53.
+
 ## [2026-11-21] update | 7.1 E-AC-3 under --ladder: already covered by 615c468, regression tests added
 
 Premise check of the "--ladder re-encodes 7.1 E-AC-3 then fails output verification" report (research 0006): the real-file runs predate 615c468, which made `CodecChoice` send anything over 5.1 channels to FLAC (or no encoder in an MP4) and added `Guards#channel_count`. Both run in `process_file` before the measure and the dry-run branch, for every mode including `--ladder`. No code change needed. Added `spec/processor_spec.rb` "7.1 E-AC-3 with --ladder": skipped as `codec_change` (dry run and real), FLAC under `--allow-codec-change`, `too_many_channels` in an MP4.
