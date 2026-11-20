@@ -895,6 +895,48 @@ RSpec.describe Neutraliser::Processor do
       end
     end
 
+    # 7.1 E-AC-3 under --ladder: FFmpeg's E-AC-3 encoder stops at 5.1, so the old path encoded 6 channels and then
+    # failed output verification ("normalised track has 5 channels, source has 8"). Decided before any measure now.
+    describe '7.1 E-AC-3 with --ladder' do
+      let(:eac3_71) { ProbeFixture.audio(codec: 'eac3', channels: 8, bit_rate: '1536000') }
+
+      before { stub_probe(audio: [eac3_71]) }
+
+      [false, true].each do |dry_run|
+        it "skips it as a codec change before measuring or encoding (dry_run: #{dry_run})" do
+          processor = described_class.new(ladder: true, replace: true, dry_run: dry_run)
+          expect(processor).not_to receive(:analyze_loudness_for_path)
+          expect(processor).not_to receive(:normalize_file_with_paths)
+
+          result = nil
+          expect { result = run(processor) }.to output(/Codec change.*--allow-codec-change/).to_stdout
+
+          expect(result).to have_attributes(status: :skipped, reason: :codec_change, message: 'eac3 would be re-encoded as flac')
+        end
+      end
+
+      it 'is converted to FLAC, never E-AC-3, under --allow-codec-change' do
+        expect(Neutraliser::CodecChoice.decide(eac3_71.transform_keys(&:to_sym), '.mkv')).to include(encoder: 'flac', encodable: true)
+        processor = described_class.new(ladder: true, allow_codec_change: true)
+        allow(processor).to receive(:analyze_loudness_for_path).and_return(measured)
+        allow(processor).to receive(:normalize_file_with_paths).and_return({ mode: Neutraliser::Mode::LINEAR })
+
+        expect(run(processor)).to have_attributes(status: :done)
+      end
+
+      it 'is skipped as too_many_channels in an MP4, even under --allow-codec-change' do
+        mp4 = File.join(temp_dir, 'movie.mp4')
+        File.write(mp4, 'x')
+        processor = described_class.new(ladder: true, allow_codec_change: true)
+        processor.instance_variable_set(:@skip_decider, skip_decider)
+        expect(processor).not_to receive(:analyze_loudness_for_path)
+
+        result = nil
+        expect { result = processor.send(:process_file, mp4) }.to output(/Too many channels/).to_stdout
+        expect(result).to have_attributes(status: :skipped, reason: :too_many_channels)
+      end
+    end
+
     describe 'disk guard' do
       before { stub_probe(audio: [ProbeFixture.audio(codec: 'aac', channels: 6, bit_rate: '1509000')]) }
 
