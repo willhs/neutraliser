@@ -176,6 +176,19 @@ RSpec.describe Neutraliser::CodecChoice do
       expect(rate('aac', 0)).to eq(128_000) # unknown stays at the floor, nothing to add to
     end
 
+    it 'gives 7.1 its own cap, so a 641k 7.1 AAC is not pulled down to the 5.1 cap of 512k' do
+      expect(rate('aac', 641_000, channels: 8, container: '.mp4')).to eq(768_000) # 801k, held by the 7.1 cap
+      expect(rate('aac', 641_000, channels: 6, container: '.mp4')).to eq(512_000) # 5.1 cap unchanged
+      expect(rate('aac', 384_000, channels: 8, container: '.mp4')).to eq(480_000) # under the cap: +25%
+      expect(rate('aac', 0, channels: 8, container: '.mp4')).to eq(320_000) # 7.1 floor
+    end
+
+    it 'gives 7.1 Opus and Vorbis their own floors and caps' do
+      expect(rate('opus', 800_000, channels: 8, container: '.webm')).to eq(680_000) # no headroom: held by the cap
+      expect(rate('vorbis', 800_000, channels: 8, container: '.webm')).to eq(700_000)
+      expect(rate('opus', 128_000, channels: 8, container: '.webm')).to eq(320_000)
+    end
+
     it 'leaves encoders it was not measured on alone' do
       expect(rate('mp3', 192_000)).to eq(192_000)
       expect(rate('opus', 128_000, container: '.webm')).to eq(128_000)

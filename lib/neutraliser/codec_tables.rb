@@ -25,24 +25,25 @@ module Neutraliser
 
     # Minimum quality floor bitrates per encoder (in bps)
     QUALITY_FLOORS = {
-      'aac' => { 2 => 128_000, 6 => 256_000 },
+      'aac' => { 2 => 128_000, 6 => 256_000, 8 => 320_000 },
       'ac3' => { 2 => 192_000, 6 => 384_000 },
       'eac3' => { 2 => 128_000, 6 => 256_000 },
       'libmp3lame' => { 2 => 192_000 },
       'libtwolame' => { 2 => 192_000 },
-      'libopus' => { 2 => 128_000, 6 => 256_000 },
-      'libvorbis' => { 2 => 128_000, 6 => 256_000 }
+      'libopus' => { 2 => 128_000, 6 => 256_000, 8 => 320_000 },
+      'libvorbis' => { 2 => 128_000, 6 => 256_000, 8 => 320_000 }
     }.freeze
 
-    # Maximum useful bitrates per encoder (in bps)
+    # Maximum useful bitrates per encoder (in bps). The 8 key (7.1) is above the 5.1 one: a 7.1 AAC
+    # at 641k must not be pulled down to the 5.1 cap of 512k (it would land below its source).
     QUALITY_CAPS = {
-      'aac' => { 2 => 320_000, 6 => 512_000 },
+      'aac' => { 2 => 320_000, 6 => 512_000, 8 => 768_000 },
       'ac3' => { 2 => 640_000, 6 => 640_000 },
       'eac3' => { 2 => 640_000, 6 => 1_536_000 },
       'libmp3lame' => { 2 => 320_000 },
       'libtwolame' => { 2 => 384_000 },
-      'libopus' => { 2 => 256_000, 6 => 510_000 },
-      'libvorbis' => { 2 => 256_000, 6 => 500_000 }
+      'libopus' => { 2 => 256_000, 6 => 510_000, 8 => 680_000 },
+      'libvorbis' => { 2 => 256_000, 6 => 500_000, 8 => 700_000 }
     }.freeze
 
     # Bitrate headroom (research 0004): the re-encode is one more lossy generation, and +25% bits on the

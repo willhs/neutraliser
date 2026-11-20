@@ -120,7 +120,7 @@ module Neutraliser
     def self.resolve_bitrate(encoder, first_generation, channels, headroom:)
       return nil if lossless_encoder?(encoder)
 
-      channel_key = channels >= 6 ? 6 : 2
+      channel_key = [8, 6].find { |key| channels >= key } || 2
       floor = QUALITY_FLOORS.dig(encoder, channel_key) || QUALITY_FLOORS.dig(encoder, 2) || 128_000
       cap = QUALITY_CAPS.dig(encoder, channel_key) || QUALITY_CAPS.dig(encoder, 2) || 640_000
 

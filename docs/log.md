@@ -1,3 +1,7 @@
+## [2026-11-21] fix | 7.1 AAC bitrate cap no longer uses the 5.1 cap
+
+`CodecChoice.resolve_bitrate` picked the 5.1 floor and cap for any track with 6+ channels, so a 641k 7.1 AAC came back at 512k, below its source. Added an 8-channel key to `QUALITY_FLOORS` and `QUALITY_CAPS` for aac (cap 768k), libopus (cap 680k) and libvorbis (cap 700k); the resolver now picks 8 for 7.1. 5.1 and stereo are unchanged. Spec in `spec/codec_choice_spec.rb`.
+
 ## [2026-11-21] create | Research 0007: sceptical review of the 7.1 and E-AC-3 changes; fix 7.1 dynamic overshoot
 
 Reviewed 615c468 (7.1 to FLAC or skip up front) and f96462a (regression specs only) with synthetic ffmpeg files across MKV, MP4, M4V, MOV, WebM and every flag. Neither change has a bug of its own. Found one serious older one: the 7.1 loudness read set loudnorm's `offset=` to the whole gain to target, which loudnorm's dynamic mode (`--allow-dynamic`, night profile) adds as extra gain, so 7.1 came out about 14 dB over (-5.7 LUFS for -20). Fixed in `Measurement#with_all_channels` (offset is now loudnorm's own plus the side channels' gap), cache version 1.4, real-ffmpeg specs. README corrected: only AC-3 / E-AC-3 / DTS / TrueHD 7.1 are converted; AAC, Opus, Vorbis, FLAC and PCM 7.1 are levelled in place. Five smaller items filed as Steady tasks.
