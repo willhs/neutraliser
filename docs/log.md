@@ -1,3 +1,7 @@
+## [2026-11-21] fix | Unnamed 7-channel tracks measure again (research 0007 findings 6 and 8)
+
+A 7-channel track ffprobe reports with layout `unknown` (ffmpeg's own AAC 6.1) failed every measure: the ebur128 branch of the split read cannot map seven unnamed channels. `Measurement.side_channels` now adds `layout: '6.1'` for that case and `FFmpegWrapper.loudness_graph_args` puts `aformat=channel_layouts=6.1` ahead of the split. Named layouts and 7.1 are untouched. The `report` "untouched, one reason" count is by design (a failed file leaves no record), so it is not changed. Spec: `spec/unnamed_seven_channel_spec.rb`.
+
 ## [2026-11-21] fix | 7.1 AAC bitrate cap no longer uses the 5.1 cap
 
 `CodecChoice.resolve_bitrate` picked the 5.1 floor and cap for any track with 6+ channels, so a 641k 7.1 AAC came back at 512k, below its source. Added an 8-channel key to `QUALITY_FLOORS` and `QUALITY_CAPS` for aac (cap 768k), libopus (cap 680k) and libvorbis (cap 700k); the resolver now picks 8 for 7.1. 5.1 and stereo are unchanged. Spec in `spec/codec_choice_spec.rb`.

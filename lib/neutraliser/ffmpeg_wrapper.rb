@@ -61,13 +61,13 @@ module Neutraliser
     # loudnorm's (Measurement#with_all_channels). Left nil, or at six and under, the read is loudnorm alone.
     def self.measure_loudness(input_path, target_i: -20.0, target_tp: -1.5, target_lra: 12.0, input_args: [],
                               duration: nil, start_offset: nil, audio_index: 0, pre_filter: nil, channels: nil,
-                              track_read: false)
+                              track_read: false, layout: nil)
       loudnorm = "loudnorm=I=#{target_i}:TP=#{target_tp}:LRA=#{loudnorm_lra(target_lra)}:print_format=json"
       cmd = ['ffmpeg', '-hide_banner', '-nostats', *DolbyStream::DRC_OFF, *input_args]
       cmd += ['-ss', start_offset.round.to_s] if start_offset&.positive?
       cmd += ['-i', input_path]
       cmd += ['-t', duration.to_s] if duration
-      cmd += loudness_graph_args(audio_index, pre_filter, loudnorm, channels)
+      cmd += loudness_graph_args(audio_index, pre_filter, loudnorm, channels, layout)
       cmd += ['-progress', 'pipe:2'] if track_read
       cmd += ['-f', 'null', '-']
 
@@ -79,10 +79,14 @@ module Neutraliser
 
     # The -map / filter arguments for a loudness read: loudnorm alone, or for a track with channels
     # loudnorm doesn't count, one decode split into loudnorm and ebur128.
-    def self.loudness_graph_args(audio_index, pre_filter, loudnorm, channels)
+    #
+    # layout names a channel layout to give the stream first (`aformat`): ebur128 cannot map seven channels
+    # ffprobe reports as `unknown`, so Measurement.side_channels asks for 6.1 there.
+    def self.loudness_graph_args(audio_index, pre_filter, loudnorm, channels, layout = nil)
       return ['-map', "0:a:#{audio_index}", '-af', [pre_filter, loudnorm].compact.join(',')] unless channels.to_i > Measurement::LOUDNORM_CHANNELS
 
-      head = ["[0:a:#{audio_index}]", pre_filter && "#{pre_filter},", 'asplit[a][b]'].compact.join
+      head = ["[0:a:#{audio_index}]", pre_filter && "#{pre_filter},", layout && "aformat=channel_layouts=#{layout},",
+              'asplit[a][b]'].compact.join
       # verbose suppresses frame logs at the default info level, including on FFmpeg 4.2.
       ['-filter_complex', "#{head};[a]#{loudnorm}[loudnorm];[b]ebur128=peak=true:framelog=verbose[ebur]",
        '-map', '[loudnorm]', '-map', '[ebur]']
@@ -208,6 +212,7 @@ module Neutraliser
       input_path = source.path
       audio_index = source.primary_track[:index]
       channels = source.primary_track[:channels]
+      layout = Measurement.side_channels(source.primary_track)[:layout]
       total_duration = source.duration
       return nil unless total_duration
       return nil if total_duration < duration * 2 # File too short for meaningful sample
@@ -219,7 +224,7 @@ module Neutraliser
         'ffmpeg', '-hide_banner', '-nostats', *DolbyStream::DRC_OFF,
         '-ss', start_time.to_s, '-i', input_path,
         '-t', duration.to_s,
-        *loudness_graph_args(audio_index, nil, "loudnorm=I=#{target_i}:print_format=json", channels),
+        *loudness_graph_args(audio_index, nil, "loudnorm=I=#{target_i}:print_format=json", channels, layout),
         '-f', 'null', '-'
       ]
 

@@ -13,11 +13,18 @@ module Neutraliser
     # loudnorm (libebur128 behind it) weighs the first six channels only; the 7th and 8th of a 7.1 layout
     # (the side surrounds) are dropped, so a track above this is also read with ebur128 (#with_all_channels).
     LOUDNORM_CHANNELS = 6
+    UNNAMED_SEVEN_LAYOUT = '6.1'.freeze
 
     # The `channels:` keyword for FFmpegWrapper.measure_loudness, only for a track with channels loudnorm
     # doesn't count: splat it into the call, so every other track is measured by exactly the call it always was.
+    #
+    # Seven channels with no layout name (ffprobe `unknown`, e.g. ffmpeg's own AAC 6.1) cannot be mapped
+    # by the ebur128 branch, so they are read as 6.1 (`layout:`).
     def self.side_channels(track)
-      track[:channels].to_i > LOUDNORM_CHANNELS ? { channels: track[:channels] } : {}
+      return {} unless track[:channels].to_i > LOUDNORM_CHANNELS
+
+      unnamed = track[:channels].to_i == 7 && track[:channel_layout].to_s.strip.then { |l| l.empty? || l == 'unknown' }
+      unnamed ? { channels: track[:channels], layout: UNNAMED_SEVEN_LAYOUT } : { channels: track[:channels] }
     end
 
     attr_reader :input_i, :input_tp, :input_lra, :input_thresh, :target_offset
