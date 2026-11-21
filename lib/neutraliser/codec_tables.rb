@@ -21,7 +21,7 @@ module Neutraliser
     }.freeze
 
     # Codecs considered lossless
-    LOSSLESS_CODECS = %w[flac pcm_s16le pcm_s16be pcm_s24le pcm_f32le truehd pcm_s32le].freeze
+    LOSSLESS_CODECS = %w[flac pcm_s16le pcm_s16be pcm_s24le pcm_f32le truehd pcm_s32le pcm_s24be pcm_s32be pcm_f64le pcm_bluray].freeze
 
     # Minimum quality floor bitrates per encoder (in bps)
     QUALITY_FLOORS = {

@@ -65,6 +65,17 @@ RSpec.describe Neutraliser::CodecChoice do
     expect(result[:bitrate]).to eq(128_000)
   end
 
+  it 'sends Blu-ray big-endian LPCM to FLAC in MKV without counting a codec change' do
+    %w[pcm_s24be pcm_s32le pcm_bluray].each do |codec|
+      result = described_class.decide(make_track(codec: codec, channels: 8), '.mkv')
+      expect(result).to include(encoder: 'flac', lossless_output: true, changes_codec: false)
+    end
+  end
+
+  it 'still counts lossless-to-lossy as a codec change' do
+    expect(described_class.decide(make_track(codec: 'pcm_s24be', channels: 2), '.mp4')).to include(changes_codec: true)
+  end
+
   describe 'more than 5.1 channels (ffmpeg\'s AC-3 and E-AC-3 stop at 5.1)' do
     it 'sends 7.1 E-AC-3 to FLAC where the container allows it' do
       result = described_class.decide(make_track(codec: 'eac3', channels: 8, bit_rate: 1_536_000), '.mkv')

@@ -1,3 +1,7 @@
+## [2026-11-21] fix | Blu-ray LPCM (pcm_s24be, pcm_s32le) is lossless, not a codec change
+
+PCM sources going to FLAC/PCM no longer trip the codec-change guard (`CodecChoice.changes_codec?`); added pcm_s24be/s32be/f64le/bluray to LOSSLESS_CODECS. Output is FLAC in MKV.
+
 ## [2026-11-21] fix | Unnamed 7-channel tracks measure again (research 0007 findings 6 and 8)
 
 A 7-channel track ffprobe reports with layout `unknown` (ffmpeg's own AAC 6.1) failed every measure: the ebur128 branch of the split read cannot map seven unnamed channels. `Measurement.side_channels` now adds `layout: '6.1'` for that case and `FFmpegWrapper.loudness_graph_args` puts `aformat=channel_layouts=6.1` ahead of the split. Named layouts and 7.1 are untouched. The `report` "untouched, one reason" count is by design (a failed file leaves no record), so it is not changed. Spec: `spec/unnamed_seven_channel_spec.rb`.

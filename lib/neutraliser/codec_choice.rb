@@ -37,7 +37,7 @@ module Neutraliser
         source_bitrate: source_bitrate,
         first_generation_bitrate: first_generation,
         lossless_output: lossless_encoder?(encoder),
-        changes_codec: ENCODABLE_CODECS[source_codec] != encoder
+        changes_codec: changes_codec?(source_codec, encoder)
       }
     end
 
@@ -49,6 +49,14 @@ module Neutraliser
       { encoder: nil, encodable: false, channels: channels, bitrate: nil, source_codec: source_codec,
         source_profile: track[:profile], source_bitrate: nil, first_generation_bitrate: nil,
         lossless_output: false, changes_codec: true }
+    end
+
+    # PCM to PCM or FLAC loses nothing, so it is not the codec change the guard exists for
+    # (Blu-ray remuxes carry pcm_s24be, which nothing here writes: it goes out as FLAC).
+    def self.changes_codec?(source_codec, encoder)
+      return false if source_codec.start_with?('pcm_') && lossless_encoder?(encoder)
+
+      ENCODABLE_CODECS[source_codec] != encoder
     end
 
     def self.lossless_encoder?(encoder)
