@@ -1,3 +1,7 @@
+## [2026-11-21] research | Sceptical review of the opt-in --lossy71 route
+
+Ran 138eda0 through `process` on synthetic 7.1 / 6.1 files (MKV, MP4, M4V, MOV, AVI; AAC, Opus; faked E-AC-3, AC-3, DTS, TrueHD sources). No serious bug; default unchanged and the consent gate holds. Fixed one S wording bug (a 6.1 track was called 7.1 in the too_many_channels message). Findings for later: AAC 7.1(wide) and 6.1 use a PCE (channel_config 0) that many players ignore; `--lossy71 opus` on 7.1(wide) in MKV silently becomes FLAC; no real_ffmpeg spec for the flag; real E-AC-3 7.1 and real players untested. Filed under goal 669c751d. See `docs/research/0008-lossy-71-route-sceptical-review/research.md`.
+
 ## [2026-11-21] update | Opt-in AAC/Opus route for lossy 7.1; too_many_channels message names the options
 
 Research 0007 finding 3. `--lossy71 aac|opus` (with `--allow-codec-change`) writes an over-5.1 track

@@ -58,6 +58,7 @@ Entry point and navigation map for the neutraliser documentation set. Neutralise
 - [`research/pre-release-review-2026-11.md`](research/pre-release-review-2026-11.md) — Updated 2026-11-16: second --ladder sweep after sidecar loss run, not re-encoded
 - [`research/0006-71-and-atmos-real-files/research.md`](research/0006-71-and-atmos-real-files/research.md) — 7.1 and Atmos tracks in the real library (counts) and 8 measured against independent meters: meter, skips and name hints as specified; E-AC-3 7.1 fails under --ladder, analyze-plex reads a different track from a sweep
 - [`research/0007-71-eac3-sceptical-review/research.md`](research/0007-71-eac3-sceptical-review/research.md) — Sceptical review of the 7.1 / E-AC-3 changes before v0.1.0: 7.1 under --allow-dynamic and night was 14 dB over (fixed); README corrected; E-AC-3 7.1 limits, LPCM, 7.1 AAC cap filed as tasks
+- [`research/0008-lossy-71-route-sceptical-review/research.md`](research/0008-lossy-71-route-sceptical-review/research.md) — Sceptical review of the opt-in --lossy71 aac|opus route: no serious bug, AAC 7.1(wide)/6.1 use a PCE, Opus-to-FLAC fallback is silent, real E-AC-3 and players untested
 
 ## Tasks
 - [`tasks/0001-plex-library-analysis/task.md`](tasks/0001-plex-library-analysis/task.md) — Plex library audio analysis command (complete)

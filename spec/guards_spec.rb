@@ -253,6 +253,12 @@ RSpec.describe Neutraliser::Guards do
       expect(verdict.message).to end_with('; --lossy71 aac with --allow-codec-change levels it as AAC 7.1')
     end
 
+    it 'calls a seven-channel track 6.1 in the message, not 7.1' do
+      eac3 = source(audio: [ProbeFixture.audio(codec: 'eac3', channels: 7)])
+
+      expect(guards.channel_count(mp4, eac3).message).to match(/levels it as .* 6\.1\z/)
+    end
+
     it 'lets E-AC-3 7.1 through in an MP4 under --lossy71 (the codec-change guard then decides)' do
       eac3 = source(audio: [ProbeFixture.audio(codec: 'eac3', channels: 8)])
       lossy = described_class.new(**guards_options(lossy71: 'aac'))

@@ -1,0 +1,153 @@
+
+=== A1 mkv 7.1 eac3 default (--allow-codec-change)
+[2026-11-21 18:07:06] Processing: /tmp/l71/out/1795237622602410000/flac71_mkv.mkv
+[2026-11-21 18:07:06]   Note: FLAC 7.1 is about 3-5x the size of the E-AC-3 (3-6 Mbit/s against 0.77-1.5), and many TV clients cannot play multichannel FLAC; --lossy71 aac keeps it lossy
+[2026-11-21 18:07:07]   Current: -37.9 LUFS, Target: -20.0 LUFS (17.9 LU adjustment)
+[2026-11-21 18:07:08]   Audio: eac3 1024k -> flac (lossless)
+[2026-11-21 18:07:08]   Normalization: Linear
+[2026-11-21 18:07:08]   Replaced: /tmp/l71/out/1795237622602410000/flac71_mkv.mkv
+Summary: found=1, queued=1, resumed=0, done=1, skipped=0, failed=0, linear=1, dynamic=0, limited=0
+-- result: flac,8,7.1,N/A,linear 
+
+=== A2 mkv 7.1 eac3 aac
+[2026-11-21 18:07:10] Processing: /tmp/l71/out/1795237628761161000/flac71_mkv.mkv
+[2026-11-21 18:07:12]   Current: -37.9 LUFS, Target: -20.0 LUFS (17.9 LU adjustment)
+[2026-11-21 18:07:14]   Audio: eac3 1024k -> aac 768k
+[2026-11-21 18:07:14]   Normalization: Linear
+[2026-11-21 18:07:14]   Replaced: /tmp/l71/out/1795237628761161000/flac71_mkv.mkv
+Summary: found=1, queued=1, resumed=0, done=1, skipped=0, failed=0, linear=1, dynamic=0, limited=0
+-- result: aac,8,7.1,N/A,linear 
+
+=== A3 mkv 7.1 eac3 opus
+[2026-11-21 18:07:16] Processing: /tmp/l71/out/1795237635145924000/flac71_mkv.mkv
+[2026-11-21 18:07:18]   Current: -37.9 LUFS, Target: -20.0 LUFS (17.9 LU adjustment)
+[2026-11-21 18:07:18]   Audio: eac3 1024k -> libopus 680k
+[2026-11-21 18:07:18]   Normalization: Linear
+[2026-11-21 18:07:19]   Replaced: /tmp/l71/out/1795237635145924000/flac71_mkv.mkv
+Summary: found=1, queued=1, resumed=0, done=1, skipped=0, failed=0, linear=1, dynamic=0, limited=0
+-- result: opus,8,7.1,N/A,linear 
+
+=== B1 mkv 7.1(wide) eac3 opus
+[2026-11-21 18:07:23] Processing: /tmp/l71/out/1795237639820338000/flac71wide_mkv.mkv
+[2026-11-21 18:07:23]   Note: FLAC 7.1 is about 3-5x the size of the E-AC-3 (3-6 Mbit/s against 0.77-1.5), and many TV clients cannot play multichannel FLAC; --lossy71 aac keeps it lossy
+[2026-11-21 18:07:26]   Current: -38.8 LUFS, Target: -20.0 LUFS (18.8 LU adjustment)
+[2026-11-21 18:07:26]   Audio: eac3 1024k -> flac (lossless)
+[2026-11-21 18:07:26]   Normalization: Linear
+[2026-11-21 18:07:27]   Replaced: /tmp/l71/out/1795237639820338000/flac71wide_mkv.mkv
+Summary: found=1, queued=1, resumed=0, done=1, skipped=0, failed=0, linear=1, dynamic=0, limited=0
+-- result: flac,8,7.1(wide),N/A,linear 
+
+=== B2 mkv 7.1(wide) eac3 aac
+[2026-11-21 18:07:29] Processing: /tmp/l71/out/1795237647600619000/flac71wide_mkv.mkv
+[2026-11-21 18:07:31]   Current: -38.8 LUFS, Target: -20.0 LUFS (18.8 LU adjustment)
+[2026-11-21 18:07:34]   Audio: eac3 1024k -> aac 768k
+[2026-11-21 18:07:34]   Normalization: Linear
+[2026-11-21 18:07:34]   Replaced: /tmp/l71/out/1795237647600619000/flac71wide_mkv.mkv
+Summary: found=1, queued=1, resumed=0, done=1, skipped=0, failed=0, linear=1, dynamic=0, limited=0
+-- result: aac,8,unknown,N/A,linear 
+
+=== C1 mp4 7.1 eac3 no flags
+[2026-11-21 18:07:38] Processing: /tmp/l71/out/1795237655516866000/flac71_mp4.mp4
+[2026-11-21 18:07:38]   Too many channels (eac3 with 8 channels can't be re-encoded in .mp4 as it is: ffmpeg's AC-3 and E-AC-3 stop at 5.1 and .mp4 takes no FLAC; --lossy71 aac or opus with --allow-codec-change levels it as AAC or Opus 7.1), skipping
+Summary: found=1, queued=1, resumed=0, done=0, skipped=1, failed=0, linear=0, dynamic=0, limited=0
+-- result: flac,8,7.1,9052221 
+
+=== C2 mp4 7.1 eac3 --allow-codec-change only
+[2026-11-21 18:07:42] Processing: /tmp/l71/out/1795237658985841000/flac71_mp4.mp4
+[2026-11-21 18:07:42]   Too many channels (eac3 with 8 channels can't be re-encoded in .mp4 as it is: ffmpeg's AC-3 and E-AC-3 stop at 5.1 and .mp4 takes no FLAC; --lossy71 aac or opus with --allow-codec-change levels it as AAC or Opus 7.1), skipping
+Summary: found=1, queued=1, resumed=0, done=0, skipped=1, failed=0, linear=0, dynamic=0, limited=0
+-- result: flac,8,7.1,9052221 
+
+=== C3 mp4 7.1 eac3 --lossy71 aac only (no consent)
+[2026-11-21 18:07:44] Note: --lossy71 aac converts a track's codec, so it takes effect only with --allow-codec-change
+[2026-11-21 18:07:46] Processing: /tmp/l71/out/1795237663426730000/flac71_mp4.mp4
+[2026-11-21 18:07:46]   Codec change (eac3 would be re-encoded as aac), skipping (--allow-codec-change to process anyway)
+Summary: found=1, queued=1, resumed=0, done=0, skipped=1, failed=0, linear=0, dynamic=0, limited=0
+-- result: flac,8,7.1,9052221 
+
+=== C4 mp4 7.1 eac3 aac+consent
+[2026-11-21 18:07:51] Processing: /tmp/l71/out/1795237667287627000/flac71_mp4.mp4
+[2026-11-21 18:07:56]   Current: -37.9 LUFS, Target: -20.0 LUFS (17.9 LU adjustment)
+[2026-11-21 18:07:58]   Audio: eac3 1024k -> aac 768k
+[2026-11-21 18:07:58]   Normalization: Linear
+[2026-11-21 18:07:59]   Replaced: /tmp/l71/out/1795237667287627000/flac71_mp4.mp4
+Summary: found=1, queued=1, resumed=0, done=1, skipped=0, failed=0, linear=1, dynamic=0, limited=0
+-- result: aac,8,7.1,763574 
+
+=== C5 mp4 7.1 eac3 opus+consent
+[2026-11-21 18:08:02] Processing: /tmp/l71/out/1795237679972234000/flac71_mp4.mp4
+[2026-11-21 18:08:05]   Current: -37.9 LUFS, Target: -20.0 LUFS (17.9 LU adjustment)
+[2026-11-21 18:08:05]   Audio: eac3 1024k -> libopus 680k
+[2026-11-21 18:08:05]   Normalization: Linear
+[2026-11-21 18:08:06]   Replaced: /tmp/l71/out/1795237679972234000/flac71_mp4.mp4
+Summary: found=1, queued=1, resumed=0, done=1, skipped=0, failed=0, linear=1, dynamic=0, limited=0
+-- result: opus,8,7.1,507454 
+
+=== D1 mp4 7.1(wide) eac3 no flag
+[2026-11-21 18:08:10] Processing: /tmp/l71/out/1795237687371822000/flac71_mp4.mp4
+[2026-11-21 18:08:10]   Too many channels (eac3 with 8 channels can't be re-encoded in .mp4 as it is: ffmpeg's AC-3 and E-AC-3 stop at 5.1 and .mp4 takes no FLAC; --lossy71 aac with --allow-codec-change levels it as AAC 7.1), skipping
+Summary: found=1, queued=1, resumed=0, done=0, skipped=1, failed=0, linear=0, dynamic=0, limited=0
+-- result: flac,8,7.1,9052221 
+
+=== D2 mp4 7.1(wide) eac3 opus
+[2026-11-21 18:08:15] Processing: /tmp/l71/out/1795237691103223000/flac71_mp4.mp4
+[2026-11-21 18:08:15]   Too many channels (eac3 with 8 channels can't be re-encoded in .mp4 as it is: ffmpeg's AC-3 and E-AC-3 stop at 5.1 and .mp4 takes no FLAC; --lossy71 aac with --allow-codec-change levels it as AAC 7.1), skipping
+Summary: found=1, queued=1, resumed=0, done=0, skipped=1, failed=0, linear=0, dynamic=0, limited=0
+-- result: flac,8,7.1,9052221 
+
+=== D3 mp4 7.1(wide) eac3 aac
+[2026-11-21 18:08:21] Processing: /tmp/l71/out/1795237697046099000/flac71_mp4.mp4
+[2026-11-21 18:08:24]   Current: -37.9 LUFS, Target: -20.0 LUFS (17.9 LU adjustment)
+[2026-11-21 18:08:27]   Audio: eac3 1024k -> aac 768k
+[2026-11-21 18:08:27]   Normalization: Linear
+[2026-11-21 18:08:28]   Replaced: /tmp/l71/out/1795237697046099000/flac71_mp4.mp4
+Summary: found=1, queued=1, resumed=0, done=1, skipped=0, failed=0, linear=1, dynamic=0, limited=0
+-- result: aac,8,7.1,763574 
+
+=== E1 mp4 unnamed 8ch eac3 no flag
+[2026-11-21 18:08:31] Processing: /tmp/l71/out/1795237708966868000/flac71_mp4.mp4
+[2026-11-21 18:08:31]   Too many channels (eac3 with 8 channels can't be re-encoded in .mp4 as it is: ffmpeg's AC-3 and E-AC-3 stop at 5.1 and .mp4 takes no FLAC; --lossy71 aac or opus with --allow-codec-change levels it as AAC or Opus 7.1), skipping
+Summary: found=1, queued=1, resumed=0, done=0, skipped=1, failed=0, linear=0, dynamic=0, limited=0
+-- result: flac,8,7.1,9052221 
+
+=== E2 mp4 unnamed 8ch eac3 opus
+[2026-11-21 18:08:36] Processing: /tmp/l71/out/1795237712623791000/flac71_mp4.mp4
+[2026-11-21 18:08:38]   Current: -37.9 LUFS, Target: -20.0 LUFS (17.9 LU adjustment)
+[2026-11-21 18:08:39]   Audio: eac3 1024k -> libopus 680k
+[2026-11-21 18:08:39]   Normalization: Linear
+[2026-11-21 18:08:39]   Replaced: /tmp/l71/out/1795237712623791000/flac71_mp4.mp4
+Summary: found=1, queued=1, resumed=0, done=1, skipped=0, failed=0, linear=1, dynamic=0, limited=0
+-- result: opus,8,7.1,507454 
+
+=== E3 mp4 unnamed 8ch eac3 aac
+[2026-11-21 18:08:46] Processing: /tmp/l71/out/1795237720782338000/flac71_mp4.mp4
+[2026-11-21 18:08:49]   Current: -37.9 LUFS, Target: -20.0 LUFS (17.9 LU adjustment)
+[2026-11-21 18:08:50]   Audio: eac3 1024k -> aac 768k
+[2026-11-21 18:08:50]   Normalization: Linear
+[2026-11-21 18:08:51]   Replaced: /tmp/l71/out/1795237720782338000/flac71_mp4.mp4
+Summary: found=1, queued=1, resumed=0, done=1, skipped=0, failed=0, linear=1, dynamic=0, limited=0
+-- result: aac,8,7.1,763574 
+
+=== F1 mp4 6.1 (7ch) eac3 no flag
+[2026-11-21 18:08:54] Processing: /tmp/l71/out/1795237732115748000/flac61_mp4.mp4
+[2026-11-21 18:08:54]   Too many channels (eac3 with 7 channels can't be re-encoded in .mp4 as it is: ffmpeg's AC-3 and E-AC-3 stop at 5.1 and .mp4 takes no FLAC; --lossy71 aac or opus with --allow-codec-change levels it as AAC or Opus 7.1), skipping
+Summary: found=1, queued=1, resumed=0, done=0, skipped=1, failed=0, linear=0, dynamic=0, limited=0
+-- result: flac,7,6.1,7842102 
+
+=== F2 mp4 6.1 (7ch) eac3 opus
+[2026-11-21 18:08:57] Processing: /tmp/l71/out/1795237735322185000/flac61_mp4.mp4
+[2026-11-21 18:09:00]   Current: -39.9 LUFS, Target: -20.0 LUFS (19.9 LU adjustment)
+[2026-11-21 18:09:01]   Audio: eac3 640k -> libopus 510k
+[2026-11-21 18:09:01]   Normalization: Linear
+[2026-11-21 18:09:03]   Replaced: /tmp/l71/out/1795237735322185000/flac61_mp4.mp4
+Summary: found=1, queued=1, resumed=0, done=1, skipped=0, failed=0, linear=1, dynamic=0, limited=0
+-- result: opus,7,6.1,403777 
+
+=== F3 mp4 6.1 (7ch) eac3 aac
+[2026-11-21 18:09:09] Processing: /tmp/l71/out/1795237743741288000/flac61_mp4.mp4
+[2026-11-21 18:09:10]   Current: -39.9 LUFS, Target: -20.0 LUFS (19.9 LU adjustment)
+[2026-11-21 18:09:12]   Audio: eac3 640k -> aac 512k
+[2026-11-21 18:09:12]   Normalization: Linear
+[2026-11-21 18:09:13]   Replaced: /tmp/l71/out/1795237743741288000/flac61_mp4.mp4
+Summary: found=1, queued=1, resumed=0, done=1, skipped=0, failed=0, linear=1, dynamic=0, limited=0
+-- result: aac,7,unknown,511239 

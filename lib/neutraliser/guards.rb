@@ -189,7 +189,12 @@ module Neutraliser
       return '' if options.empty?
 
       "; --lossy71 #{options.join(' or ')} with --allow-codec-change levels it as " \
-        "#{options.map { |option| LOSSY_71_NAMES.fetch(option) }.join(' or ')} 7.1"
+        "#{options.map { |option| LOSSY_71_NAMES.fetch(option) }.join(' or ')} #{channel_name(track)}"
+    end
+
+    # 7.1 for eight channels, 6.1 for seven: the message names what the track is, not always 7.1.
+    def channel_name(track)
+      track[:channels].to_i == 7 ? '6.1' : '7.1'
     end
 
     # A lossy over-5.1 track about to become (or skipped for becoming) FLAC: what that costs, and the

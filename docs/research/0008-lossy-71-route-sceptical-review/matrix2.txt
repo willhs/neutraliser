@@ -1,0 +1,158 @@
+
+=== G1 avi 7.1 eac3 aac
+[2026-11-21 18:10:39] Processing: /tmp/l71/out/1795237835441940000/pcm71_avi.avi
+[2026-11-21 18:10:40]   Current: -37.9 LUFS, Target: -20.0 LUFS (17.9 LU adjustment)
+[2026-11-21 18:10:42]   Audio: eac3 1024k -> aac 768k
+[2026-11-21 18:10:42]   Normalization: Linear
+[2026-11-21 18:10:42]   Replaced: /tmp/l71/out/1795237835441940000/pcm71_avi.avi
+Summary: found=1, queued=1, resumed=0, done=1, skipped=0, failed=0, linear=1, dynamic=0, limited=0
+-- result: aac,8,7.1,768000 
+
+=== G2 avi 7.1 eac3 opus
+[2026-11-21 18:10:51] Processing: /tmp/l71/out/1795237845083524000/pcm71_avi.avi
+[2026-11-21 18:10:51]   Too many channels (eac3 with 8 channels can't be re-encoded in .avi as it is: ffmpeg's AC-3 and E-AC-3 stop at 5.1 and .avi takes no FLAC; --lossy71 aac with --allow-codec-change levels it as AAC 7.1), skipping
+Summary: found=1, queued=1, resumed=0, done=0, skipped=1, failed=0, linear=0, dynamic=0, limited=0
+-- result: pcm_s16le,8,7.1,6144000 
+
+=== G3 avi 7.1 eac3 no flag
+[2026-11-21 18:10:55] Processing: /tmp/l71/out/1795237852528797000/pcm71_avi.avi
+[2026-11-21 18:10:55]   Too many channels (eac3 with 8 channels can't be re-encoded in .avi as it is: ffmpeg's AC-3 and E-AC-3 stop at 5.1 and .avi takes no FLAC; --lossy71 aac with --allow-codec-change levels it as AAC 7.1), skipping
+Summary: found=1, queued=1, resumed=0, done=0, skipped=1, failed=0, linear=0, dynamic=0, limited=0
+-- result: pcm_s16le,8,7.1,6144000 
+
+=== H1 mov 7.1 eac3 aac
+[2026-11-21 18:10:58] Processing: /tmp/l71/out/1795237855826112000/pcm71_mov.mov
+[2026-11-21 18:11:00]   Current: -37.9 LUFS, Target: -20.0 LUFS (17.9 LU adjustment)
+[2026-11-21 18:11:03]   Audio: eac3 1024k -> aac 768k
+[2026-11-21 18:11:03]   Normalization: Linear
+[2026-11-21 18:11:03]   Replaced: /tmp/l71/out/1795237855826112000/pcm71_mov.mov
+Summary: found=1, queued=1, resumed=0, done=1, skipped=0, failed=0, linear=1, dynamic=0, limited=0
+-- result: aac,8,7.1,763575 
+
+=== H2 mov 7.1 eac3 opus
+[2026-11-21 18:11:07] Processing: /tmp/l71/out/1795237864447194000/pcm71_mov.mov
+[2026-11-21 18:11:07]   Too many channels (eac3 with 8 channels can't be re-encoded in .mov as it is: ffmpeg's AC-3 and E-AC-3 stop at 5.1 and .mov takes no FLAC; --lossy71 aac with --allow-codec-change levels it as AAC 7.1), skipping
+Summary: found=1, queued=1, resumed=0, done=0, skipped=1, failed=0, linear=0, dynamic=0, limited=0
+-- result: pcm_s16le,8,7.1,6144000 
+
+=== I1 m4v 7.1 eac3 aac
+[2026-11-21 18:11:10] Processing: /tmp/l71/out/1795237867992956000/lossy71_m4v.m4v
+[2026-11-21 18:11:12]   Current: -37.9 LUFS, Target: -20.0 LUFS (17.9 LU adjustment)
+[2026-11-21 18:11:15]   Audio: eac3 1024k -> aac 768k
+[2026-11-21 18:11:15]   Normalization: Linear
+[2026-11-21 18:11:15]   Replaced: /tmp/l71/out/1795237867992956000/lossy71_m4v.m4v
+Summary: found=1, queued=1, resumed=0, done=1, skipped=0, failed=0, linear=1, dynamic=0, limited=0
+-- result: aac,8,7.1,763574 
+
+=== J1 mkv 7.1 dts(lossy HRA) aac
+[2026-11-21 18:11:18] Processing: /tmp/l71/out/1795237876376620000/flac71_mkv.mkv
+[2026-11-21 18:11:19]   Current: -37.9 LUFS, Target: -20.0 LUFS (17.9 LU adjustment)
+[2026-11-21 18:11:21]   Audio: dts (DTS-HD HRA) 1509k -> aac 768k
+[2026-11-21 18:11:21]   Normalization: Linear
+[2026-11-21 18:11:21]   Replaced: /tmp/l71/out/1795237876376620000/flac71_mkv.mkv
+Summary: found=1, queued=1, resumed=0, done=1, skipped=0, failed=0, linear=1, dynamic=0, limited=0
+-- result: aac,8,7.1,N/A,linear 
+
+=== J2 mkv 7.1 dts-hd ma (lossless) aac -> expect flac
+[2026-11-21 18:11:24] Processing: /tmp/l71/out/1795237882316146000/flac71_mkv.mkv
+[2026-11-21 18:11:26]   Current: -37.9 LUFS, Target: -20.0 LUFS (17.9 LU adjustment)
+[2026-11-21 18:11:26]   Audio: dts (DTS-HD MA) 4000k -> flac (lossless)
+[2026-11-21 18:11:26]   Normalization: Linear
+[2026-11-21 18:11:26]   Replaced: /tmp/l71/out/1795237882316146000/flac71_mkv.mkv
+Summary: found=1, queued=1, resumed=0, done=1, skipped=0, failed=0, linear=1, dynamic=0, limited=0
+-- result: flac,8,7.1,N/A,linear 
+
+=== J3 mp4 7.1 dts-hd ma (lossless) aac -> expect aac
+[2026-11-21 18:11:29] Processing: /tmp/l71/out/1795237887382614000/flac71_mp4.mp4
+[2026-11-21 18:11:31]   Current: -37.9 LUFS, Target: -20.0 LUFS (17.9 LU adjustment)
+[2026-11-21 18:11:32]   Audio: dts (DTS-HD MA) 4000k -> aac 768k
+[2026-11-21 18:11:32]   Normalization: Linear
+[2026-11-21 18:11:33]   Replaced: /tmp/l71/out/1795237887382614000/flac71_mp4.mp4
+Summary: found=1, queued=1, resumed=0, done=1, skipped=0, failed=0, linear=1, dynamic=0, limited=0
+-- result: aac,8,7.1,763574 
+
+=== J4 mp4 7.1 truehd aac
+[2026-11-21 18:11:35] Processing: /tmp/l71/out/1795237893626352000/flac71_mp4.mp4
+[2026-11-21 18:11:37]   Current: -37.9 LUFS, Target: -20.0 LUFS (17.9 LU adjustment)
+[2026-11-21 18:11:39]   Audio: truehd 4000k -> aac 768k
+[2026-11-21 18:11:39]   Normalization: Linear
+[2026-11-21 18:11:39]   Replaced: /tmp/l71/out/1795237893626352000/flac71_mp4.mp4
+Summary: found=1, queued=1, resumed=0, done=1, skipped=0, failed=0, linear=1, dynamic=0, limited=0
+-- result: aac,8,7.1,763574 
+
+=== J5 mkv 7.1 truehd aac -> flac
+[2026-11-21 18:11:42] Processing: /tmp/l71/out/1795237900642090000/flac71_mkv.mkv
+[2026-11-21 18:11:46]   Current: -37.9 LUFS, Target: -20.0 LUFS (17.9 LU adjustment)
+[2026-11-21 18:11:46]   Audio: truehd 4000k -> flac (lossless)
+[2026-11-21 18:11:46]   Normalization: Linear
+[2026-11-21 18:11:47]   Replaced: /tmp/l71/out/1795237900642090000/flac71_mkv.mkv
+Summary: found=1, queued=1, resumed=0, done=1, skipped=0, failed=0, linear=1, dynamic=0, limited=0
+-- result: flac,8,7.1,N/A,linear 
+
+=== K1 mp4 7.1 ac3 (fake) aac, low bitrate 448k
+[2026-11-21 18:11:51] Processing: /tmp/l71/out/1795237908640189000/flac71_mp4.mp4
+[2026-11-21 18:11:54]   Current: -37.9 LUFS, Target: -20.0 LUFS (17.9 LU adjustment)
+[2026-11-21 18:11:55]   Audio: ac3 448k -> aac 448k
+[2026-11-21 18:11:55]   Normalization: Linear
+[2026-11-21 18:11:56]   Replaced: /tmp/l71/out/1795237908640189000/flac71_mp4.mp4
+Summary: found=1, queued=1, resumed=0, done=1, skipped=0, failed=0, linear=1, dynamic=0, limited=0
+-- result: aac,8,7.1,447611 
+
+=== K2 mp4 7.1 eac3 high bitrate 6M
+[2026-11-21 18:11:58] Processing: /tmp/l71/out/1795237917268231000/flac71_mp4.mp4
+[2026-11-21 18:12:00]   Current: -37.9 LUFS, Target: -20.0 LUFS (17.9 LU adjustment)
+[2026-11-21 18:12:01]   Audio: eac3 6000k -> aac 768k
+[2026-11-21 18:12:01]   Normalization: Linear
+[2026-11-21 18:12:02]   Replaced: /tmp/l71/out/1795237917268231000/flac71_mp4.mp4
+Summary: found=1, queued=1, resumed=0, done=1, skipped=0, failed=0, linear=1, dynamic=0, limited=0
+-- result: aac,8,7.1,763574 
+
+=== K3 mp4 7.1 eac3 no bit_rate in probe
+[2026-11-21 18:12:03] Processing: /tmp/l71/out/1795237922463284000/flac71_mp4.mp4
+[2026-11-21 18:12:04]   Current: -37.9 LUFS, Target: -20.0 LUFS (17.9 LU adjustment)
+[2026-11-21 18:12:06]   Audio: eac3 5431k -> aac 768k
+[2026-11-21 18:12:06]   Normalization: Linear
+[2026-11-21 18:12:09]   Replaced: /tmp/l71/out/1795237922463284000/flac71_mp4.mp4
+Summary: found=1, queued=1, resumed=0, done=1, skipped=0, failed=0, linear=1, dynamic=0, limited=0
+-- result: aac,8,7.1,763574 
+
+=== L1 mp4 7.1 eac3 --fast aac
+Error: --fast is single-pass loudnorm and always compresses dynamics; add --allow-dynamic (or use the night profile) to accept that
+-- result: flac,8,7.1,9052221 
+
+=== L2 mp4 7.1 eac3 --allow-dynamic opus
+[2026-11-21 18:12:16] Processing: /tmp/l71/out/1795237934218009000/flac71_mp4.mp4
+[2026-11-21 18:12:18]   Current: -37.9 LUFS, Target: -20.0 LUFS (17.9 LU adjustment)
+[2026-11-21 18:12:19]   Audio: eac3 1024k -> libopus 680k
+[2026-11-21 18:12:19]   Normalization: Linear
+[2026-11-21 18:12:19]   Replaced: /tmp/l71/out/1795237934218009000/flac71_mp4.mp4
+Summary: found=1, queued=1, resumed=0, done=1, skipped=0, failed=0, linear=1, dynamic=0, limited=0
+-- result: opus,8,7.1,507454 
+
+=== L3 mp4 7.1 eac3 keep-original-audio aac
+[2026-11-21 18:12:23] Processing: /tmp/l71/out/1795237940650865000/flac71_mp4.mp4
+[2026-11-21 18:12:24]   Current: -37.9 LUFS, Target: -20.0 LUFS (17.9 LU adjustment)
+[2026-11-21 18:12:26]   Audio: eac3 1024k -> aac 768k
+[2026-11-21 18:12:26]   Normalization: Linear
+[2026-11-21 18:12:26]   Replaced: /tmp/l71/out/1795237940650865000/flac71_mp4.mp4
+Summary: found=1, queued=1, resumed=0, done=1, skipped=0, failed=0, linear=1, dynamic=0, limited=0
+-- result: aac,8,7.1,763574 flac,8,7.1,9052221 
+
+=== L4 mp4 7.1 eac3 ladder aac
+[2026-11-21 18:12:30] Processing: /tmp/l71/out/1795237947292645000/flac71_mp4.mp4
+[2026-11-21 18:12:31]   Current: -37.9 LUFS, Target: -20.0 LUFS (17.9 LU adjustment)
+[2026-11-21 18:12:33]   Audio: eac3 1024k -> aac 768k
+[2026-11-21 18:12:33]   Normalization: Linear
+[2026-11-21 18:12:34]   Replaced: /tmp/l71/out/1795237947292645000/flac71_mp4.mp4
+Summary: found=1, queued=1, resumed=0, done=1, skipped=0, failed=0, linear=1, dynamic=0, limited=0
+-- result: aac,8,7.1,763574 
+
+=== L5 bad value
+Expected '--lossy71' to be one of aac, opus; got mp3
+-- result: flac,8,7.1,9052221 
+
+=== L6 dry-run aac
+[2026-11-21 18:12:37] Processing: /tmp/l71/out/1795237955580278000/flac71_mp4.mp4
+[2026-11-21 18:12:38]   [DRY RUN] Would normalize: -37.9 LUFS → -20.0 LUFS
+Summary: found=1, queued=1, resumed=0, done=1, skipped=0, failed=0, linear=0, dynamic=0, limited=0
+-- result: flac,8,7.1,9052221 
