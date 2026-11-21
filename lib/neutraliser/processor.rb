@@ -630,6 +630,7 @@ module Neutraliser
     end
 
     def process_file_fast(original_path, working)
+      warn_fast_misses_side_channels(working)
       if @dry_run
         log "  [DRY RUN] Would normalize (fast single-pass) to #{@profile[:lufs]} LUFS"
         return FileResult.done(original_path, :dry_run)
@@ -640,6 +641,15 @@ module Neutraliser
       ) { |out| FFmpegWrapper.apply_normalization_single_pass(working, out, @profile, keep_original: @keep_original_audio) }
 
       FileResult.done(original_path, :normalized, mode: codec_decision[:mode])
+    end
+
+    # Single-pass loudnorm cannot hear channels 7 and 8 and --fast has no read to correct it with
+    # (an ebur128 read costs a decode, which is what --fast saves), so say so rather than hide it.
+    def warn_fast_misses_side_channels(working)
+      return if Measurement.side_channels(working.primary_track).empty?
+
+      log "  Warning: --fast cannot hear the side channels of this #{working.primary_track[:channels]}-channel track; " \
+          'it will land about 1.7 LU above target. Drop --fast for an exact level.'
     end
 
     def analyze_loudness_for_path(working, original_path)

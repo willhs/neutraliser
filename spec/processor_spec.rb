@@ -577,6 +577,26 @@ RSpec.describe Neutraliser::Processor do
       expect(result.status).to eq(:done)
       expect(result.reason).to eq(:dry_run)
     end
+
+    it 'warns that --fast cannot hear the side channels of a 7.1 track' do
+      stub_probe(audio: [ProbeFixture.audio(codec: 'aac', channels: 8, layout: '7.1', bit_rate: '640000')])
+      logged = []
+      allow(Neutraliser.logger).to receive(:log) { |message| logged << message }
+
+      processor.send(:process_file, video_file)
+
+      expect(logged.join("\n")).to match(/--fast cannot hear the side channels.*1\.7 LU/)
+    end
+
+    it 'does not warn for a 5.1 track' do
+      stub_probe(audio: [ProbeFixture.audio(codec: 'aac', channels: 6, layout: '5.1', bit_rate: '640000')])
+      logged = []
+      allow(Neutraliser.logger).to receive(:log) { |message| logged << message }
+
+      processor.send(:process_file, video_file)
+
+      expect(logged.join("\n")).not_to match(/side channels/)
+    end
   end
 
   describe '#process_file with local staging' do

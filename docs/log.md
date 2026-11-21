@@ -1,3 +1,6 @@
+## [2026-11-21] fix | --fast warns on tracks above six channels
+`process --fast` on a 7.1 (or other >6-channel) track now logs that single-pass loudnorm cannot hear channels 7 and 8 and lands about 1.7 LU high. Chose the warning over an ebur128 correction because that read costs a decode, which is what --fast saves. Research 0007 finding 7.
+
 ## [2026-11-21] fix | Blu-ray LPCM (pcm_s24be, pcm_s32le) is lossless, not a codec change
 
 PCM sources going to FLAC/PCM no longer trip the codec-change guard (`CodecChoice.changes_codec?`); added pcm_s24be/s32be/f64le/bluray to LOSSLESS_CODECS. Output is FLAC in MKV.
