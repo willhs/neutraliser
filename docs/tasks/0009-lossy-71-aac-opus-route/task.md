@@ -50,10 +50,10 @@ message; README says "several times the size" with no figure.
 - Rename the `too_many_channels` reason (manifest compatibility).
 
 ## Success Criteria
-- [ ] `process --lossy-71 aac --allow-codec-change` levels an E-AC-3 7.1 track in MP4 and MKV as AAC 7.1
-- [ ] `--lossy-71 opus` does the same as Opus where the container and channel layout allow it
+- [ ] `process --lossy71 aac --allow-codec-change` levels an E-AC-3 7.1 track in MP4 and MKV as AAC 7.1
+- [ ] `--lossy71 opus` does the same as Opus where the container and channel layout allow it
 - [ ] Without the flag, decisions are identical to before (specs unchanged)
-- [ ] The too_many_channels message no longer claims no encoder holds more than 5.1, and names `--lossy-71`
+- [ ] The too_many_channels message no longer claims no encoder holds more than 5.1, and names `--lossy71`
 - [ ] README and `--allow-codec-change` help state the FLAC size cost
 
 ## References

@@ -106,6 +106,55 @@ RSpec.describe Neutraliser::CodecChoice do
     end
   end
 
+  describe '--lossy71 (opt-in AAC / Opus for over-5.1 tracks ffmpeg cannot write in their own codec)' do
+    let(:eac3_seven_one) { make_track(codec: 'eac3', channels: 8, bit_rate: 1_024_000).merge(channel_layout: '7.1') }
+
+    it 'writes E-AC-3 7.1 as AAC 7.1 in MP4 and MKV, a codec change, held by the 7.1 AAC cap' do
+      %w[.mp4 .m4v .mkv .mov .avi].each do |container|
+        expect(described_class.decide(eac3_seven_one, container, lossy71: 'aac'))
+          .to include(encoder: 'aac', encodable: true, lossless_output: false, changes_codec: true, bitrate: 768_000)
+      end
+    end
+
+    it 'writes it as Opus 7.1 where the container takes Opus' do
+      %w[.mp4 .mkv].each do |container|
+        expect(described_class.decide(eac3_seven_one, container, lossy71: 'opus')).to include(encoder: 'libopus', bitrate: 680_000)
+      end
+    end
+
+    it 'falls back to the default when the container has no Opus or libopus cannot map the layout' do
+      expect(described_class.decide(eac3_seven_one, '.mov', lossy71: 'opus')).to include(encoder: nil, encodable: false)
+      wide = eac3_seven_one.merge(channel_layout: '7.1(wide)')
+      expect(described_class.decide(wide, '.mkv', lossy71: 'opus')).to include(encoder: 'flac')
+      expect(described_class.decide(wide, '.mkv', lossy71: 'aac')).to include(encoder: 'aac')
+      expect(described_class.decide(eac3_seven_one.merge(channel_layout: nil), '.mp4', lossy71: 'opus')).to include(encoder: 'libopus')
+    end
+
+    it 'keeps FLAC for a lossless source where the container has it, and uses the route only where it has none' do
+      %w[truehd flac].each do |codec|
+        expect(described_class.decide(make_track(codec: codec, channels: 8), '.mkv', lossy71: 'aac')).to include(encoder: 'flac')
+        expect(described_class.decide(make_track(codec: codec, channels: 8), '.mp4', lossy71: 'aac')).to include(encoder: 'aac')
+      end
+      dts_ma = make_track(codec: 'dts', channels: 8).merge(profile: 'DTS-HD MA')
+      expect(described_class.decide(dts_ma, '.mkv', lossy71: 'aac')).to include(encoder: 'flac')
+      expect(described_class.decide(make_track(codec: 'dts', channels: 7).merge(profile: 'DTS-ES'), '.mkv', lossy71: 'aac'))
+        .to include(encoder: 'aac')
+    end
+
+    it 'changes nothing a track already has an encoder for' do
+      expect(described_class.decide(make_track(codec: 'aac', channels: 8, bit_rate: 384_000), '.mp4', lossy71: 'opus'))
+        .to include(encoder: 'aac', changes_codec: false)
+      expect(described_class.decide(make_track(codec: 'eac3', channels: 6, bit_rate: 640_000), '.mp4', lossy71: 'aac'))
+        .to include(encoder: 'eac3')
+    end
+
+    it 'lists the --lossy71 values that would write the track in a container' do
+      expect(described_class.lossy71_options(eac3_seven_one, '.mp4')).to eq(%w[aac opus])
+      expect(described_class.lossy71_options(eac3_seven_one, '.mov')).to eq(%w[aac])
+      expect(described_class.lossy71_options(eac3_seven_one.merge(channel_layout: '7.1(wide)'), '.mp4')).to eq(%w[aac])
+    end
+  end
+
   it 'uses libopus for Opus source in WebM' do
     result = described_class.decide(make_track(codec: 'opus', bit_rate: 128_000), '.webm')
     expect(result[:encoder]).to eq('libopus')

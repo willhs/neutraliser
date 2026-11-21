@@ -17,12 +17,12 @@ module Neutraliser
     # (HEADROOM) over the *first-generation* bitrate: the stamp's source_bitrate when it was a pass
     # over this same codec, else the file's own. A redo thus lands on the same rate instead of
     # growing 25% a pass. `first_generation_bitrate` is what the new stamp records.
-    def self.decide(track, container, sample: nil, stamp: nil)
+    def self.decide(track, container, sample: nil, stamp: nil, lossy71: nil)
       source_codec = track[:codec]&.downcase || 'unknown'
       channels = track[:channels].to_i
       channels = 2 if channels.zero?
       allowed = CONTAINER_CODECS.fetch(container, CONTAINER_CODECS['.mkv'])
-      encoder = resolve_encoder(source_codec, allowed, container, channels)
+      encoder = resolve_encoder(track, source_codec, allowed, container, channels, LOSSY_71[lossy71])
       return unencodable(track, source_codec, channels) unless encoder
 
       source_bitrate = known_bitrate(track, sample)
@@ -41,8 +41,9 @@ module Neutraliser
       }
     end
 
-    # No encoder in this container takes this many channels (7.1 in an MP4: ffmpeg's AC-3 and E-AC-3
-    # stop at 5.1 and FLAC is not allowed there). The track cannot be levelled in place, so the
+    # No encoder this run may use in this container takes this many channels (E-AC-3 7.1 in an MP4:
+    # ffmpeg's AC-3 and E-AC-3 stop at 5.1, FLAC is not allowed there, and AAC / Opus 7.1 only come
+    # with --lossy71). The track cannot be levelled in place, so the
     # decision has no encoder and the codec-change guard is not asked; `Guards#channel_count` stops
     # the file before it is measured.
     def self.unencodable(track, source_codec, channels)
@@ -80,7 +81,7 @@ module Neutraliser
       value.to_i
     end
 
-    def self.resolve_encoder(source_codec, allowed, container, channels)
+    def self.resolve_encoder(track, source_codec, allowed, container, channels, lossy71)
       # 1. Try direct match — same codec if encodable and allowed in container
       direct = ENCODABLE_CODECS[source_codec]
       return direct if direct && allowed.include?(direct) && holds?(direct, channels)
@@ -92,9 +93,10 @@ module Neutraliser
         return 'pcm_s16le' if allowed.include?('pcm_s16le')
       end
 
-      # 3. Beyond 5.1 (7.1, 6.1): only FLAC holds it, so there is no lossy fallback. nil when the
-      #    container has no FLAC; ffmpeg's AC-3 / E-AC-3 stop at 5.1 and would fail every sweep.
-      return (allowed.include?('flac') ? 'flac' : nil) if channels > 6
+      # 3. Beyond 5.1 (7.1, 6.1): ffmpeg's AC-3 / E-AC-3 stop at 5.1. FLAC by default; --lossy71's AAC or
+      #    Opus instead for a lossy source, and where the container has no FLAC. nil when neither is there:
+      #    the track can't be written and would fail every sweep.
+      return over_five_one(track, source_codec, allowed, lossy71) if channels > 6
 
       # 3b. Non-encodable surround — prefer lossless if container supports it, else AC3/EAC3
       if channels >= 6
@@ -109,6 +111,31 @@ module Neutraliser
 
       # 5. Last resort — first allowed codec
       allowed.first || 'aac'
+    end
+
+    # --lossy71's encoder wins over FLAC only for a lossy source: a lossless one (TrueHD, PCM, FLAC,
+    # DTS-HD MA) keeps FLAC where the container has it, and gets the lossy route only where it has none.
+    def self.over_five_one(track, source_codec, allowed, lossy71)
+      wide = lossy71 if lossy71 && allowed.include?(lossy71) && takes_layout?(lossy71, track)
+      return 'flac' if allowed.include?('flac') && !(wide && lossy_source?(source_codec, track))
+
+      wide
+    end
+
+    def self.lossy_source?(source_codec, track)
+      !LOSSLESS_CODECS.include?(source_codec) && !track[:profile].to_s.include?('DTS-HD MA')
+    end
+
+    # libopus opens only for the layouts it maps; AAC takes any.
+    def self.takes_layout?(encoder, track)
+      encoder != 'libopus' || OPUS_WIDE_LAYOUTS.include?(track[:channel_layout].to_s.strip)
+    end
+
+    # The --lossy71 values that would let this over-5.1 track be written in `container` (the skip
+    # message names them).
+    def self.lossy71_options(track, container)
+      allowed = CONTAINER_CODECS.fetch(container, CONTAINER_CODECS['.mkv'])
+      LOSSY_71.select { |_, encoder| allowed.include?(encoder) && takes_layout?(encoder, track) }.keys
     end
 
     # The stamp's source_bitrate only when it describes this track's codec: after a codec change
@@ -141,6 +168,6 @@ module Neutraliser
       wanted = (bitrate * HEADROOM.fetch(encoder, 1)).ceil
       encoder == 'ac3' ? AC3_BITRATES.find { |step| step >= wanted } || AC3_BITRATES.last : wanted
     end
-    private_class_method :known_bitrate, :resolve_encoder, :resolve_bitrate, :first_generation_bitrate, :with_headroom, :holds?, :unencodable
+    private_class_method :known_bitrate, :resolve_encoder, :resolve_bitrate, :first_generation_bitrate, :with_headroom, :holds?, :unencodable, :over_five_one, :takes_layout?
   end
 end

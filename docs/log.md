@@ -1,3 +1,14 @@
+## [2026-11-21] update | Opt-in AAC/Opus route for lossy 7.1; too_many_channels message names the options
+
+Research 0007 finding 3. `--lossy71 aac|opus` (with `--allow-codec-change`) writes an over-5.1 track
+ffmpeg cannot keep in its own codec (E-AC-3, AC-3, DTS) as AAC or Opus 7.1 instead of FLAC, and levels it
+in MP4 / M4V / MOV / AVI, where it was skipped. Lossless 7.1 keeps FLAC where the container takes it.
+Opus only for layouts libopus maps (6.1, 7.1, unnamed). The default is unchanged. The `too_many_channels`
+message no longer says no encoder holds more than 5.1; it names the `--lossy71` values that would work.
+A lossy 7.1 track headed for FLAC logs the size cost (about 3-5x, an estimate from research 0007).
+Proved on FLAC 7.1 in MP4 with real ffmpeg 7.1.1 (no E-AC-3 7.1 can be built locally). Whether to make
+AAC the default for lossy 7.1 is left to Will (Steady task 66a329d3 notes).
+
 ## [2026-11-21] fix | --fast warns on tracks above six channels
 `process --fast` on a 7.1 (or other >6-channel) track now logs that single-pass loudnorm cannot hear channels 7 and 8 and lands about 1.7 LU high. Chose the warning over an ebur128 correction because that read costs a decode, which is what --fast saves. Research 0007 finding 7.
 

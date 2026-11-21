@@ -955,6 +955,26 @@ RSpec.describe Neutraliser::Processor do
         expect { result = processor.send(:process_file, mp4) }.to output(/Too many channels/).to_stdout
         expect(result).to have_attributes(status: :skipped, reason: :too_many_channels)
       end
+
+      it 'is levelled as AAC 7.1 in an MP4 under --lossy71 aac --allow-codec-change, the encode told the same' do
+        mp4 = File.join(temp_dir, 'movie.mp4')
+        File.write(mp4, 'x')
+        processor = described_class.new(ladder: true, allow_codec_change: true, lossy71: 'aac')
+        processor.instance_variable_set(:@skip_decider, skip_decider)
+        allow(processor).to receive(:analyze_loudness_for_path).and_return(measured)
+        allow(Neutraliser::FFmpegWrapper).to receive(:apply_normalization).and_return({ mode: Neutraliser::Mode::LINEAR })
+        allow(processor).to receive(:render_normalization) { |*_, **_, &encode| encode.call('out.mp4') }
+
+        expect(processor.send(:process_file, mp4)).to have_attributes(status: :done)
+        expect(Neutraliser::FFmpegWrapper).to have_received(:apply_normalization).with(anything, 'out.mp4', anything, anything,
+                                                                                       hash_including(lossy71: 'aac'))
+      end
+
+      it 'refuses a --lossy71 value it does not know, and notes one given without --allow-codec-change' do
+        expect { described_class.new(lossy71: 'mp3') }.to raise_error(ArgumentError, /Unknown --lossy71 'mp3': use aac or opus/)
+        expect(described_class.new(lossy71: 'opus').instance_variable_get(:@notes))
+          .to include(/--lossy71 opus .* only with --allow-codec-change/)
+      end
     end
 
     describe 'disk guard' do

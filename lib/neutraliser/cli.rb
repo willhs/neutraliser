@@ -111,7 +111,13 @@ module Neutraliser
     option :min_gain, type: :numeric,
                       desc: 'Skip a peak-capped file when the gain towards target would be under N dB (default: --tolerance)'
     option :allow_codec_change, type: :boolean, default: false,
-                                desc: 'Process tracks whose codec cannot be re-encoded to itself (DTS, TrueHD ... become FLAC/E-AC3)'
+                                desc: 'Process tracks whose codec cannot be re-encoded to itself (DTS, TrueHD ... become FLAC/E-AC3). ' \
+                                      'A lossy 7.1 (E-AC-3, AC-3, DTS) becomes FLAC 7.1 in MKV: about 3-5x the size, and many TV ' \
+                                      'clients cannot play it; see --lossy71'
+    option :lossy71, type: :string, enum: CodecChoice::LOSSY_71.keys,
+                     desc: 'With --allow-codec-change, write a 7.1 track ffmpeg cannot keep in its own codec (E-AC-3, AC-3, DTS) ' \
+                           'as AAC or Opus 7.1 instead of FLAC, and level it in MP4 / M4V / MOV / AVI too (default: FLAC in ' \
+                           'MKV, skipped elsewhere). Lossless 7.1 keeps FLAC where the container takes it'
     option :min_free_gb, type: :numeric,
                          desc: 'Skip files while the output volume has less than N GiB free (or less than the file size)'
     option :abort_free_gb, type: :numeric,
@@ -242,6 +248,7 @@ module Neutraliser
     option :limit_db, type: :numeric, desc: 'Recipe: peak limiter reach in dB (default 0 = off; 6 with --ladder)'
     option :min_gain, type: :numeric, desc: 'Recipe: skip a peak-capped file when the gain would be under N dB'
     option :allow_codec_change, type: :boolean, default: false, desc: 'Recipe: process DTS / TrueHD anyway'
+    option :lossy71, type: :string, enum: CodecChoice::LOSSY_71.keys, desc: 'Recipe: 7.1 E-AC-3 / AC-3 / DTS as AAC or Opus (see process --lossy71)'
     option :allow_object_audio_loss, type: :boolean, default: false, desc: 'Recipe: process Atmos / DTS:X anyway'
     option :within, type: :numeric, default: RemoteFreeRate::WITHIN_LU, desc: 'Remote-free: within this many LU of target'
     option :lra_limit, type: :numeric, default: RemoteFreeRate::LRA_LIMIT, desc: 'Remote-free: loudness range at or under N LU'
@@ -362,7 +369,7 @@ module Neutraliser
       { profile: options[:profile], target_level: options[:target_level], tolerance: options[:tolerance],
         allow_dynamic: options[:allow_dynamic], limit_db: options[:limit_db], min_gain: options[:min_gain],
         allow_codec_change: options[:allow_codec_change], allow_object_audio_loss: options[:allow_object_audio_loss],
-        ladder: options[:ladder], anchor: options[:anchor], lra_target: options[:lra_target] }
+        ladder: options[:ladder], anchor: options[:anchor], lra_target: options[:lra_target], lossy71: options[:lossy71] }
     end
 
     def print_plan(harness)
@@ -413,6 +420,7 @@ module Neutraliser
         lra_target: options[:lra_target],
         centre_boost: options[:centre_boost],
         allow_codec_change: options[:allow_codec_change],
+        lossy71: options[:lossy71],
         ladder: options[:ladder],
         anchor: options[:anchor],
         disk_guard: guard,

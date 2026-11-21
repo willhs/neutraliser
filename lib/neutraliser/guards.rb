@@ -37,11 +37,15 @@ module Neutraliser
 
     PROCEED = Verdict.proceed.freeze
 
+    # How the too_many_channels message names each --lossy71 value.
+    LOSSY_71_NAMES = { 'aac' => 'AAC', 'opus' => 'Opus' }.freeze
+
     # object_audio_undetectable: this ffmpeg is too old to name Atmos / DTS:X, so a
     # file named as such is skipped rather than guessed at (see ObjectAudio.undetectable?).
     def initialize(profile:, replace:, dry_run:, disk_guard:, allow_object_audio_loss:, allow_codec_change:,
-                   object_audio_undetectable: false, recipe: Recipe::CURRENT)
+                   object_audio_undetectable: false, recipe: Recipe::CURRENT, lossy71: nil)
       @profile = profile
+      @lossy71 = lossy71
       @recipe = recipe
       @replace = replace
       @dry_run = dry_run
@@ -143,37 +147,60 @@ module Neutraliser
                  '(--allow-object-audio-loss to process anyway)')
     end
 
-    # A track with more channels than any encoder this container takes can hold (7.1 in an MP4: E-AC-3
-    # stops at 5.1, FLAC isn't allowed). Writing it would fail the output check after a full measure, on
-    # every sweep, so skip it first, whatever --allow-codec-change says: no flag makes it possible.
-    # Recorded as left alone: a different container or ffmpeg could.
+    # A track with more channels than any encoder this run may use in this container holds (E-AC-3 7.1
+    # in an MP4: ffmpeg's AC-3 / E-AC-3 stop at 5.1, FLAC isn't allowed, and AAC / Opus 7.1 come only
+    # with --lossy71). Writing it would fail the output check after a full measure, on every sweep, so
+    # skip it first. Recorded as left alone: --lossy71, a different container or ffmpeg could. The
+    # message names the --lossy71 values that would work here.
     def channel_count(original_path, working)
       return PROCEED unless working.audio?
 
       track = working.primary_track
       container = FFmpegWrapper.output_container(working, original_path)
-      return PROCEED if CodecChoice.decide(track, container)[:encodable]
+      return PROCEED if CodecChoice.decide(track, container, lossy71: @lossy71)[:encodable]
 
-      message = "#{track[:codec]} with #{track[:channels]} channels can't be re-encoded in #{container}: " \
-                'no encoder there holds more than 5.1'
+      message = "#{track[:codec]} with #{track[:channels]} channels can't be re-encoded in #{container} as it is: " \
+                "ffmpeg's AC-3 and E-AC-3 stop at 5.1 and #{container} takes no FLAC#{lossy71_hint(track, container)}"
       left_alone(:too_many_channels, message, "  Too many channels (#{message}), skipping")
     end
 
     # Re-encoding to a different codec isn't leveling the volume, it's converting
-    # the track. Skipped unless the user accepts it.
+    # the track. Skipped unless the user accepts it. A lossy 7.1 track going to FLAC
+    # gets a note of the size cost either way.
     def codec_change(original_path, working)
-      return PROCEED if @allow_codec_change
       return PROCEED unless working.audio?
 
-      choice = CodecChoice.decide(working.primary_track, FFmpegWrapper.output_container(working, original_path))
+      choice = CodecChoice.decide(working.primary_track, FFmpegWrapper.output_container(working, original_path),
+                                  lossy71: @lossy71)
       return PROCEED unless choice[:changes_codec]
+      return Verdict.proceed(flac_71_note(working, choice)) if @allow_codec_change
 
       message = "#{working.primary_track[:codec]} would be re-encoded as #{choice[:encoder]}"
-      left_alone(:codec_change, message,
-                 "  Codec change (#{message}), skipping (--allow-codec-change to process anyway)")
+      verdict = left_alone(:codec_change, message,
+                           "  Codec change (#{message}), skipping (--allow-codec-change to process anyway)")
+      verdict.with(log: verdict.log + flac_71_note(working, choice))
     end
 
     private
+
+    # The end of the too_many_channels message: the --lossy71 values that would write this track here.
+    def lossy71_hint(track, container)
+      options = CodecChoice.lossy71_options(track, container) - [@lossy71]
+      return '' if options.empty?
+
+      "; --lossy71 #{options.join(' or ')} with --allow-codec-change levels it as " \
+        "#{options.map { |option| LOSSY_71_NAMES.fetch(option) }.join(' or ')} 7.1"
+    end
+
+    # A lossy over-5.1 track about to become (or skipped for becoming) FLAC: what that costs, and the
+    # opt-in lossy route. None for a lossless source, where FLAC is no bigger.
+    def flac_71_note(working, choice)
+      track = working.primary_track
+      return [] unless choice[:encoder] == 'flac' && track[:channels].to_i > 6 &&
+                       CodecChoice.lossy_source?(choice[:source_codec], track)
+
+      ["  Note: #{CodecChoice::FLAC_71_COST}; --lossy71 aac keeps it lossy"]
+    end
 
     # The first verdict that stops the file, else proceed. The lines of the checks
     # that let it through are kept and come before the stopper's.

@@ -60,6 +60,19 @@ module Neutraliser
     # Any other encoder here is taken to hold what the source has.
     MAX_CHANNELS = { 'ac3' => 6, 'eac3' => 6 }.freeze
 
+    # `--lossy71`: the lossy encoder an over-5.1 track goes to when its own codec can't be written
+    # (E-AC-3 / AC-3 / DTS 7.1), instead of FLAC or a skip. Both hold eight channels in MP4 and MKV.
+    LOSSY_71 = { 'aac' => 'aac', 'opus' => 'libopus' }.freeze
+
+    # The over-5.1 layouts libopus maps (mapping family 1); a named one outside these, such as
+    # 7.1(wide), fails to open the encoder. An unnamed layout is taken as the standard one.
+    OPUS_WIDE_LAYOUTS = ['6.1', '7.1', '', 'unknown'].freeze
+
+    # FLAC 7.1 of decoded lossy film audio against the E-AC-3 7.1 it came from (research 0007 finding 3;
+    # an estimate, not measured on a real film). Said wherever a lossy 7.1 track is about to become FLAC.
+    FLAC_71_COST = 'FLAC 7.1 is about 3-5x the size of the E-AC-3 (3-6 Mbit/s against 0.77-1.5), ' \
+                   'and many TV clients cannot play multichannel FLAC'
+
     # Container compatibility — which encoders work in which containers
     CONTAINER_CODECS = {
       '.mp4' => %w[aac ac3 eac3 libmp3lame libopus],

@@ -27,7 +27,8 @@ module Neutraliser
                    dry_run: false, fast_verify: false, resume: false, fast: false, local_stage: false,
                    allow_dynamic: false, allow_object_audio_loss: false, keep_original_audio: false,
                    limit_db: nil, min_gain: nil, allow_codec_change: false, disk_guard: nil, redo_recipes: [],
-                   redo_side_channels: false, lra_target: nil, centre_boost: nil, ladder: Recipe::CURRENT == Recipe::LADDER, anchor: 'programme')
+                   redo_side_channels: false, lra_target: nil, centre_boost: nil, ladder: Recipe::CURRENT == Recipe::LADDER, anchor: 'programme',
+                   lossy71: nil)
       @replace = replace
       base_profile = profile.is_a?(Hash) ? profile : Profiles.get_profile(profile)
       @anchor = anchor.to_s
@@ -55,6 +56,7 @@ module Neutraliser
       @allow_codec_change = allow_codec_change
       @disk_guard = disk_guard || DiskGuard.new
       @notes = []
+      @lossy71 = lossy71_choice(lossy71)
       @ladder = ladder_on?(ladder, fast, fast_verify)
       @recipe = Recipe.for(ladder: @ladder)
       @redo_recipes = Array(redo_recipes).uniq
@@ -99,6 +101,19 @@ module Neutraliser
     end
 
     private
+
+    # --lossy71: nil (FLAC where the container has it, else skip) or 'aac' / 'opus'. Converting E-AC-3
+    # to AAC is still a codec change, so it waits on --allow-codec-change like any other.
+    def lossy71_choice(value)
+      return nil if value.nil? || value.to_s.empty?
+      raise ArgumentError, "Unknown --lossy71 '#{value}': use #{CodecChoice::LOSSY_71.keys.join(' or ')}" unless
+        CodecChoice::LOSSY_71.key?(value.to_s)
+
+      unless @allow_codec_change
+        @notes << "Note: --lossy71 #{value} converts a track's codec, so it takes effect only with --allow-codec-change"
+      end
+      value.to_s
+    end
 
     # The ladder is a constant-gain method. A run that picks loudnorm instead (--allow-dynamic, the night
     # profile, --fast) has chosen another method, so the ladder steps aside rather than refusing it:
@@ -183,7 +198,7 @@ module Neutraliser
     def build_guards(object_audio_undetectable:)
       Guards.new(profile: @profile, replace: @replace, dry_run: @dry_run, disk_guard: @disk_guard,
                  allow_object_audio_loss: @allow_object_audio_loss, allow_codec_change: @allow_codec_change,
-                 object_audio_undetectable: object_audio_undetectable, recipe: @recipe)
+                 object_audio_undetectable: object_audio_undetectable, recipe: @recipe, lossy71: @lossy71)
     end
 
     def process_directory(dir_path)
@@ -591,7 +606,7 @@ module Neutraliser
       ) do |out|
         FFmpegWrapper.apply_normalization(working, out, measurement, aim, keep_original: @keep_original_audio,
                                                                           limit_db: @limit_db, compression: plan,
-                                                                          recipe: @recipe)
+                                                                          recipe: @recipe, lossy71: @lossy71)
       end
       FileResult.done(original_path, :normalized, mode: codec_decision[:mode])
     end
@@ -638,7 +653,8 @@ module Neutraliser
 
       codec_decision = render_normalization(
         original_path, working, log_message: "  Fast mode: single-pass normalization to #{@profile[:lufs]} LUFS"
-      ) { |out| FFmpegWrapper.apply_normalization_single_pass(working, out, @profile, keep_original: @keep_original_audio) }
+      ) { |out| FFmpegWrapper.apply_normalization_single_pass(working, out, @profile, keep_original: @keep_original_audio,
+                                                                                      lossy71: @lossy71) }
 
       FileResult.done(original_path, :normalized, mode: codec_decision[:mode])
     end
@@ -670,7 +686,7 @@ module Neutraliser
       ) do |out|
         FFmpegWrapper.apply_normalization(working, out, measurement, aim, allow_dynamic: @allow_dynamic,
                                                                           keep_original: @keep_original_audio,
-                                                                          limit_db: @limit_db, recipe: @recipe)
+                                                                          limit_db: @limit_db, recipe: @recipe, lossy71: @lossy71)
       end
     end
 

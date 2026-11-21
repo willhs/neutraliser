@@ -254,10 +254,11 @@ module Neutraliser
     end
 
     # What the primary track is re-encoded to, with the source's dialnorm carried across.
-    def self.decide_codec(source, output_path)
+    def self.decide_codec(source, output_path, lossy71: nil)
       track = source.primary_track
       sample = ->(t) { estimate_bitrate_from_packets(source.path, "a:#{t[:index]}") }
-      choice = CodecChoice.decide(track, output_container(source, output_path), stamp: source.stamp, sample: sample)
+      choice = CodecChoice.decide(track, output_container(source, output_path), stamp: source.stamp, sample: sample,
+                                                                                lossy71: lossy71)
       carry_dialnorm(choice, source.path, track)
     end
 
@@ -268,9 +269,9 @@ module Neutraliser
     end
 
     def self.apply_normalization(source, output_path, measured_data, profile, allow_dynamic: false,
-                                 keep_original: false, limit_db: 0.0, compression: nil, recipe: Recipe::CURRENT)
+                                 keep_original: false, limit_db: 0.0, compression: nil, recipe: Recipe::CURRENT, lossy71: nil)
       primary_track = source.primary_track
-      codec_decision = decide_codec(source, output_path)
+      codec_decision = decide_codec(source, output_path, lossy71: lossy71)
 
       # A CompressionPlan (--lra-target) wraps the GainPlan for the compressed signal.
       plan = compression || (GainPlan.for(measured_data, profile, limit_db: limit_db) unless allow_dynamic)
@@ -307,9 +308,9 @@ module Neutraliser
       plan.shortfall.positive? ? codec_decision.merge(shortfall_lu: plan.shortfall) : codec_decision
     end
 
-    def self.apply_normalization_single_pass(source, output_path, profile, keep_original: false)
+    def self.apply_normalization_single_pass(source, output_path, profile, keep_original: false, lossy71: nil)
       primary_track = source.primary_track
-      codec_decision = decide_codec(source, output_path)
+      codec_decision = decide_codec(source, output_path, lossy71: lossy71)
 
       loudnorm_filter = "loudnorm=I=#{profile[:lufs]}:TP=#{profile[:tp]}:LRA=#{loudnorm_lra(profile[:lra])}:print_format=summary"
       loudnorm_filter += ",#{pin_sample_rate(primary_track[:sample_rate])}" if primary_track[:sample_rate]

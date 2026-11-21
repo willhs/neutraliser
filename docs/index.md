@@ -74,6 +74,8 @@ Entry point and navigation map for the neutraliser documentation set. Neutralise
 - [`tasks/0007-pre-release-code-security-review-october/plan.md`](tasks/0007-pre-release-code-security-review-october/plan.md) — Plan for the review
 - [`tasks/0008-levelling-ladder-opt-in-mode/task.md`](tasks/0008-levelling-ladder-opt-in-mode/task.md) — Levelling ladder as an opt-in mode (`--ladder`, `--anchor`, recipe 3, rungs in `report`); the default flip is one line
 - [`tasks/0008-levelling-ladder-opt-in-mode/plan.md`](tasks/0008-levelling-ladder-opt-in-mode/plan.md) — Plan for the ladder
+- [`tasks/0009-lossy-71-aac-opus-route/task.md`](tasks/0009-lossy-71-aac-opus-route/task.md) — Lossy 7.1 (E-AC-3/AC-3): opt-in `--lossy71 aac|opus`, an honest `too_many_channels` message, FLAC 7.1's size cost stated
+- [`tasks/0009-lossy-71-aac-opus-route/plan.md`](tasks/0009-lossy-71-aac-opus-route/plan.md) — Plan for the lossy 7.1 route
 
 ## Doc Schema
 - [`front-matter-schema.json`](front-matter-schema.json) — JSON Schema for validating doc frontmatter

@@ -1,7 +1,7 @@
 ---
 id: plan-0009
 type: spec
-purpose: "Implementation plan for the opt-in --lossy-71 AAC/Opus route, the too_many_channels message and the FLAC 7.1 size cost."
+purpose: "Implementation plan for the opt-in --lossy71 AAC/Opus route, the too_many_channels message and the FLAC 7.1 size cost."
 tags: ["plan", "codec", "7.1"]
 related: ["./task.md"]
 ---
@@ -12,10 +12,10 @@ Vision alignment: Have an online presence (goal: Release neutraliser publicly)
 
 ## Overview
 
-**Primary Goal**: `--lossy-71 aac|opus` (with `--allow-codec-change`) levels E-AC-3/AC-3/DTS 7.1 as AAC or
+**Primary Goal**: `--lossy71 aac|opus` (with `--allow-codec-change`) levels E-AC-3/AC-3/DTS 7.1 as AAC or
 Opus 7.1 in MP4 and MKV; the default is byte-for-byte unchanged.
 
-**Approach**: one new input to `CodecChoice.decide` (`lossy_71:`, an encoder name or nil), used only at
+**Approach**: one new input to `CodecChoice.decide` (`lossy71:`, an encoder name or nil), used only at
 `resolve_encoder`'s over-5.1 step; threaded CLI -> Processor -> Guards and FFmpegWrapper.decide_codec.
 
 ## Current State Analysis
@@ -36,7 +36,7 @@ Opus 7.1 in MP4 and MKV; the default is byte-for-byte unchanged.
 
 ## Data shape
 
-`lossy_71`: `nil | 'aac' | 'libopus'` (CLI spelling `aac`/`opus`, mapped by `CodecChoice::LOSSY_71`).
+`lossy71`: `nil | 'aac' | 'libopus'` (CLI spelling `aac`/`opus`, mapped by `CodecChoice::LOSSY_71`).
 Invariant: it only changes the answer for a track with more than six channels whose own codec cannot be
 written there, from a lossy source or where the container has no lossless output. `nil` is exactly today.
 
@@ -44,7 +44,7 @@ written there, from a lossy source or where the container has no lossless output
 
 | Option | Exposes | Verdict |
 |---|---|---|
-| A. `lossy_71:` keyword on `CodecChoice.decide`, threaded through Guards/FFmpegWrapper | one keyword per call site | **chosen**: matches how `allow_codec_change` is threaded; decide stays pure |
+| A. `lossy71:` keyword on `CodecChoice.decide`, threaded through Guards/FFmpegWrapper | one keyword per call site | **chosen**: matches how `allow_codec_change` is threaded; decide stays pure |
 | B. Mutate the container table (add AAC preference) per run | global state | rejected: tables are frozen constants shared by every caller |
 | C. Flag implies consent (no `--allow-codec-change` needed) | a second consent path | rejected: two gates for one loss; the flag names the encoder, the allow flag gives consent |
 
@@ -53,7 +53,7 @@ written there, from a lossy source or where the container has no lossless output
 - `rate-sample` support beyond passing the same option (added there for parity, nothing else).
 
 ## Assumptions
-- Flag name `--lossy-71`, values `aac`/`opus` (Thor enum). Thor maps `lossy_71` to `--lossy-71`.
+- Flag name `--lossy71`, values `aac`/`opus` (Thor enum). Thor maps `lossy71` to `--lossy71`.
 - Lossless sources (LOSSLESS_CODECS, DTS-HD MA profile) keep FLAC where allowed.
 - Opus is taken to hold an over-5.1 track only when its layout is `6.1`, `7.1`, or unnamed; otherwise the
   route falls back to today's answer (FLAC/skip), and the skip message offers only what works.
@@ -64,29 +64,29 @@ written there, from a lossy source or where the container has no lossless output
 
 ## Phase 1: CodecChoice route
 
-- [ ] Add `LOSSY_71 = { 'aac' => 'aac', 'opus' => 'libopus' }` and `OPUS_WIDE_LAYOUTS` to `codec_tables.rb`
-- [ ] `decide(track, container, sample:, stamp:, lossy_71: nil)`; step 3 prefers `lossy_71` over FLAC for a lossy source, and uses it where there is no FLAC; `holds?` knows Opus layouts
-- [ ] Add `CodecChoice.lossy_71_options(track, container)`: the `--lossy-71` values that would encode this track there
-- [ ] Specs in `spec/codec_choice_spec.rb`: E-AC-3 7.1 in MP4/MKV with aac and opus; TrueHD 7.1 in MKV stays FLAC; Opus 7.1(wide) falls back; MOV+opus unencodable; nil unchanged
-- [ ] Run: `bundle exec rspec spec/codec_choice_spec.rb` — green
+- [x] Add `LOSSY_71 = { 'aac' => 'aac', 'opus' => 'libopus' }` and `OPUS_WIDE_LAYOUTS` to `codec_tables.rb`
+- [x] `decide(track, container, sample:, stamp:, lossy71: nil)`; step 3 prefers `lossy71` over FLAC for a lossy source, and uses it where there is no FLAC; `holds?` knows Opus layouts
+- [x] Add `CodecChoice.lossy71_options(track, container)`: the `--lossy71` values that would encode this track there
+- [x] Specs in `spec/codec_choice_spec.rb`: E-AC-3 7.1 in MP4/MKV with aac and opus; TrueHD 7.1 in MKV stays FLAC; Opus 7.1(wide) falls back; MOV+opus unencodable; nil unchanged
+- [x] Run: `bundle exec rspec spec/codec_choice_spec.rb` — green
 
 ## Phase 2: Guards, Processor, FFmpegWrapper, CLI
 
-- [ ] `Guards.new(lossy_71:)`; `channel_count` message names the options; `codec_change` log adds the FLAC size note and `--lossy-71` for over-5.1 lossy-to-FLAC
-- [ ] `Processor.new(lossy_71:)` validated (`aac`/`opus`), passed to Guards and `FFmpegWrapper.apply_normalization(_single_pass)` -> `decide_codec`
-- [ ] CLI `process` and `rate-sample` option `--lossy-71`; `--allow-codec-change` help states the size cost
-- [ ] Specs in `spec/guards_spec.rb` (new message, size note) and `spec/processor_spec.rb` (MP4 E-AC-3 7.1 done under the flag)
-- [ ] Run: `bundle exec rspec spec/guards_spec.rb spec/processor_spec.rb spec/ffmpeg_wrapper_spec.rb` — green
+- [x] `Guards.new(lossy71:)`; `channel_count` message names the options; `codec_change` log adds the FLAC size note and `--lossy71` for over-5.1 lossy-to-FLAC
+- [x] `Processor.new(lossy71:)` validated (`aac`/`opus`), passed to Guards and `FFmpegWrapper.apply_normalization(_single_pass)` -> `decide_codec`
+- [x] CLI `process` and `rate-sample` option `--lossy71`; `--allow-codec-change` help states the size cost
+- [x] Specs in `spec/guards_spec.rb` (new message, size note) and `spec/processor_spec.rb` (MP4 E-AC-3 7.1 done under the flag)
+- [x] Run: `bundle exec rspec spec/guards_spec.rb spec/processor_spec.rb spec/ffmpeg_wrapper_spec.rb` — green
 
 ## Phase 3: Real surface and docs
 
-- [ ] Real ffmpeg: AC-3-free stand-in (an 8-channel track probed as eac3 cannot be built), so drive `process` on a 7.1 FLAC-in-MKV... see decisions.tsv; plus a real AAC 7.1 encode through `RemuxPlan` argv
-- [ ] README feature bullet, flag table, known limits; `docs/ops/data_contracts.md` too_many_channels wording; AGENTS.md CodecChoice line; CHANGELOG
-- [ ] Log/index fragments under `docs/log.d/` and `docs/index.d/`
-- [ ] Steady notes: the default-change question for Will
-- [ ] Run: `bundle exec rspec --tag '~real_ffmpeg'` and `bundle exec rubocop` — green
+- [x] Real ffmpeg: FLAC 7.1 in MP4 (no E-AC-3 7.1 can be built) driven through `process` with and without `--lossy71`; see decisions.tsv and evidence/real-run.txt
+- [x] README feature bullet, flag table, known limits; `docs/ops/data_contracts.md` too_many_channels wording; AGENTS.md CodecChoice line; CHANGELOG
+- [x] Log/index fragments under `docs/log.d/` and `docs/index.d/`
+- [x] Steady notes: the default-change question for Will
+- [x] Run: `bundle exec rspec --tag '~real_ffmpeg'` and `bundle exec rubocop` — green
 
 ## Phase 4: Wrap (commit & finalize)
 
-- [ ] Run: `git status`; commit the work with paths named (Manager job: commit only, no merge/push)
-- [ ] Run: `git status` — clean
+- [x] Run: `git status`; commit the work with paths named (Manager job: commit only, no merge/push)
+- [x] Run: `git status` — clean

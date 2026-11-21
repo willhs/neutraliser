@@ -198,6 +198,29 @@ RSpec.describe Neutraliser::Guards do
       expect(described_class.new(**guards_options(allow_codec_change: true)).codec_change(video, dts)).to be_proceed
     end
 
+    describe 'a lossy 7.1 track headed for FLAC' do
+      let(:eac3_seven_one) { source(audio: [ProbeFixture.audio(codec: 'eac3', channels: 8)]) }
+      let(:size_note) { /Note: FLAC 7.1 is about 3-5x the size.*--lossy71 aac keeps it lossy/ }
+
+      it 'states the size cost whether it is skipped or converted' do
+        skipped = guards.codec_change(video, eac3_seven_one)
+        expect(skipped).to have_attributes(reason: :codec_change, message: 'eac3 would be re-encoded as flac')
+        expect(skipped.log.last).to match(size_note)
+
+        converted = described_class.new(**guards_options(allow_codec_change: true)).codec_change(video, eac3_seven_one)
+        expect(converted).to be_proceed
+        expect(converted.log).to contain_exactly(size_note)
+      end
+
+      it 'says nothing for a lossless source, or once --lossy71 sends it elsewhere' do
+        truehd = source(audio: [ProbeFixture.audio(codec: 'truehd', channels: 8)])
+        allowing = described_class.new(**guards_options(allow_codec_change: true))
+        expect(allowing.codec_change(video, truehd).log).to be_empty
+        expect(described_class.new(**guards_options(allow_codec_change: true, lossy71: 'aac')).codec_change(video, eac3_seven_one).log)
+          .to be_empty
+      end
+    end
+
     it 'lets a codec that is kept through' do
       expect(guards.codec_change(video, source(audio: [ProbeFixture.audio(codec: 'aac')]))).to be_proceed
     end
@@ -213,10 +236,30 @@ RSpec.describe Neutraliser::Guards do
         verdict = g.channel_count(mp4, flac71)
 
         expect(verdict).to have_attributes(status: :skipped, reason: :too_many_channels,
-                                           message: "flac with 8 channels can't be re-encoded in .mp4: no encoder there holds more than 5.1")
+                                           message: "flac with 8 channels can't be re-encoded in .mp4 as it is: ffmpeg's AC-3 and " \
+                                                    'E-AC-3 stop at 5.1 and .mp4 takes no FLAC; --lossy71 aac or opus with ' \
+                                                    '--allow-codec-change levels it as AAC or Opus 7.1')
         expect(verdict.left).to have_attributes(reason: 'too_many_channels')
         expect(verdict.log.first).to match(/Too many channels/)
       end
+    end
+
+    it 'names only the --lossy71 values the container takes' do
+      mov = File.join(temp_dir, 'film.mov')
+      eac3 = source(audio: [ProbeFixture.audio(codec: 'eac3', channels: 8)])
+      verdict = described_class.new(**guards_options(lossy71: 'opus')).channel_count(mov, eac3)
+
+      expect(verdict).to have_attributes(reason: :too_many_channels)
+      expect(verdict.message).to end_with('; --lossy71 aac with --allow-codec-change levels it as AAC 7.1')
+    end
+
+    it 'lets E-AC-3 7.1 through in an MP4 under --lossy71 (the codec-change guard then decides)' do
+      eac3 = source(audio: [ProbeFixture.audio(codec: 'eac3', channels: 8)])
+      lossy = described_class.new(**guards_options(lossy71: 'aac'))
+
+      expect(lossy.channel_count(mp4, eac3)).to be_proceed
+      expect(lossy.codec_change(mp4, eac3)).to have_attributes(reason: :codec_change, message: 'eac3 would be re-encoded as aac')
+      expect(described_class.new(**guards_options(lossy71: 'aac', allow_codec_change: true)).after_staging(mp4, eac3)).to be_proceed
     end
 
     it 'lets 7.1 through where FLAC holds it (the codec-change guard then decides)' do
